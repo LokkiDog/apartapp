@@ -29,4 +29,5 @@ coverage
 
 *.tsbuildinfo
 
-config.ts
+config/
+.env
