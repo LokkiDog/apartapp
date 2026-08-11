@@ -1,0 +1,1 @@
+export type Task = { id: string; title: string; status: string; dueOn?: string | null; priority: string; checklist: Array<{ label: string; checked: boolean }>; hasProblem: boolean; problemDescription: string; apartmentId: string; apartment: { name: string; hotel: { name: string; address: string; latitude: string; longitude: string } } }

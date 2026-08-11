@@ -1,0 +1,1 @@
+export { useCrmFetch } from './client'
