@@ -64,6 +64,41 @@
       "when": 1786560000000,
       "tag": "0008_global_reports",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1786646400000,
+      "tag": "0009_cleaning_route_position",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1786732800000,
+      "tag": "0010_manual_cleanings",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1786819200000,
+      "tag": "0011_cleaning_checklist_templates",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1786905600000,
+      "tag": "0012_cleaning_inventory_reports",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1786992000000,
+      "tag": "0013_remove_sleeping_places",
+      "breakpoints": true
     }
   ]
 }

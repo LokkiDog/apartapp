@@ -1,11 +1,13 @@
 import { and, eq } from 'drizzle-orm'
-import { completionInputSchema, taskInputSchema, taskUpdateSchema } from '@contracts/crm'
+import { completionInputSchema, taskInputSchema, taskUpdateSchema, workProgressInputSchema } from '@contracts/crm'
 import { canManageApartment, requireRole, type Actor } from '../../infrastructure/auth/actor'
 import { writeAuditLog } from '../../infrastructure/audit/log'
 import { db } from '../../infrastructure/database/client'
-import { tasks, users } from '../../infrastructure/database/schema'
+import { apartments, inventoryMovements, tasks, users } from '../../infrastructure/database/schema'
 import { administratorsForOrganization, notifyUsers } from '../../infrastructure/notification/publish'
 import { createFinancialEntry } from '../finance/finance.service'
+import { deleteWorkRecord } from '../work/work-record.service'
+import { canChangeTaskApartment } from '../work/work-policy'
 
 export async function listTasks(actor: Actor) {
   const rows = await db.query.tasks.findMany({
@@ -54,6 +56,17 @@ export async function completeTask(actor: Actor, taskId: string, input: unknown)
   return updated
 }
 
+export async function saveTaskProgress(actor: Actor, taskId: string, input: unknown) {
+  const data = workProgressInputSchema.parse(input)
+  const task = await db.query.tasks.findFirst({ where: and(eq(tasks.id, taskId), eq(tasks.organizationId, actor.organizationId)) })
+  if (!task) throw createError({ statusCode: 404, statusMessage: 'Задача не найдена' })
+  if (['completed', 'canceled'].includes(task.status)) throw createError({ statusCode: 409, statusMessage: 'Завершенную или отмененную задачу нельзя изменить' })
+  if (!actor.roles.includes('administrator') && task.assigneeId !== actor.id) throw createError({ statusCode: 403, statusMessage: 'Задача не назначена вам' })
+  const [updated] = await db.update(tasks).set({ checklist: data.checklist, comment: data.comment, hasProblem: data.hasProblem, problemDescription: data.problemDescription, updatedAt: new Date() }).where(eq(tasks.id, taskId)).returning()
+  await writeAuditLog({ organizationId: actor.organizationId, actorId: actor.id, action: 'task.progress_saved', entityType: 'task', entityId: taskId })
+  return updated
+}
+
 export async function updateTask(actor: Actor, taskId: string, input: unknown) {
   requireRole(actor, 'administrator', 'manager')
   const data = taskUpdateSchema.parse(input)
@@ -61,7 +74,17 @@ export async function updateTask(actor: Actor, taskId: string, input: unknown) {
   if (!task || !(await canManageApartment(actor, task.apartmentId))) throw createError({ statusCode: 404, statusMessage: 'Задача не найдена' })
   if (['completed', 'canceled'].includes(task.status)) throw createError({ statusCode: 409, statusMessage: 'Завершенную или отмененную задачу нельзя изменить' })
   if (data.status && data.status !== 'canceled') throw createError({ statusCode: 400, statusMessage: 'Для начала и завершения задачи используйте отдельные действия' })
-  if (!actor.roles.includes('administrator') && 'ownerCostEur' in data) throw createError({ statusCode: 403, statusMessage: 'Стоимость задачи задает администратор' })
+  const cancelOnly = data.status === 'canceled' && Object.keys(data).length === 1
+  if (!cancelOnly && !actor.roles.includes('administrator')) throw createError({ statusCode: 403, statusMessage: 'Изменять задачу может только администратор' })
+  if (data.apartmentId && data.apartmentId !== task.apartmentId) {
+    const usage = await db.query.inventoryMovements.findFirst({ where: and(eq(inventoryMovements.sourceType, 'task'), eq(inventoryMovements.sourceId, taskId)) })
+    if (!canChangeTaskApartment(task.status, Boolean(usage))) {
+      const statusMessage = task.status !== 'open' ? 'Апартамент можно изменить только у открытой задачи' : 'Апартамент нельзя изменить после списания расходников'
+      throw createError({ statusCode: 409, statusMessage })
+    }
+    const apartment = await db.query.apartments.findFirst({ where: and(eq(apartments.id, data.apartmentId), eq(apartments.organizationId, actor.organizationId)) })
+    if (!apartment) throw createError({ statusCode: 400, statusMessage: 'Апартамент не найден' })
+  }
   if (data.assigneeId) {
     const assignee = await db.query.users.findFirst({ where: and(eq(users.id, data.assigneeId), eq(users.organizationId, actor.organizationId), eq(users.status, 'active')) })
     if (!assignee) throw createError({ statusCode: 400, statusMessage: 'Исполнитель не активен' })
@@ -71,6 +94,15 @@ export async function updateTask(actor: Actor, taskId: string, input: unknown) {
   if (data.assigneeId && data.assigneeId !== task.assigneeId) await notifyUsers({ organizationId: actor.organizationId, userIds: [data.assigneeId], type: 'work_assigned', title: 'Назначена задача', body: updated.title, href: `/tasks/${taskId}` })
   if (data.status === 'canceled' && task.assigneeId) await notifyUsers({ organizationId: actor.organizationId, userIds: [task.assigneeId], type: 'work_canceled', title: 'Задача отменена', body: updated.title, href: `/tasks/${taskId}` })
   return updated
+}
+
+export async function deleteTask(actor: Actor, taskId: string) {
+  requireRole(actor, 'administrator')
+  const task = await db.query.tasks.findFirst({ where: and(eq(tasks.id, taskId), eq(tasks.organizationId, actor.organizationId)) })
+  if (!task) throw createError({ statusCode: 404, statusMessage: 'Задача не найдена' })
+  await deleteWorkRecord('task', taskId)
+  await writeAuditLog({ organizationId: actor.organizationId, actorId: actor.id, action: 'task.deleted', entityType: 'task', entityId: taskId })
+  return { ok: true }
 }
 
 export async function startTask(actor: Actor, taskId: string) {

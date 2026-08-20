@@ -2,7 +2,7 @@
 import { useCurrentUser } from '#fsd/shared/auth'
 import { EmptyState, PageHeader, StatusBadge } from '#fsd/shared/ui'
 
-type Apartment = { id: string; name: string; internalCode: string; building: string; status: string; capacity: number; rooms: number; sleepingPlaces: number; locationDetails?: string; hotel: { id: string; name: string }; manager: { id: string; name: string } | null; type: { name: string } }
+type Apartment = { id: string; name: string; internalCode: string; building: string; status: string; capacity: number; rooms: number; locationDetails?: string; hotel: { id: string; name: string }; manager: { id: string; name: string } | null; type: { name: string } }
 type Attachment = { id: string; fileName: string }
 const user = useCurrentUser()
 const { data: apartments, status } = await useAsyncData('apartments', () => $fetch<Apartment[]>('/api/apartments'), { server: false })
@@ -41,7 +41,6 @@ function hotelLabel(apartment: Apartment) { return [apartment.hotel.name, apartm
           <dl class="apartment-card__facts">
             <div><dt>Гостей</dt><dd>{{ apartment.capacity }}</dd></div>
             <div><dt>Комнат</dt><dd>{{ apartment.rooms }}</dd></div>
-            <div><dt>Спальных мест</dt><dd>{{ apartment.sleepingPlaces }}</dd></div>
           </dl>
 
           <div class="apartment-card__footer">

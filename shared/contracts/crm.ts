@@ -34,7 +34,8 @@ function withCalculatedTariff<Shape extends z.ZodRawShape>(shape: Shape) {
   })
 }
 
-export const apartmentTypeInputSchema = withCalculatedTariff({ name: z.string().trim().min(1).max(100) })
+const checklistLabelsSchema = z.array(z.string().trim().min(1).max(200)).max(100)
+export const apartmentTypeInputSchema = withCalculatedTariff({ name: z.string().trim().min(1).max(100), defaultChecklist: checklistLabelsSchema.default(['Сменить белье и полотенца', 'Проверить санузел и кухню', 'Проверить расходники']) })
 const apartmentTariffInputSchema = withCalculatedTariff({})
 
 export const apartmentInputSchema = z.object({
@@ -47,7 +48,6 @@ export const apartmentInputSchema = z.object({
   locationDetails: z.string().trim().max(250, 'Расположение не должно превышать 250 символов').optional().default(''),
   capacity: z.coerce.number().int('Укажите целое число').positive('Укажите хотя бы одного гостя').max(50, 'Максимум 50 гостей'),
   rooms: z.coerce.number().int('Укажите целое число').positive('Укажите хотя бы одну комнату').max(20, 'Максимум 20 комнат'),
-  sleepingPlaces: z.coerce.number().int('Укажите целое число').positive('Укажите хотя бы одно спальное место').max(50, 'Максимум 50 спальных мест'),
   checkInTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Укажите время заезда'),
   checkOutTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Укажите время выезда'),
   instructions: z.string().max(5000, 'Инструкции не должны превышать 5000 символов').optional().default(''),
@@ -69,7 +69,6 @@ export const stayInputSchema = z.object({
   checkOutOn: z.iso.date(),
   adultCount: z.coerce.number().int().min(1).max(50),
   childCount: z.coerce.number().int().min(0).max(50),
-  sleepingPlacesUsed: z.coerce.number().int().min(0).max(50),
   specialRequests: z.string().max(2000).optional().default(''),
   guestName: z.string().trim().max(160).optional().default(''),
   guestPhone: z.string().trim().max(50).optional().default(''),
@@ -82,18 +81,98 @@ export const stayInputSchema = z.object({
   }
 })
 
+const optionalApartmentIdsSchema = z.preprocess(value => {
+  if (value === undefined || value === null || value === '') return undefined
+  const values = Array.isArray(value) ? value : typeof value === 'string' ? value.split(',') : []
+  return [...new Set(values.map(item => String(item).trim()).filter(Boolean))]
+}, z.array(z.uuid({ error: 'Некорректный апартамент' })).min(1, 'Выберите хотя бы один апартамент').optional())
+
+export const stayListQuerySchema = z.object({
+  hotelId: z.uuid({ error: 'Некорректный отель' }).optional(),
+  apartmentIds: optionalApartmentIdsSchema,
+  from: z.iso.date().optional(),
+  to: z.iso.date().optional()
+}).strict().superRefine((value, context) => {
+  if (value.hotelId && value.apartmentIds) {
+    context.addIssue({ code: 'custom', path: ['apartmentIds'], message: 'Выберите отель или апартаменты' })
+  }
+})
+
+export type StayListQuery = z.infer<typeof stayListQuerySchema>
+
 export const cleaningAssignmentInputSchema = z.object({ cleanerIds: z.array(z.uuid()).min(1), scheduledOn: z.iso.date() })
 export const cleaningTariffOverrideSchema = withCalculatedTariff({ reason: z.string().trim().min(3).max(1000) })
+const cleaningChecklistSchema = z.array(z.object({ label: z.string().trim().min(1).max(200), checked: z.boolean() })).max(100)
+export const cleaningInputSchema = withCalculatedTariff({
+  apartmentId: z.uuid(),
+  stayId: z.uuid().nullable().optional(),
+  cleanerIds: z.array(z.uuid()).default([]),
+  scheduledOn: z.iso.date().nullable(),
+  checklist: cleaningChecklistSchema.optional()
+}).superRefine((value, context) => {
+  if (value.cleanerIds.length && !value.scheduledOn) context.addIssue({ code: 'custom', path: ['scheduledOn'], message: 'Укажите дату уборки для выбранных исполнителей' })
+})
+export const cleaningUpdateSchema = withCalculatedTariff({
+  cleanerIds: z.array(z.uuid()).default([]),
+  scheduledOn: z.iso.date().nullable(),
+  apartmentId: z.uuid().optional(),
+  stayId: z.uuid().nullable().optional(),
+  checklist: cleaningChecklistSchema.optional(),
+  reason: z.string().trim().max(1000).default('')
+}).superRefine((value, context) => {
+  if (value.cleanerIds.length && !value.scheduledOn) {
+    context.addIssue({ code: 'custom', path: ['scheduledOn'], message: 'Укажите дату уборки для выбранных исполнителей' })
+  }
+})
+
+export const cleaningRouteUpdateSchema = z.object({
+  cleanerId: z.uuid(),
+  scheduledOn: z.iso.date(),
+  cleaningIds: z.array(z.uuid()).min(1).max(500)
+}).superRefine((value, context) => {
+  if (new Set(value.cleaningIds).size !== value.cleaningIds.length) {
+    context.addIssue({ code: 'custom', path: ['cleaningIds'], message: 'Уборки в маршруте не должны повторяться' })
+  }
+})
 
 export const completionInputSchema = z.object({
   checklist: z.array(z.object({ label: z.string().min(1), checked: z.boolean() })),
   comment: z.string().max(2000).default(''),
   hasProblem: z.boolean().default(false),
-  problemDescription: z.string().max(2000).default('')
+  problemDescription: z.string().max(2000).default(''),
+  inventoryReports: z.array(z.object({
+    consumableId: z.uuid(),
+    usedQuantity: z.coerce.number().finite().nonnegative().max(9_999_999.999),
+    remainingQuantity: z.coerce.number().finite().nonnegative().max(9_999_999.999)
+  })).max(500).optional()
 }).superRefine((value, context) => {
   if (value.hasProblem && !value.problemDescription.trim()) {
     context.addIssue({ code: 'custom', path: ['problemDescription'], message: 'Опишите проблему' })
   }
+})
+
+export const workProgressInputSchema = z.object({
+  checklist: z.array(z.object({ label: z.string().min(1), checked: z.boolean() })),
+  comment: z.string().max(2000).default(''),
+  hasProblem: z.boolean().default(false),
+  problemDescription: z.string().max(2000).default(''),
+  inventoryReports: z.array(z.object({
+    consumableId: z.uuid(),
+    usedQuantity: z.coerce.number().finite().nonnegative().max(9_999_999.999),
+    remainingQuantity: z.coerce.number().finite().nonnegative().max(9_999_999.999)
+  })).max(500).optional()
+}).superRefine((value, context) => {
+  if (value.hasProblem && !value.problemDescription.trim()) {
+    context.addIssue({ code: 'custom', path: ['problemDescription'], message: 'Опишите проблему' })
+  }
+})
+
+export const cleaningInventoryReportInputSchema = z.object({
+  reports: z.array(z.object({
+    consumableId: z.uuid(),
+    usedQuantity: z.coerce.number().finite().nonnegative().max(9_999_999.999),
+    remainingQuantity: z.coerce.number().finite().nonnegative().max(9_999_999.999)
+  })).max(500)
 })
 
 export const taskInputSchema = z.object({

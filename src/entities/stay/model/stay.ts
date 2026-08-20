@@ -4,7 +4,6 @@ export interface Stay {
   checkOutOn: string
   adultCount: number
   childCount: number
-  sleepingPlacesUsed?: number
   specialRequests?: string
   guestName?: string
   guestPhone?: string
@@ -12,5 +11,12 @@ export interface Stay {
   cashAmountEur?: number | null
   apartmentId: string
   apartment: { name: string; hotel: { name: string } }
-  services?: Array<{ nameSnapshot: string; priceEurSnapshot: number }>
+  cleaning?: { id: string; status: string; scheduledOn: string | null } | null
+  services?: Array<{
+    id: string
+    specialServiceId: string
+    nameSnapshot: string
+    priceEurSnapshot: number
+    managerSharePercentSnapshot: number
+  }>
 }

@@ -11,7 +11,7 @@ const moreOpen = ref(false)
 const work: NavItem[] = [
   { to: '/', label: 'Главная', icon: 'i-lucide-layout-dashboard' },
   { to: '/calendar', label: 'Заезды', icon: 'i-lucide-calendar-days' },
-  { to: '/work', label: 'Работы', icon: 'i-lucide-list-checks' }
+  { to: '/work', label: 'Уборки', icon: 'i-lucide-sparkles' }
 ]
 const objects: NavItem[] = [
   { to: '/apartments', label: 'Апартаменты', icon: 'i-lucide-building-2' },

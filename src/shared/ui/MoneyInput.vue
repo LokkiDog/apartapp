@@ -4,9 +4,10 @@ import { formatEuroInput, parseEuroInput } from '#fsd/shared/lib'
 const props = withDefaults(defineProps<{
   modelValue: number | null
   placeholder?: string
+  emptyValue?: number | null
   disabled?: boolean
   required?: boolean
-}>(), { placeholder: '0', disabled: false, required: false })
+}>(), { placeholder: '0', emptyValue: null, disabled: false, required: false })
 
 const emit = defineEmits<{ 'update:modelValue': [value: number | null] }>()
 const raw = ref(formatEuroInput(props.modelValue))
@@ -24,15 +25,21 @@ function update(value: string | number) {
     return
   }
   invalid.value = false
+  if (!next.trim() && props.emptyValue !== null) {
+    raw.value = formatEuroInput(props.emptyValue)
+    emit('update:modelValue', props.emptyValue)
+    return
+  }
   raw.value = next
   emit('update:modelValue', parseEuroInput(next))
 }
 
 function blur() {
   const parsed = parseEuroInput(raw.value)
+  const value = !raw.value.trim() && props.emptyValue !== null ? props.emptyValue : parsed
   invalid.value = Boolean(raw.value.trim()) && parsed === null
-  raw.value = formatEuroInput(parsed)
-  emit('update:modelValue', parsed)
+  raw.value = formatEuroInput(value)
+  emit('update:modelValue', value)
 }
 </script>
 

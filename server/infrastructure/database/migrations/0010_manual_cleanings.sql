@@ -1,0 +1,1 @@
+ALTER TABLE "cleanings" ALTER COLUMN "stay_id" DROP NOT NULL;

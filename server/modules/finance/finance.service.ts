@@ -1,7 +1,7 @@
-import { and, asc, eq, gte, lt } from 'drizzle-orm'
+import { and, asc, eq, gte, lt, sql } from 'drizzle-orm'
 import Decimal from 'decimal.js'
 import { db } from '../../infrastructure/database/client'
-import { apartments, financialEntries } from '../../infrastructure/database/schema'
+import { apartments, consumables, financialEntries, inventoryMovements } from '../../infrastructure/database/schema'
 import type { Actor } from '../../infrastructure/auth/actor'
 
 export async function createFinancialEntry(input: {
@@ -42,11 +42,13 @@ export async function managerStatement(actor: Actor, month: string) {
     type: financialEntries.type,
     amountEur: financialEntries.amountEur,
     occurredOn: financialEntries.occurredOn,
-    description: financialEntries.description,
+    description: sql<string>`case when ${financialEntries.type} = 'inventory_charge' and ${consumables.name} is not null then concat('Расход: ', ${consumables.name}) else ${financialEntries.description} end`,
     sourceType: financialEntries.sourceType,
     sourceId: financialEntries.sourceId
   }).from(financialEntries)
     .innerJoin(apartments, eq(financialEntries.apartmentId, apartments.id))
+    .leftJoin(inventoryMovements, and(eq(financialEntries.sourceType, 'inventory_movement'), eq(financialEntries.sourceId, inventoryMovements.id)))
+    .leftJoin(consumables, eq(inventoryMovements.consumableId, consumables.id))
     .where(and(...criteria))
     .orderBy(asc(apartments.name), asc(financialEntries.type), asc(financialEntries.occurredOn), asc(financialEntries.createdAt))
   const totalEur = Number(entries.reduce((sum, entry) => sum.plus(entry.amountEur), new Decimal(0)).toDecimalPlaces(2))

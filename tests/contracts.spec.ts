@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { apartmentInputSchema, apartmentTypeInputSchema, cleaningAssignmentInputSchema, cleaningTariffOverrideSchema, completionInputSchema, hotelInputSchema, specialServiceInputSchema, stayInputSchema, taskInputSchema } from '../shared/contracts/crm'
+import { apartmentInputSchema, apartmentTypeInputSchema, cleaningAssignmentInputSchema, cleaningInputSchema, cleaningRouteUpdateSchema, cleaningTariffOverrideSchema, cleaningUpdateSchema, completionInputSchema, hotelInputSchema, specialServiceInputSchema, stayInputSchema, stayListQuerySchema, taskInputSchema, workProgressInputSchema } from '../shared/contracts/crm'
 import { formatEuroInput, parseEuroInput } from '../src/shared/lib/money'
 import { apartmentCalendarColor } from '../src/shared/lib/calendar'
 import { calculateFifoUsage } from '../server/modules/inventory/fifo'
@@ -13,6 +13,8 @@ describe('CRM contracts', () => {
   it('calculates a cleaning tariff total from its components', () => {
     const parsed = apartmentTypeInputSchema.parse({ name: 'Studio', cleanerPoolEur: 5, laundryEur: 3, serviceEur: 2 })
     expect(parsed.ownerTotalEur).toBe(10)
+    expect(parsed.defaultChecklist).toEqual(['Сменить белье и полотенца', 'Проверить санузел и кухню', 'Проверить расходники'])
+    expect(apartmentTypeInputSchema.safeParse({ name: 'Studio', cleanerPoolEur: 5, laundryEur: 3, serviceEur: 2, defaultChecklist: [''] }).success).toBe(false)
   })
 
   it('normalizes and validates an apartment building', () => {
@@ -24,7 +26,6 @@ describe('CRM contracts', () => {
       internalCode: 'MV-12',
       capacity: 4,
       rooms: 2,
-      sleepingPlaces: 3,
       checkInTime: '15:00',
       checkOutTime: '11:00'
     }
@@ -33,18 +34,27 @@ describe('CRM contracts', () => {
     expect(apartmentInputSchema.safeParse({ ...base, building: 'B'.repeat(101) }).success).toBe(false)
   })
   it('requires check-out after check-in', () => {
-    const base = { apartmentId: '00000000-0000-4000-8000-000000000001', adultCount: 1, childCount: 0, sleepingPlacesUsed: 1 }
+    const base = { apartmentId: '00000000-0000-4000-8000-000000000001', adultCount: 1, childCount: 0 }
     expect(stayInputSchema.safeParse({ ...base, checkInOn: '2026-01-02', checkOutOn: '2026-01-03' }).success).toBe(true)
     expect(stayInputSchema.safeParse({ ...base, checkInOn: '2026-01-03', checkOutOn: '2026-01-02' }).success).toBe(false)
     expect(stayInputSchema.safeParse({ ...base, checkInOn: '2026-01-02T10:00:00Z', checkOutOn: '2026-01-03' }).success).toBe(false)
   })
 
   it('validates cash and selected service data on a stay', () => {
-    const base = { apartmentId: '00000000-0000-4000-8000-000000000001', checkInOn: '2026-01-02', checkOutOn: '2026-01-03', adultCount: 1, childCount: 0, sleepingPlacesUsed: 1 }
+    const base = { apartmentId: '00000000-0000-4000-8000-000000000001', checkInOn: '2026-01-02', checkOutOn: '2026-01-03', adultCount: 1, childCount: 0 }
     expect(stayInputSchema.safeParse({ ...base, cashAmountEur: 25, serviceIds: [] }).success).toBe(true)
     expect(stayInputSchema.safeParse({ ...base, cashAmountEur: -1 }).success).toBe(false)
     expect(specialServiceInputSchema.safeParse({ name: 'Поздний выезд', priceEur: 20, managerSharePercent: 25, active: true }).success).toBe(true)
     expect(specialServiceInputSchema.safeParse({ name: 'Поздний выезд', priceEur: 20, managerSharePercent: 101 }).success).toBe(false)
+  })
+
+  it('normalizes apartment filters for the stay list', () => {
+    const firstId = '00000000-0000-4000-8000-000000000001'
+    const secondId = '00000000-0000-4000-8000-000000000002'
+    expect(stayListQuerySchema.parse({ apartmentIds: `${firstId},${secondId},${firstId}`, from: '2026-08-01', to: '2026-09-01' }).apartmentIds).toEqual([firstId, secondId])
+    expect(stayListQuerySchema.safeParse({ apartmentIds: ['not-a-uuid'] }).success).toBe(false)
+    expect(stayListQuerySchema.safeParse({ hotelId: firstId, apartmentIds: [secondId] }).success).toBe(false)
+    expect(stayListQuerySchema.parse({ hotelId: firstId }).hotelId).toBe(firstId)
   })
 
   it('requires a reason for tariff override and a description for a problem', () => {
@@ -53,6 +63,43 @@ describe('CRM contracts', () => {
     expect(cleaningTariffOverrideSchema.safeParse({ ...tariff, reason: '' }).success).toBe(false)
     expect(completionInputSchema.safeParse({ checklist: [], hasProblem: true, problemDescription: '' }).success).toBe(false)
     expect(completionInputSchema.safeParse({ checklist: [], hasProblem: true, problemDescription: 'Протекает кран' }).success).toBe(true)
+  })
+
+  it('validates combined cleaning updates', () => {
+    const tariff = { cleanerPoolEur: 5, laundryEur: 4, serviceEur: 3 }
+    const cleanerId = '00000000-0000-4000-8000-000000000001'
+    expect(cleaningUpdateSchema.safeParse({ ...tariff, cleanerIds: [], scheduledOn: null }).success).toBe(true)
+    expect(cleaningUpdateSchema.safeParse({ ...tariff, cleanerIds: [cleanerId], scheduledOn: '2026-01-10' }).success).toBe(true)
+    expect(cleaningUpdateSchema.safeParse({ ...tariff, cleanerIds: [cleanerId], scheduledOn: null }).success).toBe(false)
+    expect(cleaningUpdateSchema.safeParse({ ...tariff, cleanerIds: [], scheduledOn: '2026-01-10T12:00:00Z' }).success).toBe(false)
+  })
+
+  it('validates optional cleaning inventory reports', () => {
+    const consumableId = '00000000-0000-4000-8000-000000000001'
+    expect(completionInputSchema.safeParse({ checklist: [], inventoryReports: [{ consumableId, usedQuantity: 0, remainingQuantity: 2 }] }).success).toBe(true)
+    expect(completionInputSchema.safeParse({ checklist: [], inventoryReports: [{ consumableId, usedQuantity: -1, remainingQuantity: 2 }] }).success).toBe(false)
+  })
+
+  it('validates a saved work draft without requiring completion', () => {
+    expect(workProgressInputSchema.safeParse({ checklist: [{ label: 'Проверить санузел', checked: false }], comment: '', hasProblem: false }).success).toBe(true)
+    expect(workProgressInputSchema.safeParse({ checklist: [], hasProblem: true, problemDescription: '' }).success).toBe(false)
+  })
+
+  it('validates manual cleaning creation with optional stay and assignment', () => {
+    const apartmentId = '00000000-0000-4000-8000-000000000001'
+    const cleanerId = '00000000-0000-4000-8000-000000000002'
+    const tariff = { cleanerPoolEur: 5, laundryEur: 4, serviceEur: 3 }
+    expect(cleaningInputSchema.safeParse({ ...tariff, apartmentId, stayId: null, cleanerIds: [], scheduledOn: null }).success).toBe(true)
+    expect(cleaningInputSchema.safeParse({ ...tariff, apartmentId, cleanerIds: [cleanerId], scheduledOn: null }).success).toBe(false)
+    expect(cleaningInputSchema.safeParse({ ...tariff, apartmentId, cleanerIds: [cleanerId], scheduledOn: '2026-01-10' }).success).toBe(true)
+    expect(cleaningInputSchema.parse({ ...tariff, apartmentId, cleanerIds: [], scheduledOn: null }).checklist).toBeUndefined()
+    expect(cleaningInputSchema.safeParse({ ...tariff, apartmentId, cleanerIds: [], scheduledOn: null, checklist: [{ label: 'Проверить окна', checked: false }] }).success).toBe(true)
+  })
+
+  it('validates a unique cleaning route order', () => {
+    const base = { cleanerId: '00000000-0000-4000-8000-000000000001', scheduledOn: '2026-01-10' }
+    expect(cleaningRouteUpdateSchema.safeParse({ ...base, cleaningIds: ['00000000-0000-4000-8000-000000000002'] }).success).toBe(true)
+    expect(cleaningRouteUpdateSchema.safeParse({ ...base, cleaningIds: ['00000000-0000-4000-8000-000000000002', '00000000-0000-4000-8000-000000000002'] }).success).toBe(false)
   })
 
   it('accepts comma and dot EUR input and rounds to the nearest cent', () => {

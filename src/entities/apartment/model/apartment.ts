@@ -6,5 +6,7 @@ export interface Apartment {
   locationDetails: string
   status: string
   hotel: { id: string; name: string }
+  tariffOverride?: { ownerTotalEur: number; cleanerPoolEur: number; laundryEur: number; serviceEur: number } | null
+  type?: { ownerTotalEur: number; cleanerPoolEur: number; laundryEur: number; serviceEur: number; defaultChecklist?: string[] } | null
   manager: { id: string; name: string } | null
 }

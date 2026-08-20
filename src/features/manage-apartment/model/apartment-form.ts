@@ -33,7 +33,6 @@ export function createApartmentFormState(initial: Partial<ApartmentFormState> = 
     locationDetails: '',
     capacity: 2,
     rooms: 1,
-    sleepingPlaces: 2,
     checkInTime: '15:00',
     checkOutTime: '11:00',
     instructions: '',

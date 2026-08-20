@@ -1,12 +1,11 @@
 import { and, eq, inArray, lt, gt, ne } from 'drizzle-orm'
 import Decimal from 'decimal.js'
-import { stayInputSchema } from '@contracts/crm'
+import { stayInputSchema, type StayListQuery } from '@contracts/crm'
 import { canManageApartment, requireRole, type Actor } from '../../infrastructure/auth/actor'
 import { writeAuditLog } from '../../infrastructure/audit/log'
 import { db } from '../../infrastructure/database/client'
 import { cleaningAssignments, cleanings, financialEntries, inventoryLots, inventoryMovements, specialServices, stayServices, stays } from '../../infrastructure/database/schema'
 import { administratorsForOrganization, notifyUsers } from '../../infrastructure/notification/publish'
-import { createCleaningForStay } from '../cleaning/cleaning.service'
 import { createFinancialEntry } from '../finance/finance.service'
 
 async function assertNoOverlap(organizationId: string, apartmentId: string, checkInOn: string, checkOutOn: string, exceptId?: string) {
@@ -23,12 +22,13 @@ async function serviceSnapshots(serviceIds: string[], organizationId: string) {
   return services
 }
 
-export async function listStays(actor: Actor, hotelId?: string, from?: string, to?: string) {
+export async function listStays(actor: Actor, query: StayListQuery = {}) {
   const criteria = [eq(stays.organizationId, actor.organizationId)]
-  if (from) criteria.push(gt(stays.checkOutOn, from))
-  if (to) criteria.push(lt(stays.checkInOn, to))
-  const rows = await db.query.stays.findMany({ where: and(...criteria), with: { apartment: { with: { hotel: true, manager: true } }, services: true }, orderBy: (stays, { asc }) => [asc(stays.checkInOn)] })
-  return rows.filter(stay => (actor.roles.includes('administrator') || stay.apartment.managerId === actor.id) && (!hotelId || stay.apartment.hotelId === hotelId))
+  if (query.from) criteria.push(gt(stays.checkOutOn, query.from))
+  if (query.to) criteria.push(lt(stays.checkInOn, query.to))
+  if (query.apartmentIds) criteria.push(inArray(stays.apartmentId, query.apartmentIds))
+  const rows = await db.query.stays.findMany({ where: and(...criteria), with: { apartment: { with: { hotel: true, manager: true } }, services: true, cleaning: { columns: { id: true, status: true, scheduledOn: true } } }, orderBy: (stays, { asc }) => [asc(stays.checkInOn)] })
+  return rows.filter(stay => (actor.roles.includes('administrator') || stay.apartment.managerId === actor.id) && (!query.hotelId || stay.apartment.hotelId === query.hotelId))
 }
 
 export async function createStay(actor: Actor, input: unknown) {
@@ -45,7 +45,6 @@ export async function createStay(actor: Actor, input: unknown) {
     ? await db.insert(stayServices).values(services.map(service => ({ stayId: stay.id, specialServiceId: service.id, nameSnapshot: service.name, priceEurSnapshot: service.priceEur, managerSharePercentSnapshot: service.managerSharePercent }))).returning()
     : []
   await Promise.all(snapshots.map(service => createFinancialEntry({ organizationId: actor.organizationId, apartmentId: stay.apartmentId, type: 'guest_service_charge', visibility: 'administrator', amountEur: service.priceEurSnapshot, occurredOn: stay.checkInOn, description: `Допуслуга: ${service.nameSnapshot}`, sourceType: 'stay_service', sourceId: service.id, createdById: actor.id })))
-  await createCleaningForStay({ organizationId: actor.organizationId, stayId: stay.id, apartmentId: stay.apartmentId })
   await writeAuditLog({ organizationId: actor.organizationId, actorId: actor.id, action: 'stay.created', entityType: 'stay', entityId: stay.id })
   if (actor.roles.includes('manager')) await notifyUsers({ organizationId: actor.organizationId, userIds: await administratorsForOrganization(actor.organizationId), type: 'stay_changed', title: 'Новый заезд', body: 'Управляющий создал новый заезд', href: `/calendar` })
   return stay
@@ -53,12 +52,44 @@ export async function createStay(actor: Actor, input: unknown) {
 
 export async function updateStay(actor: Actor, stayId: string, input: unknown) {
   const data = stayInputSchema.parse(input)
-  const existing = await db.query.stays.findFirst({ where: and(eq(stays.id, stayId), eq(stays.organizationId, actor.organizationId)) })
+  const existing = await db.query.stays.findFirst({ where: and(eq(stays.id, stayId), eq(stays.organizationId, actor.organizationId)), with: { services: true } })
   if (!existing) throw createError({ statusCode: 404, statusMessage: 'Заезд не найден' })
   if (!(await canManageApartment(actor, existing.apartmentId))) throw createError({ statusCode: 403, statusMessage: 'Нет доступа к заезду' })
+  if (data.apartmentId !== existing.apartmentId) throw createError({ statusCode: 400, statusMessage: 'Апартамент существующего заезда изменить нельзя' })
   await assertNoOverlap(actor.organizationId, existing.apartmentId, data.checkInOn, data.checkOutOn, stayId)
+  const requestedServiceIds = new Set(data.serviceIds)
+  const existingByServiceId = new Map(existing.services.map(service => [service.specialServiceId, service]))
+  const addedServices = await serviceSnapshots(data.serviceIds.filter(serviceId => !existingByServiceId.has(serviceId)), actor.organizationId)
+  const retainedServices = existing.services.filter(service => requestedServiceIds.has(service.specialServiceId))
+  const selectedServiceTotal = retainedServices.reduce((sum, service) => sum.plus(service.priceEurSnapshot), new Decimal(0))
+    .plus(addedServices.reduce((sum, service) => sum.plus(service.priceEur), new Decimal(0)))
+  const cashAmountEur = data.cashAmountEur ?? Number(selectedServiceTotal.toDecimalPlaces(2))
   const { serviceIds: _serviceIds, ...stayData } = data
-  const [updated] = await db.update(stays).set({ ...stayData, updatedAt: new Date() }).where(eq(stays.id, stayId)).returning()
+  const removedServices = existing.services.filter(service => !requestedServiceIds.has(service.specialServiceId))
+
+  const updated = await db.transaction(async tx => {
+    const [updatedStay] = await tx.update(stays).set({ ...stayData, cashAmountEur, updatedAt: new Date() }).where(eq(stays.id, stayId)).returning()
+
+    if (removedServices.length) {
+      const removedIds = removedServices.map(service => service.id)
+      await tx.delete(financialEntries).where(and(eq(financialEntries.sourceType, 'stay_service'), inArray(financialEntries.sourceId, removedIds)))
+      await tx.delete(stayServices).where(inArray(stayServices.id, removedIds))
+    }
+
+    if (retainedServices.length) {
+      await tx.update(financialEntries)
+        .set({ occurredOn: data.checkInOn })
+        .where(and(eq(financialEntries.sourceType, 'stay_service'), inArray(financialEntries.sourceId, retainedServices.map(service => service.id))))
+    }
+
+    const addedSnapshots = addedServices.length
+      ? await tx.insert(stayServices).values(addedServices.map(service => ({ stayId, specialServiceId: service.id, nameSnapshot: service.name, priceEurSnapshot: service.priceEur, managerSharePercentSnapshot: service.managerSharePercent }))).returning()
+      : []
+    for (const service of addedSnapshots) {
+      await createFinancialEntry({ organizationId: actor.organizationId, apartmentId: existing.apartmentId, type: 'guest_service_charge', visibility: 'administrator', amountEur: service.priceEurSnapshot, occurredOn: data.checkInOn, description: `Допуслуга: ${service.nameSnapshot}`, sourceType: 'stay_service', sourceId: service.id, createdById: actor.id }, tx as unknown as typeof db)
+    }
+    return updatedStay
+  })
   await writeAuditLog({ organizationId: actor.organizationId, actorId: actor.id, action: 'stay.updated', entityType: 'stay', entityId: stayId })
   if (actor.roles.includes('manager')) await notifyUsers({ organizationId: actor.organizationId, userIds: await administratorsForOrganization(actor.organizationId), type: 'stay_changed', title: 'Заезд изменен', body: 'Управляющий изменил заезд', href: '/calendar' })
   return updated

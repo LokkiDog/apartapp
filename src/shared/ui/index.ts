@@ -1,6 +1,7 @@
 export { default as EmptyState } from './EmptyState.vue'
 export { default as DeleteConfirmModal } from './DeleteConfirmModal.vue'
 export { default as DateInput } from './DateInput.vue'
+export { default as DateRangeInput } from './DateRangeInput.vue'
 export { default as MetricTile } from './MetricTile.vue'
 export { default as MoneyInput } from './MoneyInput.vue'
 export { default as PageHeader } from './PageHeader.vue'

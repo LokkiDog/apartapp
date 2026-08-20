@@ -46,7 +46,6 @@ const initialValue = computed<Partial<ApartmentInput>>(() => apartment.value ? {
   locationDetails: apartment.value.locationDetails,
   capacity: apartment.value.capacity,
   rooms: apartment.value.rooms,
-  sleepingPlaces: apartment.value.sleepingPlaces,
   checkInTime: apartment.value.checkInTime,
   checkOutTime: apartment.value.checkOutTime,
   instructions: apartment.value.instructions,

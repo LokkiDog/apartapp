@@ -109,9 +109,9 @@ export function assignMonthWeekLanes<TStay extends CalendarTimelineStay>(
         : lanes.findIndex(existing => !existing.some(placed => overlaps(placed, segment)))
 
       if (lane < 0) lane = lanes.length
-      if (!lanes[lane]) lanes[lane] = []
+      const laneSegments = lanes[lane] ?? (lanes[lane] = [])
       segment.lane = lane
-      lanes[lane].push(segment)
+      laneSegments.push(segment)
       preferredLanes.set(segment.stay.id, lane)
     }
 

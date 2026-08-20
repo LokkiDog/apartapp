@@ -2,13 +2,13 @@
 import type { GlobalReportResponse, WorkloadDay } from '@contracts/report'
 import type { Apartment } from '#fsd/entities/apartment'
 import type { Hotel } from '#fsd/entities/hotel'
+import { isPropertyScopeReady, PropertyScopeFilter, type PropertyScope } from '#fsd/features/select-property-scope'
 import { useCurrentUser } from '#fsd/shared/auth'
 import { formatDate, formatEuro } from '#fsd/shared/lib'
 import { DateInput, EmptyState, MetricTile, PageHeader, StatusBadge } from '#fsd/shared/ui'
 import { downloadReportCsv, type ReportTab } from './lib/report-csv'
 
 type Preset = 'week' | 'month' | 'next7' | 'next30' | 'custom'
-type ReportScope = 'all' | 'hotel' | 'apartments'
 
 const user = useCurrentUser()
 if (!user.value?.roles.includes('administrator')) await navigateTo('/')
@@ -19,7 +19,7 @@ const addDays = (date: Date, amount: number) => { const copy = new Date(date); c
 const today = new Date()
 const startOfWeek = addDays(today, -((today.getDay() + 6) % 7))
 const endOfWeek = addDays(startOfWeek, 6)
-const filters = reactive<{ from: string; to: string; scope: ReportScope; hotelId: string; apartmentIds: string[] }>({
+const filters = reactive<{ from: string; to: string; scope: PropertyScope; hotelId: string; apartmentIds: string[] }>({
   from: iso(startOfWeek),
   to: iso(endOfWeek),
   scope: 'all',
@@ -35,31 +35,7 @@ const error = ref('')
 
 const { data: hotels } = await useAsyncData('report-hotels', () => $fetch<Hotel[]>('/api/hotels'), { server: false })
 const { data: apartments, error: apartmentsError } = await useAsyncData('report-apartments', () => $fetch<Apartment[]>('/api/apartments'), { server: false })
-const hotelOptions = computed(() => [{ label: 'Все отели', value: 'all' }, ...(hotels.value ?? []).filter(hotel => hotel.status === 'active').map(hotel => ({ label: hotel.name, value: hotel.id }))])
-const scopeOptions = [
-  { label: 'Все объекты', value: 'all' },
-  { label: 'Один отель', value: 'hotel' },
-  { label: 'Выбранные апартаменты', value: 'apartments' }
-]
-const apartmentItems = computed(() => {
-  const byHotel = new Map<string, Apartment[]>()
-  for (const apartment of [...(apartments.value ?? [])].sort((left, right) => left.hotel.name.localeCompare(right.hotel.name, 'ru') || left.name.localeCompare(right.name, 'ru'))) {
-    const list = byHotel.get(apartment.hotel.id) ?? []
-    list.push(apartment)
-    byHotel.set(apartment.hotel.id, list)
-  }
-  return [...byHotel.values()].flatMap(group => [
-    { type: 'label' as const, label: group[0]?.hotel.name ?? '', value: group[0]?.hotel.id ?? '' },
-    ...group.map(apartment => ({
-      label: apartment.name,
-      value: apartment.id,
-      description: `${apartment.hotel.name} · ${apartment.internalCode}${apartment.status === 'archived' ? ' · Архив' : ''}`,
-      status: apartment.status
-    }))
-  ])
-})
-const selectedApartments = computed(() => (apartments.value ?? []).filter(apartment => filters.apartmentIds.includes(apartment.id)))
-const scopeReady = computed(() => filters.scope === 'all' || (filters.scope === 'hotel' && filters.hotelId !== 'all') || (filters.scope === 'apartments' && filters.apartmentIds.length > 0))
+const scopeReady = computed(() => isPropertyScopeReady(filters))
 const tabs: Array<{ value: ReportTab; label: string; icon: string }> = [
   { value: 'summary', label: 'Сводка', icon: 'i-lucide-layout-dashboard' },
   { value: 'procurement', label: 'Закупки', icon: 'i-lucide-shopping-cart' },
@@ -91,18 +67,6 @@ watch(preset, value => {
   if (value === 'next30') Object.assign(filters, { from: iso(today), to: iso(addDays(today, 29)) })
 })
 
-watch(() => filters.scope, scope => {
-  if (scope === 'all') {
-    filters.hotelId = 'all'
-    filters.apartmentIds = []
-  } else if (scope === 'hotel') {
-    filters.apartmentIds = []
-    filters.hotelId = 'all'
-  } else {
-    filters.hotelId = 'all'
-  }
-})
-
 function dayLoad(day: WorkloadDay) { return day.cleanings.length + day.tasks.length }
 function cleaningTone(status: string) { return status === 'completed' ? 'success' : status === 'in_progress' ? 'warning' : status === 'canceled' ? 'neutral' : 'info' as const }
 function taskTone(status: string) { return status === 'completed' ? 'success' : status === 'in_progress' ? 'warning' : status === 'canceled' ? 'neutral' : 'info' as const }
@@ -113,8 +77,6 @@ function plural(value: number, one: string, few: string, many: string) {
   return mod100 >= 11 && mod100 <= 19 ? many : mod10 === 1 ? one : mod10 >= 2 && mod10 <= 4 ? few : many
 }
 function countLabel(value: number, one: string, few: string, many: string) { return `${value} ${plural(value, one, few, many)}` }
-function selectedCountLabel(value: number) { return value === 1 ? 'Выбран 1 апартамент' : `Выбрано ${countLabel(value, 'апартамент', 'апартамента', 'апартаментов')}` }
-function removeApartment(id: string) { filters.apartmentIds = filters.apartmentIds.filter(apartmentId => apartmentId !== id) }
 function scopeLabel(value: GlobalReportResponse['filters']) {
   if (value.scope === 'all') return 'Все объекты'
   if (value.scope === 'hotel') return value.hotelName ?? 'Отель'
@@ -148,36 +110,16 @@ await generate()
       <UFormField label="Период"><USelect v-model="preset" :items="presets" class="w-full" /></UFormField>
       <UFormField label="С"><DateInput v-model="filters.from" required @update:model-value="preset = 'custom'" /></UFormField>
       <UFormField label="По"><DateInput v-model="filters.to" required @update:model-value="preset = 'custom'" /></UFormField>
-      <UFormField label="Область отчёта"><USelect v-model="filters.scope" :items="scopeOptions" class="w-full" /></UFormField>
-      <UFormField v-if="filters.scope === 'hotel'" label="Апарт-отель"><USelect v-model="filters.hotelId" :items="hotelOptions" class="w-full" /></UFormField>
-      <UFormField v-else-if="filters.scope === 'apartments'" label="Апартаменты">
-        <UAlert v-if="apartmentsError" color="error" variant="soft" title="Не удалось загрузить апартаменты" description="Обновите страницу или проверьте доступ к разделу апартаментов." />
-        <USelectMenu
-          v-model="filters.apartmentIds"
-          :items="apartmentItems"
-          value-key="value"
-          multiple
-          clear
-          size="md"
-          color="neutral"
-          variant="outline"
-          :content="{ align: 'start', sideOffset: 8, collisionPadding: 8 }"
-          :search-input="{ placeholder: 'Поиск апартамента', variant: 'none', ui: { root: 'h-11 min-h-0 w-full', base: 'h-11 min-h-0 border-0 px-3 py-0 text-[var(--color-ink)] ring-0 focus:ring-0 focus-visible:ring-0' } }"
-          :ui="{ base: 'w-full h-11 min-h-11 rounded-[10px] bg-white text-[var(--color-ink)] ring-[var(--color-line)] hover:bg-white focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]', input: 'h-11 min-h-0 border-0 bg-white text-[var(--color-ink)]', content: 'rounded-[12px] bg-white p-2 shadow-[var(--shadow-overlay)] ring-1 ring-[var(--color-line)]' }"
-          class="report-apartment-select w-full"
-        >
-          <template #default="{ modelValue }">
-            <span v-if="modelValue?.length">{{ selectedCountLabel(modelValue.length) }}</span>
-            <span v-else class="text-[var(--color-muted)]">Выберите апартаменты</span>
-          </template>
-        </USelectMenu>
-        <div v-if="selectedApartments.length" class="report-selected-apartments">
-          <span v-for="apartment in selectedApartments" :key="apartment.id" class="report-selected-apartment">
-            <span class="min-w-0"><span class="block truncate font-medium">{{ apartment.name }}</span><span class="block truncate text-xs text-[var(--color-muted)]">{{ apartment.hotel.name }}<span v-if="apartment.status === 'archived'"> · Архив</span></span></span>
-            <button type="button" aria-label="Убрать апартамент" @click="removeApartment(apartment.id)"><UIcon name="i-lucide-x" class="size-4" /></button>
-          </span>
-        </div>
-      </UFormField>
+      <PropertyScopeFilter
+        v-model:scope="filters.scope"
+        v-model:hotel-id="filters.hotelId"
+        v-model:apartment-ids="filters.apartmentIds"
+        :hotels="hotels ?? []"
+        :apartments="apartments ?? []"
+        :apartments-error="Boolean(apartmentsError)"
+        scope-label="Область отчёта"
+        class="report-filters__scope"
+      />
       <UButton type="submit" icon="i-lucide-sparkles" :loading="pending" :disabled="!scopeReady" class="min-h-11 justify-center">Сформировать</UButton>
     </form>
 

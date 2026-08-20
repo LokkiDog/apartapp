@@ -1,51 +1,349 @@
 <script setup lang="ts">
-import Decimal from 'decimal.js'
+import type { DropdownMenuItem } from '@nuxt/ui'
 import type { Cleaning } from '#fsd/entities/cleaning'
 import type { Task } from '#fsd/entities/task'
 import type { Apartment } from '#fsd/entities/apartment'
 import { formatDate, formatEuro } from '#fsd/shared/lib'
 import { useCurrentUser } from '#fsd/shared/auth'
-import { DateInput, EmptyState, MoneyInput, PageHeader, StatusBadge } from '#fsd/shared/ui'
+import { DateInput, DeleteConfirmModal, EmptyState, MoneyInput, PageHeader, StatusBadge } from '#fsd/shared/ui'
+import { CleaningFormSlideover, type CleaningDraft } from '#fsd/features/manage-cleaning'
+import { apartmentsForCleanings, buildCleaningPlan, localDate, routesForDay, sortRoute } from './model/work-planning'
+
+type WorkKind = 'cleaning' | 'task'
+type WorkToDelete = { kind: WorkKind; id: string; label: string }
 
 const currentUser = useCurrentUser()
 const tab = ref<'cleanings' | 'tasks'>('cleanings')
-const [{ data: cleanings, refresh: refreshCleanings }, { data: tasks, refresh: refreshTasks }, { data: apartments }] = await Promise.all([
-  useAsyncData('work-cleanings', () => $fetch<Cleaning[]>('/api/cleanings')),
-  useAsyncData('work-tasks', () => $fetch<Task[]>('/api/tasks')),
-  useAsyncData('work-apartments', () => $fetch<Apartment[]>('/api/apartments'))
+const planningMode = ref<'days' | 'cleaners' | 'apartments'>('days')
+const historyOpen = ref(false)
+const laterOpen = ref(false)
+const collapsedFinishedDays = ref(new Set<string>())
+const [{ data: cleanings, refresh: refreshCleanings }, { data: tasks, refresh: refreshTasks }, { data: apartments }, { data: stays }] = await Promise.all([
+  useAsyncData('work-cleanings', () => $fetch<Cleaning[]>('/api/cleanings'), { server: false, default: () => [], watch: [currentUser] }),
+  useAsyncData('work-tasks', () => $fetch<Task[]>('/api/tasks'), { server: false, default: () => [], watch: [currentUser] }),
+  useAsyncData('work-apartments', () => $fetch<Apartment[]>('/api/apartments'), { server: false, default: () => [] }),
+  useAsyncData('work-stays', () => $fetch<import('#fsd/entities/stay').Stay[]>('/api/stays'), { server: false, default: () => [] })
 ])
-const { data: team } = await useAsyncData('work-team', () => currentUser.value?.roles.some(role => ['administrator', 'manager'].includes(role)) ? $fetch<Array<{ id: string; name: string; roles: string[] }>>('/api/users/assignable') : Promise.resolve([]))
+const { data: team } = await useAsyncData('work-team', () => currentUser.value?.roles.some(role => ['administrator', 'manager'].includes(role)) ? $fetch<Array<{ id: string; name: string; roles: string[] }>>('/api/users/assignable') : Promise.resolve([]), { server: false, default: () => [], watch: [currentUser] })
 
-const selected = ref<{ kind: 'cleaning' | 'task'; id: string; checklist: Array<{ label: string; checked: boolean }> } | null>(null)
+const isAdministrator = computed(() => Boolean(currentUser.value?.roles.includes('administrator')))
+const isManager = computed(() => Boolean(currentUser.value?.roles.includes('manager')))
+const pending = ref(false)
+const error = ref('')
+
+const selected = ref<{ kind: WorkKind; id: string; checklist: Array<{ label: string; checked: boolean }> } | null>(null)
 const completeOpen = computed({ get: () => Boolean(selected.value), set: value => { if (!value) selected.value = null } })
-const comment = ref(''); const hasProblem = ref(false); const problemDescription = ref(''); const photo = ref<File | null>(null); const pending = ref(false); const error = ref('')
+const inventoryOnly = ref(false)
+type CleaningInventoryItem = { consumable: { id: string; name: string; unit: string }; quantity: number; usedQuantity: number; remainingQuantity: number; discrepancyQuantity: number }
+const inventoryReports = ref<CleaningInventoryItem[]>([])
+const comment = ref('')
+const hasProblem = ref(false)
+const problemDescription = ref('')
+const photo = ref<File | null>(null)
+
 const taskOpen = ref(false)
+const editingTask = ref<Task | null>(null)
 const taskForm = reactive({ apartmentId: '', assigneeId: 'unassigned', title: '', description: '', priority: 'normal', dueOn: '', ownerCostEur: 0 as number | null, checklist: [] as Array<{ label: string; checked: boolean }> })
-const assignOpen = ref(false); const cleaningToAssign = ref<Cleaning | null>(null); const cleanerIds = ref<string[]>([]); const scheduledOn = ref('')
-const tariffOpen = ref(false); const tariffCleaning = ref<Cleaning | null>(null)
-const tariffForm = reactive({ cleanerPoolEur: 0 as number | null, laundryEur: 0 as number | null, serviceEur: 0 as number | null, reason: '' })
-const tariffTotalEur = computed(() => Number(new Decimal(tariffForm.cleanerPoolEur ?? 0).plus(tariffForm.laundryEur ?? 0).plus(tariffForm.serviceEur ?? 0).toDecimalPlaces(2, Decimal.ROUND_HALF_UP)))
-const stockOpen = ref(false); const stockWork = ref<{ kind: 'cleaning' | 'task'; id: string; apartmentId: string } | null>(null)
+
+const cleaningOpen = ref(false)
+const editingCleaning = ref<Cleaning | null>(null)
+const initialStayId = ref<string | null>(null)
+
+const stockOpen = ref(false)
+const stockWork = ref<{ kind: WorkKind; id: string; apartmentId: string } | null>(null)
 const stockItems = ref<Array<{ consumable: { id: string; name: string; unit: string }; quantity: number }>>([])
 const usageForm = reactive({ consumableId: '', quantity: 1, note: '' })
+
+const deleteOpen = ref(false)
+const workToDelete = ref<WorkToDelete | null>(null)
+const quickCompleteOpen = ref(false)
+const quickCompleteTarget = ref<{ kind: WorkKind; work: Cleaning | Task } | null>(null)
+
+const route = useRoute()
+async function openCleaningFromQuery() {
+  if (!isAdministrator.value) return
+  const stayId = typeof route.query.stayId === 'string' ? route.query.stayId : null
+  const cleaningId = typeof route.query.cleaningId === 'string' ? route.query.cleaningId : null
+  const taskId = typeof route.query.taskId === 'string' ? route.query.taskId : null
+  if (cleaningId) {
+    let cleaning = (cleanings.value ?? []).find(item => item.id === cleaningId)
+    if (!cleaning) {
+      try {
+        cleaning = await $fetch<Cleaning>(`/api/cleanings/${cleaningId}`)
+      } catch {
+        error.value = 'Уборка не найдена или больше недоступна'
+      }
+    }
+    if (cleaning) openEditCleaning(cleaning)
+  } else if (stayId) {
+    openCreateCleaning(stayId)
+  } else if (taskId) {
+    const task = (tasks.value ?? []).find(item => item.id === taskId)
+    if (task) openEditTask(task)
+  }
+}
+onMounted(() => { void openCleaningFromQuery() })
+
+const cleaningPlan = computed(() => buildCleaningPlan(cleanings.value ?? []))
+const today = localDate()
+const todayCount = computed(() => cleaningPlan.value.days.find(day => day.date === today)?.cleanings.filter(cleaning => !['completed', 'canceled'].includes(cleaning.status)).length ?? 0)
+const cleanerPlan = computed(() => {
+  const routes = new Map<string, { cleanerId: string; cleanerName: string; days: Array<{ date: string; cleanings: Cleaning[] }> }>()
+  for (const day of cleaningPlan.value.days) {
+    for (const route of routesForDay(day.cleanings, true)) {
+      const employee = routes.get(route.cleanerId) ?? { cleanerId: route.cleanerId, cleanerName: route.cleanerName, days: [] }
+      employee.days.push({ date: day.date, cleanings: route.cleanings })
+      routes.set(route.cleanerId, employee)
+    }
+  }
+  return [...routes.values()].sort((left, right) => left.cleanerName.localeCompare(right.cleanerName))
+})
+const apartmentPlan = computed(() => apartmentsForCleanings(cleaningPlan.value.days.flatMap(day => day.cleanings)))
 
 const statusLabels: Record<string, string> = { unassigned: 'Без исполнителя', assigned: 'Назначено', in_progress: 'В работе', completed: 'Завершено', canceled: 'Отменено', open: 'Открыта' }
 const statusTones: Record<string, 'neutral' | 'success' | 'warning' | 'danger' | 'info'> = { unassigned: 'warning', assigned: 'info', in_progress: 'warning', completed: 'success', canceled: 'neutral', open: 'info' }
 const priorityLabels: Record<string, string> = { low: 'Низкий', normal: 'Обычный', high: 'Высокий', urgent: 'Срочный' }
+
 function cleaningAmount(cleaning: Cleaning) { return cleaning.tariffSnapshot.ownerTotalEur ?? cleaning.tariffSnapshot.cleanerPoolEur ?? 0 }
 function cleaningAmountLabel(cleaning: Cleaning) { return cleaning.tariffSnapshot.ownerTotalEur !== undefined ? 'Стоимость' : 'Общий фонд' }
 function selectPhoto(event: Event) { photo.value = (event.target as HTMLInputElement).files?.[0] ?? null }
-function openComplete(kind: 'cleaning' | 'task', work: Cleaning | Task) { selected.value = { kind, id: work.id, checklist: work.checklist.map(item => ({ ...item })) }; comment.value = ''; hasProblem.value = false; problemDescription.value = ''; photo.value = null; error.value = '' }
+function isAssignedCleaner(cleaning: Cleaning) { return cleaning.assignments.some(item => item.cleaner.id === currentUser.value?.id) }
+function isFinished(work: Cleaning | Task) { return ['completed', 'canceled'].includes(work.status) }
+function isFinishedDay(date: string) { return collapsedFinishedDays.value.has(date) }
+function toggleFinishedDay(date: string) {
+  const next = new Set(collapsedFinishedDays.value)
+  if (next.has(date)) next.delete(date)
+  else next.add(date)
+  collapsedFinishedDays.value = next
+}
+function activeRouteItems(cleanings: Cleaning[], cleanerId: string) { return sortRoute(cleanings.filter(cleaning => !isFinished(cleaning)), cleanerId) }
+function routeIndex(cleanings: Cleaning[], cleanerId: string, cleaning: Cleaning) { return activeRouteItems(cleanings, cleanerId).findIndex(item => item.id === cleaning.id) }
+function routeLabel(index: number) { return String(index + 1).padStart(2, '0') }
+function cleanerNames(cleaning: Cleaning) { return cleaning.assignments.map(item => item.cleaner.name).join(', ') || 'Исполнитель не назначен' }
+function cleaningSubtitle(cleaning: Cleaning) { return `${cleaning.apartment.hotel.name} · ${cleaning.apartment.hotel.address}` }
+function workHref(kind: WorkKind, id: string) { return `/${kind === 'cleaning' ? 'cleanings' : 'tasks'}/${encodeURIComponent(id)}` }
+function openCleaningCard(event: MouseEvent, cleaning: Cleaning) {
+  const target = event.target as HTMLElement
+  if (target.closest('button, a, input, textarea, select')) return
+  void navigateTo(workHref('cleaning', cleaning.id))
+}
+function openTaskCard(event: MouseEvent, task: Task) {
+  const target = event.target as HTMLElement
+  if (target.closest('button, a, input, textarea, select')) return
+  void navigateTo(workHref('task', task.id))
+}
+function canOperate(kind: WorkKind, work: Cleaning | Task) {
+  if (isAdministrator.value) return true
+  if (kind === 'cleaning') return isAssignedCleaner(work as Cleaning)
+  return (work as Task).assigneeId === currentUser.value?.id
+}
+function askQuickComplete(kind: WorkKind, work: Cleaning | Task) {
+  if (!canOperate(kind, work) || ['completed', 'canceled'].includes(work.status)) return
+  if (work.checklist.some(item => !item.checked)) { void navigateTo(`${workHref(kind, work.id)}?finish=1`); return }
+  quickCompleteTarget.value = { kind, work }
+  quickCompleteOpen.value = true
+}
+async function quickComplete() {
+  const target = quickCompleteTarget.value
+  if (!target) return
+  pending.value = true; error.value = ''
+  try {
+    await $fetch(`/api/${target.kind}s/${target.work.id}/complete`, { method: 'POST', body: { checklist: target.work.checklist, comment: target.work.comment ?? '', hasProblem: target.work.hasProblem, problemDescription: target.work.problemDescription } })
+    quickCompleteOpen.value = false; quickCompleteTarget.value = null
+    await refreshWork()
+  } catch (cause: any) { error.value = cause?.data?.statusMessage ?? 'Не удалось завершить работу' }
+  finally { pending.value = false }
+}
+
+async function saveRoute(date: string, cleanerId: string, ordered: Cleaning[]) {
+  if (!isAdministrator.value || !ordered.length) return
+  pending.value = true
+  error.value = ''
+  try {
+    await $fetch('/api/cleanings/routes', { method: 'PATCH', body: { cleanerId, scheduledOn: date, cleaningIds: ordered.map(cleaning => cleaning.id) } })
+    await refreshCleanings()
+  } catch (cause: any) {
+    error.value = cause?.data?.statusMessage ?? 'Не удалось сохранить маршрут'
+  } finally {
+    pending.value = false
+  }
+}
+
+function moveRouteItem(date: string, cleanerId: string, cleaning: Cleaning, direction: -1 | 1) {
+  const route = activeRouteItems(cleaningPlan.value.days.find(day => day.date === date)?.cleanings ?? [], cleanerId)
+  const index = route.findIndex(item => item.id === cleaning.id)
+  const nextIndex = index + direction
+  if (index < 0 || nextIndex < 0 || nextIndex >= route.length) return
+  const ordered = [...route]
+  const [item] = ordered.splice(index, 1)
+  if (!item) return
+  ordered.splice(nextIndex, 0, item)
+  void saveRoute(date, cleanerId, ordered)
+}
+
+function startDragging(event: DragEvent, cleaningId: string) { event.dataTransfer?.setData('text/plain', cleaningId) }
+function dropRouteItem(event: DragEvent, date: string, cleanerId: string, target: Cleaning) {
+  event.preventDefault()
+  const sourceId = event.dataTransfer?.getData('text/plain')
+  if (!sourceId || sourceId === target.id) return
+  const route = activeRouteItems(cleaningPlan.value.days.find(day => day.date === date)?.cleanings ?? [], cleanerId)
+  const sourceIndex = route.findIndex(item => item.id === sourceId)
+  const targetIndex = route.findIndex(item => item.id === target.id)
+  if (sourceIndex < 0 || targetIndex < 0) return
+  const ordered = [...route]
+  const [item] = ordered.splice(sourceIndex, 1)
+  if (!item) return
+  ordered.splice(targetIndex, 0, item)
+  void saveRoute(date, cleanerId, ordered)
+}
+
+async function openComplete(kind: WorkKind, work: Cleaning | Task, onlyInventory = false) {
+  selected.value = { kind, id: work.id, checklist: work.checklist.map(item => ({ ...item })) }
+  inventoryOnly.value = onlyInventory
+  inventoryReports.value = []
+  comment.value = ''
+  hasProblem.value = false
+  problemDescription.value = ''
+  photo.value = null
+  error.value = ''
+  if (kind === 'cleaning') {
+    try { inventoryReports.value = await $fetch<CleaningInventoryItem[]>(`/api/cleanings/${work.id}/inventory`) }
+    catch (cause: any) { error.value = cause?.data?.statusMessage ?? 'Не удалось загрузить остатки' }
+  }
+}
+
 async function refreshWork() { await Promise.all([refreshCleanings(), refreshTasks()]) }
-async function start(kind: 'cleaning' | 'task', id: string) { await $fetch(`/api/${kind}s/${id}/start`, { method: 'POST' }); await refreshWork() }
-async function complete() { if (!selected.value) return; pending.value = true; error.value = ''; try { if (photo.value) { const upload = new FormData(); upload.set('entityType', selected.value.kind); upload.set('entityId', selected.value.id); upload.set('file', photo.value); await $fetch('/api/attachments', { method: 'POST', body: upload }) }; await $fetch(`/api/${selected.value.kind}s/${selected.value.id}/complete`, { method: 'POST', body: { checklist: selected.value.checklist, comment: comment.value, hasProblem: hasProblem.value, problemDescription: problemDescription.value } }); selected.value = null; await refreshWork() } catch (cause: any) { error.value = cause?.data?.statusMessage ?? 'Не удалось завершить работу' } finally { pending.value = false } }
-async function cancelTask(id: string) { try { await $fetch(`/api/tasks/${id}`, { method: 'PATCH', body: { status: 'canceled' } }); await refreshTasks() } catch (cause: any) { error.value = cause?.data?.statusMessage ?? 'Не удалось отменить задачу' } }
-async function createTask() { pending.value = true; error.value = ''; try { const { assigneeId, ...payload } = taskForm; await $fetch('/api/tasks', { method: 'POST', body: { ...payload, ownerCostEur: payload.ownerCostEur ?? 0, assigneeId: assigneeId === 'unassigned' ? null : assigneeId, dueOn: taskForm.dueOn || null } }); taskOpen.value = false; await refreshTasks() } catch (cause: any) { error.value = cause?.data?.statusMessage ?? 'Не удалось создать задачу' } finally { pending.value = false } }
-function openAssign(cleaning: Cleaning) { cleaningToAssign.value = cleaning; cleanerIds.value = cleaning.assignments.map(item => item.cleaner.id); scheduledOn.value = cleaning.scheduledOn ?? ''; assignOpen.value = true; error.value = '' }
-async function assignCleaners() { if (!cleaningToAssign.value) return; pending.value = true; try { await $fetch(`/api/cleanings/${cleaningToAssign.value.id}/assignees`, { method: 'PUT', body: { cleanerIds: cleanerIds.value, scheduledOn: scheduledOn.value } }); assignOpen.value = false; await refreshCleanings() } catch (cause: any) { error.value = cause?.data?.statusMessage ?? 'Не удалось назначить уборщиц' } finally { pending.value = false } }
-function openTariff(cleaning: Cleaning) { tariffCleaning.value = cleaning; Object.assign(tariffForm, { cleanerPoolEur: cleaning.tariffSnapshot.cleanerPoolEur ?? 0, laundryEur: cleaning.tariffSnapshot.laundryEur ?? 0, serviceEur: cleaning.tariffSnapshot.serviceEur ?? 0, reason: '' }); tariffOpen.value = true; error.value = '' }
-async function saveTariff() { if (!tariffCleaning.value) return; pending.value = true; try { await $fetch(`/api/cleanings/${tariffCleaning.value.id}/tariff`, { method: 'PATCH', body: tariffForm }); tariffOpen.value = false; await refreshCleanings() } catch (cause: any) { error.value = cause?.data?.statusMessage ?? 'Не удалось изменить тариф' } finally { pending.value = false } }
-async function openStock(kind: 'cleaning' | 'task', work: Cleaning | Task) {
+
+async function start(kind: WorkKind, id: string) {
+  error.value = ''
+  try {
+    await $fetch(`/api/${kind}s/${id}/start`, { method: 'POST' })
+    await refreshWork()
+  } catch (cause: any) {
+    error.value = cause?.data?.statusMessage ?? 'Не удалось начать работу'
+  }
+}
+
+async function complete() {
+  if (!selected.value) return
+  pending.value = true
+  error.value = ''
+  try {
+    if (photo.value) {
+      const upload = new FormData()
+      upload.set('entityType', selected.value.kind)
+      upload.set('entityId', selected.value.id)
+      upload.set('file', photo.value)
+      await $fetch('/api/attachments', { method: 'POST', body: upload })
+    }
+    await $fetch(`/api/${selected.value.kind}s/${selected.value.id}/complete`, { method: 'POST', body: { checklist: selected.value.checklist, comment: comment.value, hasProblem: hasProblem.value, problemDescription: problemDescription.value, inventoryReports: selected.value.kind === 'cleaning' ? inventoryReports.value.map(item => ({ consumableId: item.consumable.id, usedQuantity: item.usedQuantity, remainingQuantity: item.remainingQuantity })) : undefined } })
+    selected.value = null
+    await refreshWork()
+  } catch (cause: any) {
+    error.value = cause?.data?.statusMessage ?? 'Не удалось завершить работу'
+  } finally {
+    pending.value = false
+  }
+}
+
+async function saveInventory() {
+  if (!selected.value || selected.value.kind !== 'cleaning') return
+  pending.value = true
+  error.value = ''
+  try {
+    await $fetch(`/api/cleanings/${selected.value.id}/inventory`, { method: 'PUT', body: { reports: inventoryReports.value.map(item => ({ consumableId: item.consumable.id, usedQuantity: item.usedQuantity, remainingQuantity: item.remainingQuantity })) } })
+    inventoryReports.value = await $fetch<CleaningInventoryItem[]>(`/api/cleanings/${selected.value.id}/inventory`)
+  } catch (cause: any) {
+    error.value = cause?.data?.statusMessage ?? 'Не удалось сохранить остатки'
+  } finally {
+    pending.value = false
+  }
+}
+
+async function cancelTask(id: string) {
+  error.value = ''
+  try {
+    await $fetch(`/api/tasks/${id}`, { method: 'PATCH', body: { status: 'canceled' } })
+    await refreshTasks()
+  } catch (cause: any) {
+    error.value = cause?.data?.statusMessage ?? 'Не удалось отменить задачу'
+  }
+}
+
+function resetTaskForm() {
+  Object.assign(taskForm, { apartmentId: '', assigneeId: 'unassigned', title: '', description: '', priority: 'normal', dueOn: '', ownerCostEur: 0, checklist: [] })
+}
+
+function openCreateTask() {
+  editingTask.value = null
+  resetTaskForm()
+  error.value = ''
+  taskOpen.value = true
+}
+
+function openEditTask(task: Task) {
+  editingTask.value = task
+  Object.assign(taskForm, {
+    apartmentId: task.apartmentId,
+    assigneeId: task.assigneeId ?? 'unassigned',
+    title: task.title,
+    description: task.description,
+    priority: task.priority,
+    dueOn: task.dueOn ?? '',
+    ownerCostEur: task.ownerCostEur ?? 0,
+    checklist: task.checklist.map(item => ({ ...item }))
+  })
+  error.value = ''
+  taskOpen.value = true
+}
+
+async function saveTask() {
+  pending.value = true
+  error.value = ''
+  try {
+    const { assigneeId, ...payload } = taskForm
+    const body = { ...payload, ownerCostEur: payload.ownerCostEur ?? 0, assigneeId: assigneeId === 'unassigned' ? null : assigneeId, dueOn: taskForm.dueOn || null }
+    if (editingTask.value) await $fetch(`/api/tasks/${editingTask.value.id}`, { method: 'PATCH', body })
+    else await $fetch('/api/tasks', { method: 'POST', body })
+    taskOpen.value = false
+    editingTask.value = null
+    await refreshTasks()
+  } catch (cause: any) {
+    error.value = cause?.data?.statusMessage ?? `Не удалось ${editingTask.value ? 'изменить' : 'создать'} задачу`
+  } finally {
+    pending.value = false
+  }
+}
+
+function openCreateCleaning(stayId: string | null = null) {
+  editingCleaning.value = null
+  initialStayId.value = stayId
+  error.value = ''
+  cleaningOpen.value = true
+}
+function openEditCleaning(cleaning: Cleaning) {
+  editingCleaning.value = cleaning
+  error.value = ''
+  cleaningOpen.value = true
+}
+
+async function saveCleaning(draft: CleaningDraft) {
+  pending.value = true
+  error.value = ''
+  try {
+    await $fetch(editingCleaning.value ? `/api/cleanings/${editingCleaning.value.id}` : '/api/cleanings', { method: editingCleaning.value ? 'PATCH' : 'POST', body: { ...draft, ownerTotalEur: Number(draft.cleanerPoolEur + draft.laundryEur + draft.serviceEur) } })
+    cleaningOpen.value = false
+    editingCleaning.value = null
+    initialStayId.value = null
+    await refreshCleanings()
+  } catch (cause: any) {
+    error.value = cause?.data?.statusMessage ?? `Не удалось ${editingCleaning.value ? 'изменить' : 'создать'} уборку`
+  } finally {
+    pending.value = false
+  }
+}
+
+async function openStock(kind: WorkKind, work: Cleaning | Task) {
   stockWork.value = { kind, id: work.id, apartmentId: work.apartmentId }
   Object.assign(usageForm, { consumableId: '', quantity: 1, note: '' })
   error.value = ''
@@ -53,41 +351,137 @@ async function openStock(kind: 'cleaning' | 'task', work: Cleaning | Task) {
   stockItems.value = await $fetch<Array<{ consumable: { id: string; name: string; unit: string }; quantity: number }>>(endpoint)
   stockOpen.value = true
 }
-async function recordUsage() { if (!stockWork.value) return; pending.value = true; try { await $fetch('/api/inventory/use', { method: 'POST', body: { apartmentId: stockWork.value.apartmentId, sourceType: stockWork.value.kind, sourceId: stockWork.value.id, ...usageForm } }); stockOpen.value = false } catch (cause: any) { error.value = cause?.data?.statusMessage ?? 'Не удалось списать расходник' } finally { pending.value = false } }
+
+async function recordUsage() {
+  if (!stockWork.value) return
+  pending.value = true
+  try {
+    await $fetch('/api/inventory/use', { method: 'POST', body: { apartmentId: stockWork.value.apartmentId, sourceType: stockWork.value.kind, sourceId: stockWork.value.id, ...usageForm } })
+    stockOpen.value = false
+  } catch (cause: any) {
+    error.value = cause?.data?.statusMessage ?? 'Не удалось списать расходник'
+  } finally {
+    pending.value = false
+  }
+}
+
+function askToDelete(kind: WorkKind, work: Cleaning | Task) {
+  workToDelete.value = { kind, id: work.id, label: kind === 'task' ? (work as Task).title : `${work.apartment.name} · ${work.apartment.hotel.name}` }
+  error.value = ''
+  deleteOpen.value = true
+}
+
+async function removeWork() {
+  if (!workToDelete.value) return
+  const target = workToDelete.value
+  pending.value = true
+  error.value = ''
+  try {
+    await $fetch(`/api/${target.kind}s/${target.id}`, { method: 'DELETE' })
+    const kind = target.kind
+    deleteOpen.value = false
+    workToDelete.value = null
+    if (kind === 'cleaning') await refreshCleanings()
+    else await refreshTasks()
+  } catch (cause: any) {
+    error.value = cause?.data?.statusMessage ?? 'Не удалось удалить работу'
+  } finally {
+    pending.value = false
+  }
+}
+
+function cleaningMenuItems(cleaning: Cleaning): DropdownMenuItem[] {
+  const items: DropdownMenuItem[] = [{ label: 'Открыть уборку', icon: 'i-lucide-arrow-up-right', onSelect: () => { void navigateTo(workHref('cleaning', cleaning.id)) } }]
+  if (isAdministrator.value && !['completed', 'canceled'].includes(cleaning.status)) items.push({ label: !cleaning.scheduledOn || !cleaning.assignments.length ? 'Назначить' : 'Изменить', icon: !cleaning.scheduledOn || !cleaning.assignments.length ? 'i-lucide-calendar-plus' : 'i-lucide-pencil', onSelect: () => openEditCleaning(cleaning) })
+  if (isAdministrator.value) items.push({ label: 'Удалить', icon: 'i-lucide-trash-2', color: 'error', onSelect: () => askToDelete('cleaning', cleaning) })
+  return items
+}
+
+function taskMenuItems(task: Task): DropdownMenuItem[] {
+  const items: DropdownMenuItem[] = [{ label: 'Открыть задачу', icon: 'i-lucide-arrow-up-right', onSelect: () => { void navigateTo(workHref('task', task.id)) } }]
+  const managesApartment = isManager.value && task.apartment.managerId === currentUser.value?.id
+  if (!['completed', 'canceled'].includes(task.status) && (isAdministrator.value || managesApartment)) items.push({ label: 'Отменить', icon: 'i-lucide-ban', color: 'error', onSelect: () => { void cancelTask(task.id) } })
+  if (isAdministrator.value && !['completed', 'canceled'].includes(task.status)) items.push({ label: 'Изменить', icon: 'i-lucide-pencil', onSelect: () => openEditTask(task) })
+  if (isAdministrator.value) items.push({ label: 'Удалить', icon: 'i-lucide-trash-2', color: 'error', onSelect: () => askToDelete('task', task) })
+  return items
+}
 </script>
 
 <template>
   <section class="page-wrap space-y-6">
-    <PageHeader title="Работы" description="Уборки и задачи по апартаментам."><template #actions><UButton v-if="currentUser?.roles.some(role => ['administrator', 'manager'].includes(role))" icon="i-lucide-plus" @click="taskOpen = true">Новая задача</UButton></template></PageHeader>
+    <PageHeader title="Уборки" description="Планирование уборок и дополнительные задачи по апартаментам.">
+      <template #actions><UButton v-if="tab === 'cleanings' && isAdministrator" icon="i-lucide-sparkles" @click="openCreateCleaning()">Новая уборка</UButton><UButton v-if="tab === 'tasks' && currentUser?.roles.some(role => ['administrator', 'manager'].includes(role))" icon="i-lucide-plus" @click="openCreateTask">Новая задача</UButton></template>
+    </PageHeader>
+    <UAlert v-if="error && !completeOpen && !taskOpen && !cleaningOpen && !stockOpen && !deleteOpen" color="error" variant="soft" :description="error" />
     <UFieldGroup><UButton :variant="tab === 'cleanings' ? 'solid' : 'soft'" @click="tab = 'cleanings'">Уборки <UBadge color="neutral" variant="soft">{{ cleanings?.length ?? 0 }}</UBadge></UButton><UButton :variant="tab === 'tasks' ? 'solid' : 'soft'" @click="tab = 'tasks'">Задачи <UBadge color="neutral" variant="soft">{{ tasks?.length ?? 0 }}</UBadge></UButton></UFieldGroup>
 
-    <div v-if="tab === 'cleanings' && cleanings?.length" class="surface divide-y divide-[var(--color-line)] px-5 sm:px-6">
-      <article v-for="cleaning in cleanings" :key="cleaning.id" class="py-5">
-        <div class="flex flex-col gap-4 lg:flex-row lg:items-center">
-          <div class="flex min-w-0 flex-1 gap-4"><div class="grid size-11 shrink-0 place-items-center rounded-xl bg-[var(--color-primary-soft)] text-[var(--color-primary)]"><UIcon name="i-lucide-sparkles" class="size-5" /></div><div class="min-w-0"><p class="truncate font-semibold">{{ cleaning.apartment.name }} · {{ cleaning.apartment.hotel.name }}</p><p class="mt-1 text-sm text-[var(--color-muted)]">{{ cleaning.scheduledOn ? formatDate(cleaning.scheduledOn) : 'Дата не назначена' }} · {{ cleaningAmountLabel(cleaning) }} {{ formatEuro(cleaningAmount(cleaning)) }}</p><a class="mt-1 inline-flex text-sm font-medium text-[var(--color-primary)]" :href="`https://www.google.com/maps/search/?api=1&query=${cleaning.apartment.hotel.latitude},${cleaning.apartment.hotel.longitude}`" target="_blank">{{ cleaning.apartment.hotel.address }} <UIcon name="i-lucide-external-link" class="ml-1 size-4" /></a><p v-if="cleaning.assignments.length" class="mt-2 text-xs text-[var(--color-muted)]">Исполнители: {{ cleaning.assignments.map(item => item.cleaner.name).join(', ') }}</p></div></div>
-          <div class="flex flex-wrap items-center gap-2"><StatusBadge :label="statusLabels[cleaning.status] ?? cleaning.status" :tone="statusTones[cleaning.status] ?? 'neutral'" /><UButton v-if="currentUser?.roles.includes('administrator') && !['completed','canceled'].includes(cleaning.status)" size="sm" variant="soft" @click="openAssign(cleaning)">Назначить</UButton><UButton v-if="currentUser?.roles.includes('administrator') && !['completed','canceled'].includes(cleaning.status)" size="sm" color="neutral" variant="ghost" @click="openTariff(cleaning)">Тариф</UButton><UButton v-if="['assigned','in_progress'].includes(cleaning.status)" size="sm" color="neutral" variant="ghost" @click="openStock('cleaning', cleaning)">Списать</UButton><UButton v-if="cleaning.status === 'assigned'" size="sm" variant="soft" @click="start('cleaning', cleaning.id)">Начать</UButton><UButton v-if="['assigned','in_progress'].includes(cleaning.status)" size="sm" @click="openComplete('cleaning', cleaning)">Завершить</UButton></div>
-        </div>
-        <UAlert v-if="cleaning.hasProblem" class="mt-4" color="error" variant="soft" icon="i-lucide-circle-alert" title="Проблема" :description="cleaning.problemDescription" />
-      </article>
-    </div>
-    <EmptyState v-else-if="tab === 'cleanings'" icon="i-lucide-sparkles" title="Уборок пока нет" description="Они появляются автоматически при создании заезда." />
+    <template v-if="tab === 'cleanings'">
+      <div class="grid gap-3 lg:grid-cols-3 lg:auto-rows-fr">
+        <button type="button" class="surface min-h-20 px-4 py-3 text-left transition-transform active:scale-[0.98]" @click="planningMode = 'days'"><span class="text-sm text-[var(--color-muted)]">Сегодня</span><strong class="mt-1 block text-2xl tabular-nums">{{ todayCount }}</strong></button>
+        <button type="button" class="surface min-h-20 px-4 py-3 text-left transition-transform active:scale-[0.98]" @click="planningMode = 'days'"><span class="text-sm text-[var(--color-muted)]">Без исполнителя</span><strong class="mt-1 block text-2xl tabular-nums text-amber-700">{{ cleaningPlan.attention.filter(item => !item.assignments.length).length }}</strong></button>
+        <button type="button" class="surface min-h-20 px-4 py-3 text-left transition-transform active:scale-[0.98]" @click="planningMode = 'days'"><span class="text-sm text-[var(--color-muted)]">Без даты</span><strong class="mt-1 block text-2xl tabular-nums text-amber-700">{{ cleaningPlan.attention.filter(item => !item.scheduledOn).length }}</strong></button>
+      </div>
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <UFieldGroup v-if="isAdministrator"><UButton :variant="planningMode === 'days' ? 'solid' : 'soft'" icon="i-lucide-calendar-days" @click="planningMode = 'days'">По дням</UButton><UButton :variant="planningMode === 'cleaners' ? 'solid' : 'soft'" icon="i-lucide-users" @click="planningMode = 'cleaners'">По исполнителям</UButton><UButton :variant="planningMode === 'apartments' ? 'solid' : 'soft'" icon="i-lucide-building-2" @click="planningMode = 'apartments'">По апартаментам</UButton></UFieldGroup>
+        <UButton color="neutral" variant="ghost" icon="i-lucide-history" @click="historyOpen = !historyOpen">{{ historyOpen ? 'Скрыть историю' : 'История' }} <UBadge color="neutral" variant="soft">{{ cleaningPlan.history.length }}</UBadge></UButton>
+      </div>
 
-    <div v-if="tab === 'tasks' && tasks?.length" class="surface divide-y divide-[var(--color-line)] px-5 sm:px-6">
-      <article v-for="task in tasks" :key="task.id" class="py-5">
-        <div class="flex flex-col gap-4 lg:flex-row lg:items-center"><div class="flex min-w-0 flex-1 gap-4"><div class="grid size-11 shrink-0 place-items-center rounded-xl bg-[#edf3f7] text-[#356882]"><UIcon name="i-lucide-clipboard-check" class="size-5" /></div><div class="min-w-0"><p class="truncate font-semibold">{{ task.title }}</p><p class="mt-1 text-sm text-[var(--color-muted)]">{{ task.apartment.name }} · {{ priorityLabels[task.priority] ?? task.priority }} приоритет</p><a class="mt-1 inline-flex text-sm font-medium text-[var(--color-primary)]" :href="`https://www.google.com/maps/search/?api=1&query=${task.apartment.hotel.latitude},${task.apartment.hotel.longitude}`" target="_blank">{{ task.apartment.hotel.address }} <UIcon name="i-lucide-external-link" class="ml-1 size-4" /></a></div></div><div class="flex flex-wrap items-center gap-2"><StatusBadge :label="statusLabels[task.status] ?? task.status" :tone="statusTones[task.status] ?? 'neutral'" /><UButton v-if="['open','in_progress'].includes(task.status)" size="sm" color="neutral" variant="ghost" @click="openStock('task', task)">Списать</UButton><UButton v-if="task.status === 'open'" size="sm" variant="soft" @click="start('task', task.id)">Начать</UButton><UButton v-if="['open','in_progress'].includes(task.status)" size="sm" @click="openComplete('task', task)">Завершить</UButton><UButton v-if="currentUser?.roles.some(role => ['administrator', 'manager'].includes(role)) && ['open','in_progress'].includes(task.status)" size="sm" color="error" variant="ghost" @click="cancelTask(task.id)">Отменить</UButton></div></div>
-        <UAlert v-if="task.hasProblem" class="mt-4" color="error" variant="soft" icon="i-lucide-circle-alert" title="Проблема" :description="task.problemDescription" />
-      </article>
-    </div>
-    <EmptyState v-else-if="tab === 'tasks'" icon="i-lucide-clipboard-check" title="Задач пока нет" description="Создайте задачу и назначьте исполнителя."><template #actions><UButton v-if="currentUser?.roles.some(role => ['administrator', 'manager'].includes(role))" @click="taskOpen = true">Новая задача</UButton></template></EmptyState>
+      <section v-if="cleaningPlan.attention.length" class="surface overflow-hidden">
+        <div class="flex items-center gap-3 border-b border-[var(--color-line)] bg-amber-50/70 px-5 py-4"><UIcon name="i-lucide-calendar-clock" class="size-5 text-amber-700" /><div><h2 class="font-semibold">Требует планирования</h2><p class="text-sm text-amber-800/80">Назначьте дату и исполнителя, чтобы уборка попала в маршрут.</p></div></div>
+        <div class="divide-y divide-[var(--color-line)] px-5 sm:px-6"><article v-for="cleaning in cleaningPlan.attention" :key="`attention-${cleaning.id}`" class="flex items-center gap-3 py-4" @click="openCleaningCard($event, cleaning)"><div class="grid size-9 shrink-0 place-items-center rounded-lg bg-[var(--color-primary-soft)] text-[var(--color-primary)]"><UIcon name="i-lucide-sparkles" class="size-4" /></div><div class="min-w-0 flex-1"><p class="truncate font-medium">{{ cleaning.apartment.name }}</p><p class="truncate text-sm text-[var(--color-muted)]">{{ cleaning.apartment.hotel.name }} · {{ cleaning.scheduledOn ? formatDate(cleaning.scheduledOn) : 'Дата не назначена' }} · {{ cleanerNames(cleaning) }}</p></div><StatusBadge label="Нужно спланировать" tone="warning" /><UButton v-if="isAdministrator" color="primary" variant="soft" icon="i-lucide-calendar-plus" @click="openEditCleaning(cleaning)">Назначить</UButton><UDropdownMenu v-if="cleaningMenuItems(cleaning).length" :items="cleaningMenuItems(cleaning)" :content="{ align: 'end' }"><UButton color="neutral" variant="ghost" icon="i-lucide-ellipsis-vertical" aria-label="Действия с уборкой" class="min-h-11 min-w-11 active:scale-[0.96] transition-transform" /></UDropdownMenu></article></div>
+      </section>
 
-    <USlideover v-model:open="taskOpen" title="Новая задача"><template #body><form class="form-grid" @submit.prevent="createTask"><UFormField label="Апартамент"><USelect v-model="taskForm.apartmentId" :items="(apartments ?? []).map(apartment => ({ label: `${apartment.name} · ${apartment.hotel.name}`, value: apartment.id }))" class="w-full" required /></UFormField><UFormField label="Что нужно сделать"><UInput v-model="taskForm.title" required /></UFormField><UFormField label="Описание"><UTextarea v-model="taskForm.description" /></UFormField><UFormField label="Приоритет"><USelect v-model="taskForm.priority" :items="Object.entries(priorityLabels).map(([value, label]) => ({ value, label }))" class="w-full" /></UFormField><UFormField label="Исполнитель"><USelect v-model="taskForm.assigneeId" :items="[{ label: 'Без исполнителя', value: 'unassigned' }, ...(team ?? []).map(member => ({ label: member.name, value: member.id }))]" class="w-full" /></UFormField><UFormField v-if="currentUser?.roles.includes('administrator')" label="Стоимость управляющему"><MoneyInput v-model="taskForm.ownerCostEur" /></UFormField><UFormField label="Срок"><DateInput v-model="taskForm.dueOn" /></UFormField><UAlert v-if="error" color="error" variant="soft" :description="error" /><div class="form-actions"><UButton color="neutral" variant="ghost" @click="taskOpen = false">Отмена</UButton><UButton type="submit" :loading="pending">Создать задачу</UButton></div></form></template></USlideover>
+      <template v-if="planningMode === 'days'">
+        <section v-for="day in cleaningPlan.days" :key="day.date" class="surface overflow-hidden">
+          <div class="flex items-center justify-between gap-3 border-b border-[var(--color-line)] px-5 py-4 sm:px-6"><div><h2 class="font-semibold">{{ day.date === today ? 'Сегодня' : formatDate(day.date) }}</h2><p class="text-sm text-[var(--color-muted)]">{{ day.cleanings.filter(item => !isFinished(item)).length }} активных уборок</p></div><UButton v-if="day.cleanings.some(item => isFinished(item))" color="neutral" variant="ghost" size="sm" :icon="isFinishedDay(day.date) ? 'i-lucide-chevron-down' : 'i-lucide-chevron-up'" @click="toggleFinishedDay(day.date)">{{ isFinishedDay(day.date) ? 'Показать завершённые' : 'Скрыть завершённые' }}</UButton></div>
+          <div v-for="route in routesForDay(day.cleanings, !isFinishedDay(day.date))" :key="`${day.date}-${route.cleanerId}`" class="border-b border-[var(--color-line)] last:border-b-0"><div class="flex items-center gap-2 bg-[var(--color-surface-muted)] px-5 py-2.5 text-sm font-semibold sm:px-6"><UIcon name="i-lucide-user-round" class="size-4 text-[var(--color-primary)]" />{{ route.cleanerName }}<span class="ml-auto text-xs font-normal text-[var(--color-muted)]">{{ route.cleanings.length }} уборок</span></div><div class="divide-y divide-[var(--color-line)] px-5 sm:px-6"><article v-for="cleaning in route.cleanings" :key="`${day.date}-${route.cleanerId}-${cleaning.id}`" class="group flex items-center gap-3 py-4" :draggable="isAdministrator && !isFinished(cleaning)" @dragstart="startDragging($event, cleaning.id)" @dragover.prevent @drop="dropRouteItem($event, day.date, route.cleanerId, cleaning)" @click="openCleaningCard($event, cleaning)"><span class="grid size-8 shrink-0 place-items-center rounded-lg bg-[var(--color-primary-soft)] text-xs font-semibold tabular-nums text-[var(--color-primary)]">{{ isFinished(cleaning) ? '✓' : routeLabel(routeIndex(day.cleanings, route.cleanerId, cleaning)) }}</span><div class="min-w-0 flex-1"><p class="truncate font-semibold">{{ cleaning.apartment.name }}</p><p class="truncate text-sm text-[var(--color-muted)]">{{ cleaningSubtitle(cleaning) }}</p><p v-if="cleaning.hasProblem" class="mt-1 truncate text-sm text-red-700">{{ cleaning.problemDescription }}</p></div><UButton v-if="canOperate('cleaning', cleaning) && ['assigned', 'in_progress'].includes(cleaning.status)" color="primary" variant="soft" size="sm" icon="i-lucide-circle-check" @click="askQuickComplete('cleaning', cleaning)">Завершить</UButton><StatusBadge :label="statusLabels[cleaning.status] ?? cleaning.status" :tone="statusTones[cleaning.status] ?? 'neutral'" /><div v-if="isAdministrator && !isFinished(cleaning)" class="hidden items-center gap-0.5 sm:flex"><UButton color="neutral" variant="ghost" size="xs" icon="i-lucide-chevron-up" :disabled="routeIndex(day.cleanings, route.cleanerId, cleaning) <= 0" aria-label="Поднять в маршруте" @click="moveRouteItem(day.date, route.cleanerId, cleaning, -1)" /><UButton color="neutral" variant="ghost" size="xs" icon="i-lucide-chevron-down" :disabled="routeIndex(day.cleanings, route.cleanerId, cleaning) >= activeRouteItems(day.cleanings, route.cleanerId).length - 1" aria-label="Опустить в маршруте" @click="moveRouteItem(day.date, route.cleanerId, cleaning, 1)" /></div><UDropdownMenu v-if="cleaningMenuItems(cleaning).length" :items="cleaningMenuItems(cleaning)" :content="{ align: 'end' }"><UButton color="neutral" variant="ghost" icon="i-lucide-ellipsis-vertical" aria-label="Действия с уборкой" class="min-h-11 min-w-11 active:scale-[0.96] transition-transform" /></UDropdownMenu></article></div></div>
+        </section>
+      </template>
 
-    <USlideover v-model:open="tariffOpen" title="Тариф уборки"><template #body><form class="form-grid" @submit.prevent="saveTariff"><div class="rounded-xl bg-[var(--color-primary-soft)] px-4 py-3"><p class="text-sm text-[var(--color-muted)]">Общая стоимость</p><p class="mt-1 text-xl font-semibold tabular-nums text-[var(--color-text)]">{{ formatEuro(tariffTotalEur) }}</p></div><div class="grid gap-4 sm:grid-cols-3"><UFormField label="Уборка"><MoneyInput v-model="tariffForm.cleanerPoolEur" required /></UFormField><UFormField label="Стирка"><MoneyInput v-model="tariffForm.laundryEur" required /></UFormField><UFormField label="Сервис"><MoneyInput v-model="tariffForm.serviceEur" required /></UFormField></div><UFormField label="Причина изменения"><UTextarea v-model="tariffForm.reason" required /></UFormField><UAlert v-if="error" color="error" variant="soft" :description="error" /><div class="form-actions"><UButton color="neutral" variant="ghost" @click="tariffOpen = false">Отмена</UButton><UButton type="submit" :loading="pending">Сохранить тариф</UButton></div></form></template></USlideover>
+      <template v-else-if="planningMode === 'cleaners'">
+        <section v-for="employee in cleanerPlan" :key="employee.cleanerId" class="surface overflow-hidden"><div class="flex items-center gap-3 border-b border-[var(--color-line)] px-5 py-4 sm:px-6"><div class="grid size-10 place-items-center rounded-full bg-[var(--color-primary-soft)] text-[var(--color-primary)]"><UIcon name="i-lucide-user-round" class="size-5" /></div><div><h2 class="font-semibold">{{ employee.cleanerName }}</h2><p class="text-sm text-[var(--color-muted)]">{{ employee.days.reduce((total, day) => total + day.cleanings.filter(item => !isFinished(item)).length, 0) }} активных уборок</p></div></div><div v-for="day in employee.days" :key="`${employee.cleanerId}-${day.date}`" class="border-b border-[var(--color-line)] last:border-b-0"><div class="bg-[var(--color-surface-muted)] px-5 py-2.5 text-sm font-semibold sm:px-6">{{ day.date === today ? 'Сегодня' : formatDate(day.date) }}</div><div class="divide-y divide-[var(--color-line)] px-5 sm:px-6"><article v-for="cleaning in day.cleanings" :key="`${employee.cleanerId}-${day.date}-${cleaning.id}`" class="group flex items-center gap-3 py-4" :draggable="isAdministrator && !isFinished(cleaning)" @dragstart="startDragging($event, cleaning.id)" @dragover.prevent @drop="dropRouteItem($event, day.date, employee.cleanerId, cleaning)" @click="openCleaningCard($event, cleaning)"><span class="grid size-8 shrink-0 place-items-center rounded-lg bg-[var(--color-primary-soft)] text-xs font-semibold tabular-nums text-[var(--color-primary)]">{{ isFinished(cleaning) ? '✓' : routeLabel(routeIndex(day.cleanings, employee.cleanerId, cleaning)) }}</span><div class="min-w-0 flex-1"><p class="truncate font-semibold">{{ cleaning.apartment.name }}</p><p class="truncate text-sm text-[var(--color-muted)]">{{ cleaningSubtitle(cleaning) }}</p></div><UButton v-if="canOperate('cleaning', cleaning) && ['assigned', 'in_progress'].includes(cleaning.status)" color="primary" variant="soft" size="sm" icon="i-lucide-circle-check" @click="askQuickComplete('cleaning', cleaning)">Завершить</UButton><StatusBadge :label="statusLabels[cleaning.status] ?? cleaning.status" :tone="statusTones[cleaning.status] ?? 'neutral'" /><div v-if="isAdministrator && !isFinished(cleaning)" class="hidden items-center gap-0.5 sm:flex"><UButton color="neutral" variant="ghost" size="xs" icon="i-lucide-chevron-up" :disabled="routeIndex(day.cleanings, employee.cleanerId, cleaning) <= 0" aria-label="Поднять в маршруте" @click="moveRouteItem(day.date, employee.cleanerId, cleaning, -1)" /><UButton color="neutral" variant="ghost" size="xs" icon="i-lucide-chevron-down" :disabled="routeIndex(day.cleanings, employee.cleanerId, cleaning) >= activeRouteItems(day.cleanings, employee.cleanerId).length - 1" aria-label="Опустить в маршруте" @click="moveRouteItem(day.date, employee.cleanerId, cleaning, 1)" /></div><UDropdownMenu v-if="cleaningMenuItems(cleaning).length" :items="cleaningMenuItems(cleaning)" :content="{ align: 'end' }"><UButton color="neutral" variant="ghost" icon="i-lucide-ellipsis-vertical" aria-label="Действия с уборкой" class="min-h-11 min-w-11 active:scale-[0.96] transition-transform" /></UDropdownMenu></article></div></div></section>
+      </template>
 
-    <USlideover v-model:open="assignOpen" title="Назначить уборщиц"><template #body><form class="form-grid" @submit.prevent="assignCleaners"><p class="text-sm text-[var(--color-muted)]">Все выбранные уборщицы видят один общий фонд.</p><UFormField label="Дата уборки"><DateInput v-model="scheduledOn" required /></UFormField><label v-for="member in team?.filter(member => member.roles.includes('cleaner'))" :key="member.id" class="flex min-h-11 items-center gap-3 rounded-xl bg-[#f4f8f6] px-3"><input v-model="cleanerIds" type="checkbox" :value="member.id">{{ member.name }}</label><UAlert v-if="error" color="error" variant="soft" :description="error" /><div class="form-actions"><UButton color="neutral" variant="ghost" @click="assignOpen = false">Отмена</UButton><UButton type="submit" :loading="pending" :disabled="!cleanerIds.length || !scheduledOn">Сохранить</UButton></div></form></template></USlideover>
+      <template v-else>
+        <section v-for="group in apartmentPlan" :key="group.apartmentId" class="surface overflow-hidden">
+          <div class="flex items-start gap-3 border-b border-[var(--color-line)] px-5 py-4 sm:px-6">
+            <div class="grid size-10 shrink-0 place-items-center rounded-xl bg-[var(--color-primary-soft)] text-[var(--color-primary)]"><UIcon name="i-lucide-building-2" class="size-5" /></div>
+            <div class="min-w-0"><h2 class="truncate font-semibold">{{ group.apartment.name }}</h2><p class="truncate text-sm text-[var(--color-muted)]">{{ group.apartment.hotel.name }} · {{ group.apartment.hotel.address }}</p></div>
+          </div>
+          <div v-for="day in group.days" :key="`${group.apartmentId}-${day.date}`" class="border-b border-[var(--color-line)] last:border-b-0">
+            <div class="flex items-center justify-between gap-3 bg-[var(--color-surface-muted)] px-5 py-2.5 text-sm font-semibold sm:px-6"><span>{{ day.date === today ? 'Сегодня' : formatDate(day.date) }}</span><UButton v-if="day.cleanings.some(item => isFinished(item))" color="neutral" variant="ghost" size="xs" :icon="isFinishedDay(day.date) ? 'i-lucide-chevron-down' : 'i-lucide-chevron-up'" @click="toggleFinishedDay(day.date)">{{ isFinishedDay(day.date) ? 'Показать завершённые' : `${day.cleanings.filter(item => !isFinished(item)).length} активных` }}</UButton><span v-else class="text-xs font-normal text-[var(--color-muted)]">{{ day.cleanings.length }} уборок</span></div>
+            <div class="divide-y divide-[var(--color-line)] px-5 sm:px-6">
+              <article v-for="cleaning in day.cleanings.filter(item => !isFinishedDay(day.date) || !isFinished(item))" @click="openCleaningCard($event, cleaning)" :key="`${group.apartmentId}-${day.date}-${cleaning.id}`" class="group flex items-center gap-3 py-4">
+                <span class="grid size-8 shrink-0 place-items-center rounded-lg bg-[var(--color-primary-soft)] text-xs font-semibold tabular-nums text-[var(--color-primary)]">{{ isFinished(cleaning) ? '✓' : routeLabel(Math.min(...cleaning.assignments.map(item => item.routePosition))) }}</span>
+                <div class="min-w-0 flex-1"><p class="truncate font-semibold">{{ cleaning.apartment.name }}</p><p class="truncate text-sm text-[var(--color-muted)]">{{ cleanerNames(cleaning) }} · {{ cleaningSubtitle(cleaning) }}</p><p v-if="cleaning.hasProblem" class="mt-1 truncate text-sm text-red-700">{{ cleaning.problemDescription }}</p></div>
+                <StatusBadge :label="statusLabels[cleaning.status] ?? cleaning.status" :tone="statusTones[cleaning.status] ?? 'neutral'" />
+                <UDropdownMenu v-if="cleaningMenuItems(cleaning).length" :items="cleaningMenuItems(cleaning)" :content="{ align: 'end' }"><UButton color="neutral" variant="ghost" icon="i-lucide-ellipsis-vertical" aria-label="Действия с уборкой" class="min-h-11 min-w-11 active:scale-[0.96] transition-transform" /></UDropdownMenu>
+              </article>
+            </div>
+          </div>
+        </section>
+      </template>
+
+      <section v-if="cleaningPlan.later.length" class="surface overflow-hidden"><button type="button" class="flex w-full items-center justify-between px-5 py-4 text-left font-semibold sm:px-6" @click="laterOpen = !laterOpen"><span class="flex items-center gap-2"><UIcon name="i-lucide-calendar-plus" class="size-5 text-[var(--color-primary)]" />Позже <UBadge color="neutral" variant="soft">{{ cleaningPlan.later.length }}</UBadge></span><UIcon :name="laterOpen ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down'" class="size-5" /></button><div v-if="laterOpen" class="divide-y divide-[var(--color-line)] border-t border-[var(--color-line)] px-5 sm:px-6"><article v-for="cleaning in cleaningPlan.later" :key="`later-${cleaning.id}`" class="flex items-center gap-3 py-4" @click="openCleaningCard($event, cleaning)"><span class="text-sm font-medium tabular-nums text-[var(--color-muted)]">{{ formatDate(cleaning.scheduledOn!) }}</span><div class="min-w-0 flex-1"><p class="truncate font-semibold">{{ cleaning.apartment.name }}</p><p class="truncate text-sm text-[var(--color-muted)]">{{ cleaningSubtitle(cleaning) }} · {{ cleanerNames(cleaning) }}</p></div><UButton v-if="canOperate('cleaning', cleaning) && ['assigned', 'in_progress'].includes(cleaning.status)" color="primary" variant="soft" size="sm" icon="i-lucide-circle-check" @click="askQuickComplete('cleaning', cleaning)">Завершить</UButton><StatusBadge :label="statusLabels[cleaning.status] ?? cleaning.status" :tone="statusTones[cleaning.status] ?? 'neutral'" /></article></div></section>
+
+      <section v-if="historyOpen" class="surface overflow-hidden"><div class="border-b border-[var(--color-line)] px-5 py-4 sm:px-6"><h2 class="font-semibold">История уборок</h2><p class="text-sm text-[var(--color-muted)]">Завершённые и отменённые уборки прошлых дат.</p></div><div v-if="cleaningPlan.history.length" class="divide-y divide-[var(--color-line)] px-5 sm:px-6"><article v-for="cleaning in cleaningPlan.history" :key="`history-${cleaning.id}`" class="flex items-center gap-3 py-4" @click="openCleaningCard($event, cleaning)"><span class="text-sm font-medium tabular-nums text-[var(--color-muted)]">{{ cleaning.scheduledOn ? formatDate(cleaning.scheduledOn) : 'Без даты' }}</span><div class="min-w-0 flex-1"><p class="truncate font-semibold">{{ cleaning.apartment.name }}</p><p class="truncate text-sm text-[var(--color-muted)]">{{ cleaningSubtitle(cleaning) }} · {{ cleanerNames(cleaning) }}</p></div><UButton v-if="canOperate('cleaning', cleaning) && ['assigned', 'in_progress'].includes(cleaning.status)" color="primary" variant="soft" size="sm" icon="i-lucide-circle-check" @click="askQuickComplete('cleaning', cleaning)">Завершить</UButton><StatusBadge :label="statusLabels[cleaning.status] ?? cleaning.status" :tone="statusTones[cleaning.status] ?? 'neutral'" /></article></div><p v-else class="px-5 py-6 text-sm text-[var(--color-muted)] sm:px-6">История пока пуста.</p></section>
+      <EmptyState v-if="!cleanings?.length" icon="i-lucide-sparkles" title="Уборок пока нет" description="Создайте уборку вручную или назначьте её из списка заездов." />
+    </template>
+
+    <template v-if="tab === 'tasks'">
+      <div v-if="tasks?.length" class="surface divide-y divide-[var(--color-line)] px-5 sm:px-6"><article v-for="task in tasks" :key="task.id" class="flex items-center gap-3 py-4" @click="openTaskCard($event, task)"><div class="grid size-10 shrink-0 place-items-center rounded-xl bg-[#edf3f7] text-[#356882]"><UIcon name="i-lucide-clipboard-check" class="size-5" /></div><div class="min-w-0 flex-1"><NuxtLink :to="workHref('task', task.id)" class="block rounded-lg p-1 -m-1 hover:bg-[var(--color-surface-muted)]"><p class="truncate font-semibold">{{ task.title }}</p><p class="mt-1 truncate text-sm text-[var(--color-muted)]">{{ task.dueOn ? `До ${formatDate(task.dueOn)}` : 'Без срока' }} · {{ task.assignee?.name ?? 'Исполнитель не назначен' }}</p><p class="truncate text-sm text-[var(--color-muted)]">{{ task.apartment.name }} · {{ task.apartment.hotel.name }}</p></NuxtLink></div><UButton v-if="canOperate('task', task) && ['open', 'in_progress'].includes(task.status)" color="primary" variant="soft" size="sm" icon="i-lucide-circle-check" @click="askQuickComplete('task', task)">Завершить</UButton><StatusBadge :label="priorityLabels[task.priority] ?? task.priority" :tone="task.priority === 'urgent' ? 'danger' : task.priority === 'high' ? 'warning' : 'neutral'" /><StatusBadge :label="statusLabels[task.status] ?? task.status" :tone="statusTones[task.status] ?? 'neutral'" /><UDropdownMenu v-if="taskMenuItems(task).length" :items="taskMenuItems(task)" :content="{ align: 'end' }"><UButton color="neutral" variant="ghost" icon="i-lucide-ellipsis-vertical" aria-label="Действия с задачей" class="min-h-11 min-w-11 active:scale-[0.96] transition-transform" /></UDropdownMenu><UAlert v-if="task.hasProblem" class="mt-3" color="error" variant="soft" icon="i-lucide-circle-alert" title="Проблема" :description="task.problemDescription" /></article></div>
+      <EmptyState v-else icon="i-lucide-clipboard-check" title="Задач пока нет" description="Создайте задачу и назначьте исполнителя."><template #actions><UButton v-if="currentUser?.roles.some(role => ['administrator', 'manager'].includes(role))" @click="openCreateTask">Новая задача</UButton></template></EmptyState>
+    </template>
+
+    <USlideover v-model:open="taskOpen" :title="editingTask ? 'Изменить задачу' : 'Новая задача'"><template #body><form class="form-grid" @submit.prevent="saveTask"><UFormField label="Апартамент" :help="editingTask ? 'После начала задачи или списания расходников апартамент изменить нельзя.' : undefined"><USelect v-model="taskForm.apartmentId" :items="(apartments ?? []).map(apartment => ({ label: `${apartment.name} · ${apartment.hotel.name}`, value: apartment.id }))" class="w-full" :disabled="Boolean(editingTask && editingTask.status !== 'open')" required /></UFormField><UFormField label="Что нужно сделать"><UInput v-model="taskForm.title" required /></UFormField><UFormField label="Описание"><UTextarea v-model="taskForm.description" /></UFormField><UFormField label="Приоритет"><USelect v-model="taskForm.priority" :items="Object.entries(priorityLabels).map(([value, label]) => ({ value, label }))" class="w-full" /></UFormField><UFormField label="Исполнитель"><USelect v-model="taskForm.assigneeId" :items="[{ label: 'Без исполнителя', value: 'unassigned' }, ...(team ?? []).map(member => ({ label: member.name, value: member.id }))]" class="w-full" /></UFormField><UFormField v-if="isAdministrator" label="Стоимость управляющему"><MoneyInput v-model="taskForm.ownerCostEur" /></UFormField><UFormField label="Срок"><DateInput v-model="taskForm.dueOn" /></UFormField><UAlert v-if="error" color="error" variant="soft" :description="error" /><div class="form-actions"><UButton color="neutral" variant="ghost" @click="taskOpen = false">Отмена</UButton><UButton type="submit" :loading="pending">{{ editingTask ? 'Сохранить изменения' : 'Создать задачу' }}</UButton></div></form></template></USlideover>
+
+    <CleaningFormSlideover v-model:open="cleaningOpen" :apartments="apartments ?? []" :stays="stays ?? []" :team="team ?? []" :editing-cleaning="editingCleaning" :initial-stay-id="initialStayId" :pending="pending" :error="error" @submit="saveCleaning" />
 
     <USlideover v-model:open="stockOpen" title="Списать расходник"><template #body><form class="form-grid" @submit.prevent="recordUsage"><UFormField label="Расходник"><USelect v-model="usageForm.consumableId" :items="stockItems.filter(item => item.quantity > 0).map(item => ({ label: `${item.consumable.name} · ${item.quantity} ${item.consumable.unit}`, value: item.consumable.id }))" class="w-full" required /></UFormField><UFormField label="Количество"><UInput v-model.number="usageForm.quantity" type="number" min=".001" step=".001" required /></UFormField><UFormField label="Комментарий"><UInput v-model="usageForm.note" /></UFormField><UAlert v-if="error" color="error" variant="soft" :description="error" /><div class="form-actions"><UButton color="neutral" variant="ghost" @click="stockOpen = false">Отмена</UButton><UButton type="submit" :loading="pending">Списать</UButton></div></form></template></USlideover>
 
-    <USlideover v-model:open="completeOpen" title="Завершить работу"><template #body><form v-if="selected" class="form-grid" @submit.prevent="complete"><section v-if="selected.checklist.length"><p class="mb-2 font-semibold">Чек-лист</p><label v-for="item in selected.checklist" :key="item.label" class="flex min-h-11 items-center gap-3"><input v-model="item.checked" type="checkbox">{{ item.label }}</label></section><UFormField label="Комментарий"><UTextarea v-model="comment" /></UFormField><label class="flex min-h-11 items-center gap-3 font-medium"><input v-model="hasProblem" type="checkbox">Есть проблема</label><UFormField v-if="hasProblem" label="Описание проблемы"><UTextarea v-model="problemDescription" required /></UFormField><UFormField label="Фото" help="Необязательно"><UInput type="file" accept="image/*" @change="selectPhoto" /></UFormField><UAlert v-if="error" color="error" variant="soft" :description="error" /><div class="form-actions"><UButton color="neutral" variant="ghost" @click="completeOpen = false">Отмена</UButton><UButton type="submit" :loading="pending">Подтвердить завершение</UButton></div></form></template></USlideover>
+    <USlideover v-model:open="completeOpen" :title="inventoryOnly ? 'Остатки расходников' : 'Завершить работу'"><template #body><form v-if="selected" class="form-grid" @submit.prevent="inventoryOnly ? saveInventory() : complete()"><section v-if="selected.kind === 'cleaning'" class="rounded-2xl border border-[var(--color-line)] bg-[var(--color-surface-muted)] p-4"><details open><summary class="cursor-pointer list-none font-semibold"><span class="flex items-center justify-between gap-3">Остатки расходников <UIcon name="i-lucide-chevron-down" class="size-4 text-[var(--color-muted)]" /></span><p class="mt-1 text-sm font-normal text-[var(--color-muted)]">Укажите расход и фактический остаток. Заполнение необязательно.</p></summary><div class="mt-4 space-y-3"><div v-for="item in inventoryReports" :key="item.consumable.id" class="rounded-xl bg-white p-3 shadow-sm"><div class="flex items-start justify-between gap-3"><div><p class="font-medium">{{ item.consumable.name }}</p><p class="text-xs text-[var(--color-muted)]">Сейчас: {{ item.quantity }} {{ item.consumable.unit }}</p></div><UIcon name="i-lucide-package" class="mt-0.5 size-4 text-[var(--color-primary)]" /></div><div class="mt-3 grid grid-cols-2 gap-3"><UFormField label="Израсходовано"><UInput v-model.number="item.usedQuantity" type="number" min="0" step=".001"><template #trailing>{{ item.consumable.unit }}</template></UInput></UFormField><UFormField label="Фактически осталось"><UInput v-model.number="item.remainingQuantity" type="number" min="0" step=".001"><template #trailing>{{ item.consumable.unit }}</template></UInput></UFormField></div><p v-if="item.discrepancyQuantity" class="mt-2 text-xs text-amber-700">Есть расхождение: {{ item.discrepancyQuantity > 0 ? '+' : '' }}{{ item.discrepancyQuantity }} {{ item.consumable.unit }}</p></div><p v-if="!inventoryReports.length" class="text-sm text-[var(--color-muted)]">Для этого апартамента расходники ещё не настроены.</p><div v-if="!inventoryOnly" class="flex justify-end"><UButton type="button" color="neutral" variant="soft" size="sm" :loading="pending" @click="saveInventory">Сохранить остатки</UButton></div></div></details></section><template v-if="!inventoryOnly"><section v-if="selected.checklist.length"><p class="mb-2 font-semibold">Чек-лист</p><div class="space-y-1"><UCheckbox v-for="item in selected.checklist" :key="item.label" v-model="item.checked" :label="item.label" class="min-h-11 items-center" /></div></section><UFormField label="Комментарий"><UTextarea v-model="comment" /></UFormField><UCheckbox v-model="hasProblem" label="Есть проблема" class="min-h-11 items-center font-medium" /><UFormField v-if="hasProblem" label="Описание проблемы"><UTextarea v-model="problemDescription" required /></UFormField><UFormField label="Фото" help="Необязательно"><UInput type="file" accept="image/*" @change="selectPhoto" /></UFormField></template><UAlert v-if="error" color="error" variant="soft" :description="error" /><div class="form-actions"><UButton color="neutral" variant="ghost" @click="completeOpen = false">Отмена</UButton><UButton type="submit" :loading="pending">{{ inventoryOnly ? 'Сохранить остатки' : 'Подтвердить завершение' }}</UButton></div></form></template></USlideover>
+
+    <DeleteConfirmModal v-model:open="deleteOpen" :title="workToDelete?.kind === 'cleaning' ? 'Удалить уборку?' : 'Удалить задачу?'" :description="`«${workToDelete?.label ?? ''}» будет удалена навсегда вместе с фотографиями, финансовыми записями и складскими операциями. Списанные расходники вернутся в остатки.`" :loading="pending" :error="error" @confirm="removeWork" />
+    <UModal v-model:open="quickCompleteOpen" title="Завершить работу?"><template #body><div class="space-y-5"><p>Чек-лист заполнен. После подтверждения работа перейдёт в статус «Завершено».</p><UAlert v-if="error" color="error" variant="soft" :description="error" /><div class="form-actions"><UButton color="neutral" variant="ghost" @click="quickCompleteOpen = false">Отмена</UButton><UButton color="primary" :loading="pending" @click="quickComplete">Завершить</UButton></div></div></template></UModal>
   </section>
 </template>

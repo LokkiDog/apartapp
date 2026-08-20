@@ -152,15 +152,12 @@ async function save(event: FormSubmitEvent<ApartmentInput>) {
         </UFormField>
       </div>
 
-      <div class="apartment-form-fields apartment-form-fields--three mt-5">
+      <div class="apartment-form-fields apartment-form-fields--two mt-5">
         <UFormField name="capacity" label="Гостей" required>
           <UInput v-model.number="form.capacity" class="w-full tabular-nums" size="xl" type="number" min="1" max="50" />
         </UFormField>
         <UFormField name="rooms" label="Комнат" required>
           <UInput v-model.number="form.rooms" class="w-full tabular-nums" size="xl" type="number" min="1" max="20" />
-        </UFormField>
-        <UFormField name="sleepingPlaces" label="Спальных мест" required>
-          <UInput v-model.number="form.sleepingPlaces" class="w-full tabular-nums" size="xl" type="number" min="1" max="50" />
         </UFormField>
       </div>
 

@@ -7,6 +7,7 @@ const activeOwner = shallowRef<symbol | null>(null)
 <script setup lang="ts">
 import type { Stay } from '#fsd/entities/stay'
 import { formatDate, formatEuro } from '#fsd/shared/lib'
+import { stayCleaningPresentation } from './model/stay-cleaning'
 
 const props = withDefaults(defineProps<{
   stay: Stay
@@ -19,6 +20,8 @@ const props = withDefaults(defineProps<{
   continuesRight?: boolean
   showGuestDetails?: boolean
   showFinancialDetails?: boolean
+  canEdit?: boolean
+  canManageCleaning?: boolean
 }>(), {
   leftLabel: '',
   rightLabel: '',
@@ -26,30 +29,27 @@ const props = withDefaults(defineProps<{
   continuesLeft: false,
   continuesRight: false,
   showGuestDetails: false,
-  showFinancialDetails: false
+  showFinancialDetails: false,
+  canEdit: false,
+  canManageCleaning: false
 })
+const emit = defineEmits<{ edit: [stay: Stay] }>()
 
 const owner = Symbol('stay-calendar-popover')
 const isOpen = computed({
   get: () => activeOwner.value === owner,
   set: value => { activeOwner.value = value ? owner : (activeOwner.value === owner ? null : activeOwner.value) }
 })
-let closeTimer: ReturnType<typeof setTimeout> | undefined
 
 const contextLabel = computed(() => ({ arrival: 'Заезд', stay: 'Проживание', departure: 'Выезд' })[props.context])
+const hasCleaning = computed(() => Boolean(props.stay.cleaning?.id))
+const cleaningPresentation = computed(() => stayCleaningPresentation(props.stay))
 const nights = computed(() => Math.max(0, Math.round((Date.parse(`${props.stay.checkOutOn}T12:00:00Z`) - Date.parse(`${props.stay.checkInOn}T12:00:00Z`)) / 86400000)))
 const guestCount = computed(() => props.stay.adultCount + props.stay.childCount)
 
-function show() {
-  if (closeTimer) clearTimeout(closeTimer)
-  activeOwner.value = owner
-}
-
-function hide() {
-  if (closeTimer) clearTimeout(closeTimer)
-  closeTimer = setTimeout(() => {
-    if (activeOwner.value === owner) activeOwner.value = null
-  }, 120)
+function editStay() {
+  isOpen.value = false
+  emit('edit', props.stay)
 }
 </script>
 
@@ -67,21 +67,18 @@ function hide() {
           }
         ]"
         :style="eventStyle"
-        :aria-label="`${contextLabel}: ${stay.apartment.name}, ${formatDate(stay.checkInOn)} — ${formatDate(stay.checkOutOn)}`"
-        @mouseenter="show"
-        @mouseleave="hide"
-        @focus="show"
-        @blur="hide"
+        :aria-label="`${contextLabel}: ${stay.apartment.name}, ${formatDate(stay.checkInOn)} — ${formatDate(stay.checkOutOn)}. ${cleaningPresentation.label}`"
       >
         <span v-if="continuesLeft" class="stay-calendar-trigger__arrow stay-calendar-trigger__arrow--left" aria-hidden="true" />
         <span v-if="leftLabel" class="stay-calendar-trigger__left">{{ leftLabel }}</span>
         <span v-if="rightLabel" class="stay-calendar-trigger__right">{{ rightLabel }}</span>
+        <span class="stay-cleaning-marker" :class="cleaningPresentation.className" :title="cleaningPresentation.label" aria-hidden="true"><UIcon :name="cleaningPresentation.icon" class="size-3" /></span>
         <span v-if="continuesRight" class="stay-calendar-trigger__arrow stay-calendar-trigger__arrow--right" aria-hidden="true" />
       </button>
     </template>
 
     <template #content>
-      <article class="stay-calendar-popover" @mouseenter="show" @mouseleave="hide">
+      <article class="stay-calendar-popover">
         <div class="stay-calendar-popover__accent" :style="{ backgroundColor: eventStyle?.backgroundColor }" />
         <div class="stay-calendar-popover__body">
           <div class="flex items-start justify-between gap-4">
@@ -98,7 +95,6 @@ function hide() {
             <div><dt>Выезд</dt><dd>{{ formatDate(stay.checkOutOn) }}</dd></div>
             <div><dt>Проживание</dt><dd>{{ nights }} {{ nights === 1 ? 'ночь' : nights < 5 ? 'ночи' : 'ночей' }}</dd></div>
             <div><dt>Гости</dt><dd>{{ guestCount }} · {{ stay.adultCount }} взрослых<span v-if="stay.childCount">, {{ stay.childCount }} детей</span></dd></div>
-            <div v-if="stay.sleepingPlacesUsed !== undefined"><dt>Спальные места</dt><dd>{{ stay.sleepingPlacesUsed }}</dd></div>
           </dl>
 
           <div v-if="showGuestDetails && (stay.guestName || stay.guestPhone || stay.guestComment || stay.specialRequests)" class="stay-calendar-popover__notes">
@@ -112,6 +108,8 @@ function hide() {
             <p v-if="stay.services?.length"><strong>Услуги:</strong> {{ stay.services.map(service => service.nameSnapshot).join(', ') }}</p>
             <p v-if="stay.cashAmountEur !== null && stay.cashAmountEur !== undefined"><strong>Наличные:</strong> {{ formatEuro(stay.cashAmountEur) }}</p>
           </div>
+
+          <div class="grid gap-2"><UButton v-if="canEdit" block color="neutral" variant="soft" icon="i-lucide-pencil" @click="editStay">Изменить заезд</UButton><UButton v-if="canManageCleaning" block color="primary" variant="soft" icon="i-lucide-sparkles" :to="hasCleaning ? `/cleanings/${encodeURIComponent(stay.cleaning!.id)}` : `/work?stayId=${encodeURIComponent(stay.id)}`">{{ hasCleaning ? 'Открыть уборку' : 'Назначить уборку' }}</UButton></div>
         </div>
       </article>
     </template>

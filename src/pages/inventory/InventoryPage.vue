@@ -5,13 +5,16 @@ import { DeleteConfirmModal, EmptyState, MoneyInput, PageHeader, StatusBadge } f
 
 type Stock = { id: string; consumable: { id: string; name: string; unit: string }; quantity: number; minimumQuantity: number; targetQuantity: number; isLow: boolean }
 type Consumable = { id: string; name: string; category: string; unit: string }
+type InventoryDiscrepancy = { id: string; consumable: { name: string; unit: string }; cleaning: { apartment: { name: string; hotel: { name: string } } }; discrepancyQuantity: number; remainingQuantity: number; reportedAt: string }
 const user = useCurrentUser()
 const tab = ref<'stocks' | 'catalog'>('stocks')
+const isAdministrator = computed(() => user.value?.roles.includes('administrator') ?? false)
 const selectedApartment = ref('')
 const { data: apartments } = await useAsyncData('inventory-apartments', () => $fetch<Apartment[]>('/api/apartments'), { server: false })
 watchEffect(() => { if (!selectedApartment.value && apartments.value?.[0]) selectedApartment.value = apartments.value[0].id })
 const { data: stocks, refresh, status } = await useAsyncData('inventory-stocks', () => selectedApartment.value ? $fetch<Stock[]>(`/api/inventory/${selectedApartment.value}`) : Promise.resolve([]), { server: false, watch: [selectedApartment] })
-const { data: consumables, refresh: refreshConsumables } = await useAsyncData('inventory-consumables', () => $fetch<Consumable[]>('/api/consumables'), { server: false })
+const { data: consumables, refresh: refreshConsumables } = await useAsyncData('inventory-consumables', () => isAdministrator.value ? $fetch<Consumable[]>('/api/consumables') : Promise.resolve([] as Consumable[]), { server: false, watch: [isAdministrator] })
+const { data: discrepancies } = await useAsyncData('inventory-discrepancies', () => user.value?.roles.includes('administrator') ? $fetch<InventoryDiscrepancy[]>('/api/inventory/discrepancies') : Promise.resolve([]), { server: false, watch: [user] })
 const replenishOpen = ref(false), catalogOpen = ref(false), minimumOpen = ref(false), deleteOpen = ref(false)
 const pending = ref(false), minimumPending = ref(false), error = ref('')
 const replenish = reactive({ consumableId: '', quantity: 1, unitCostEur: 0 as number | null, note: '' })
@@ -20,6 +23,10 @@ const minimum = reactive({ consumableId: '', quantity: 0, targetQuantity: 0, nam
 const editingConsumableId = ref<string | null>(null)
 const consumableToDelete = ref<Consumable | null>(null)
 const replenishmentUnit = computed(() => consumables.value?.find(item => item.id === replenish.consumableId)?.unit ?? '')
+
+watchEffect(() => {
+  if (!isAdministrator.value && tab.value === 'catalog') tab.value = 'stocks'
+})
 
 async function addStock() {
   if (!selectedApartment.value) return
@@ -69,10 +76,14 @@ async function saveMinimum() {
       <template #actions><UButton v-if="user?.roles.includes('administrator')" :icon="tab === 'stocks' ? 'i-lucide-package-plus' : 'i-lucide-plus'" @click="tab === 'stocks' ? replenishOpen = true : openCreateCatalog()">{{ tab === 'stocks' ? 'Пополнить' : 'Добавить тип' }}</UButton></template>
     </PageHeader>
     <div class="flex flex-wrap items-center justify-between gap-3">
-      <UFieldGroup><UButton :variant="tab === 'stocks' ? 'solid' : 'soft'" @click="tab = 'stocks'">По апартаментам</UButton><UButton :variant="tab === 'catalog' ? 'solid' : 'soft'" @click="tab = 'catalog'">Каталог</UButton></UFieldGroup>
+      <UFieldGroup><UButton :variant="tab === 'stocks' ? 'solid' : 'soft'" @click="tab = 'stocks'">По апартаментам</UButton><UButton v-if="isAdministrator" :variant="tab === 'catalog' ? 'solid' : 'soft'" @click="tab = 'catalog'">Каталог</UButton></UFieldGroup>
       <USelect v-if="tab === 'stocks'" v-model="selectedApartment" :items="(apartments ?? []).map(apartment => ({ label: `${apartment.name} · ${apartment.hotel.name}`, value: apartment.id }))" class="w-full sm:w-80" />
     </div>
     <template v-if="tab === 'stocks'">
+      <section v-if="user?.roles.includes('administrator') && discrepancies?.length" class="surface overflow-hidden border-amber-200 bg-amber-50/50">
+        <div class="flex items-start gap-3 border-b border-amber-200 px-5 py-4 sm:px-6"><UIcon name="i-lucide-triangle-alert" class="mt-0.5 size-5 text-amber-700" /><div><h2 class="font-semibold text-amber-950">Расхождения после уборок</h2><p class="mt-1 text-sm text-amber-900/75">Проверьте позиции, где фактический остаток отличается от расчётного.</p></div></div>
+        <div class="divide-y divide-amber-200/70 px-5 sm:px-6"><div v-for="item in discrepancies" :key="item.id" class="flex items-center gap-3 py-3"><div class="min-w-0 flex-1"><p class="truncate font-medium">{{ item.consumable.name }} · {{ item.cleaning.apartment.name }}</p><p class="truncate text-sm text-amber-900/70">{{ item.cleaning.apartment.hotel.name }} · Осталось {{ item.remainingQuantity }} {{ item.consumable.unit }}</p></div><StatusBadge :label="`${item.discrepancyQuantity > 0 ? '+' : ''}${item.discrepancyQuantity} ${item.consumable.unit}`" tone="warning" /></div></div>
+      </section>
       <div v-if="status === 'pending'" class="grid gap-3"><USkeleton v-for="item in 4" :key="item" class="h-20 rounded-2xl" /></div>
       <div v-else-if="stocks?.length" class="surface divide-y divide-[var(--color-line)] px-4 sm:px-6">
         <div v-for="stock in stocks" :key="stock.id" class="flex min-h-16 items-center gap-3 py-2 sm:gap-4">

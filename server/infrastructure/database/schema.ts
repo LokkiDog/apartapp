@@ -74,6 +74,7 @@ export const apartmentTypes = pgTable('apartment_types', {
   cleanerPoolEur: numeric('cleaner_pool_eur', { precision: 12, scale: 2, mode: 'number' }).notNull(),
   laundryEur: numeric('laundry_eur', { precision: 12, scale: 2, mode: 'number' }).notNull(),
   serviceEur: numeric('service_eur', { precision: 12, scale: 2, mode: 'number' }).notNull(),
+  defaultChecklist: jsonb('default_checklist').$type<string[]>().notNull().default(sql`'[]'::jsonb`),
   ...timestamps
 }, table => [
   check('apartment_type_tariff_nonnegative', sql`${table.ownerTotalEur} >= 0 AND ${table.cleanerPoolEur} >= 0 AND ${table.laundryEur} >= 0 AND ${table.serviceEur} >= 0`),
@@ -92,7 +93,6 @@ export const apartments = pgTable('apartments', {
   locationDetails: text('location_details').notNull().default(''),
   capacity: integer('capacity').notNull(),
   rooms: integer('rooms').notNull(),
-  sleepingPlaces: integer('sleeping_places').notNull(),
   checkInTime: text('check_in_time').notNull(),
   checkOutTime: text('check_out_time').notNull(),
   instructions: text('instructions').notNull().default(''),
@@ -119,7 +119,6 @@ export const stays = pgTable('stays', {
   checkOutOn: date('check_out_on').notNull(),
   adultCount: integer('adult_count').notNull(),
   childCount: integer('child_count').notNull().default(0),
-  sleepingPlacesUsed: integer('sleeping_places_used').notNull().default(0),
   specialRequests: text('special_requests').notNull().default(''),
   guestName: text('guest_name').notNull().default(''),
   guestPhone: text('guest_phone').notNull().default(''),
@@ -147,7 +146,7 @@ export const cleanings = pgTable('cleanings', {
   id: uuid('id').primaryKey().defaultRandom(),
   organizationId: uuid('organization_id').notNull().references(() => organizations.id),
   apartmentId: uuid('apartment_id').notNull().references(() => apartments.id),
-  stayId: uuid('stay_id').notNull().unique().references(() => stays.id),
+  stayId: uuid('stay_id').unique().references(() => stays.id),
   scheduledOn: date('scheduled_on'),
   status: cleaningStatusEnum('status').notNull().default('unassigned'),
   tariffSnapshot: jsonb('tariff_snapshot').$type<CleaningTariff>().notNull(),
@@ -162,8 +161,12 @@ export const cleanings = pgTable('cleanings', {
 export const cleaningAssignments = pgTable('cleaning_assignments', {
   cleaningId: uuid('cleaning_id').notNull().references(() => cleanings.id, { onDelete: 'cascade' }),
   cleanerId: uuid('cleaner_id').notNull().references(() => users.id),
+  routePosition: integer('route_position').notNull().default(0),
   assignedAt: timestamp('assigned_at', { withTimezone: true }).notNull().defaultNow()
-}, table => [uniqueIndex('cleaning_assignment_unique').on(table.cleaningId, table.cleanerId)])
+}, table => [
+  uniqueIndex('cleaning_assignment_unique').on(table.cleaningId, table.cleanerId),
+  index('cleaning_assignment_route_idx').on(table.cleanerId, table.routePosition)
+])
 
 export const tasks = pgTable('tasks', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -233,10 +236,28 @@ export const inventoryMovements = pgTable('inventory_movements', {
   totalCostEur: numeric('total_cost_eur', { precision: 12, scale: 2, mode: 'number' }).notNull().default(0),
   sourceType: text('source_type'),
   sourceId: uuid('source_id'),
+  origin: text('origin').notNull().default('manual'),
   note: text('note').notNull().default(''),
   createdById: uuid('created_by_id').notNull().references(() => users.id),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 }, table => [check('inventory_movement_cost_nonnegative', sql`${table.totalCostEur} >= 0`)])
+
+export const cleaningInventoryReports = pgTable('cleaning_inventory_reports', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  organizationId: uuid('organization_id').notNull().references(() => organizations.id),
+  cleaningId: uuid('cleaning_id').notNull().references(() => cleanings.id, { onDelete: 'cascade' }),
+  consumableId: uuid('consumable_id').notNull().references(() => consumables.id),
+  usedQuantity: numeric('used_quantity', { precision: 12, scale: 3 }).notNull().default('0'),
+  remainingQuantity: numeric('remaining_quantity', { precision: 12, scale: 3 }).notNull(),
+  discrepancyQuantity: numeric('discrepancy_quantity', { precision: 12, scale: 3 }).notNull().default('0'),
+  reportedById: uuid('reported_by_id').notNull().references(() => users.id),
+  reportedAt: timestamp('reported_at', { withTimezone: true }).notNull().defaultNow(),
+  ...timestamps
+}, table => [
+  uniqueIndex('cleaning_inventory_report_unique').on(table.cleaningId, table.consumableId),
+  index('cleaning_inventory_report_org_idx').on(table.organizationId, table.reportedAt),
+  check('cleaning_inventory_report_quantities_nonnegative', sql`${table.usedQuantity} >= 0 AND ${table.remainingQuantity} >= 0`)
+])
 
 export const financialEntries = pgTable('financial_entries', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -356,11 +377,17 @@ export const stayServicesRelations = relations(stayServices, ({ one }) => ({
 export const cleaningsRelations = relations(cleanings, ({ one, many }) => ({
   apartment: one(apartments, { fields: [cleanings.apartmentId], references: [apartments.id] }),
   stay: one(stays, { fields: [cleanings.stayId], references: [stays.id] }),
-  assignments: many(cleaningAssignments)
+  assignments: many(cleaningAssignments),
+  inventoryReports: many(cleaningInventoryReports)
 }))
 export const cleaningAssignmentsRelations = relations(cleaningAssignments, ({ one }) => ({
   cleaning: one(cleanings, { fields: [cleaningAssignments.cleaningId], references: [cleanings.id] }),
   cleaner: one(users, { fields: [cleaningAssignments.cleanerId], references: [users.id] })
+}))
+export const cleaningInventoryReportsRelations = relations(cleaningInventoryReports, ({ one }) => ({
+  cleaning: one(cleanings, { fields: [cleaningInventoryReports.cleaningId], references: [cleanings.id] }),
+  consumable: one(consumables, { fields: [cleaningInventoryReports.consumableId], references: [consumables.id] }),
+  reportedBy: one(users, { fields: [cleaningInventoryReports.reportedById], references: [users.id] })
 }))
 export const tasksRelations = relations(tasks, ({ one }) => ({
   apartment: one(apartments, { fields: [tasks.apartmentId], references: [apartments.id] }),
