@@ -6,7 +6,7 @@ import { notifications, pushSubscriptions, users } from '../database/schema'
 export async function notifyUsers(input: {
   organizationId: string
   userIds: string[]
-  type: 'stay_changed' | 'work_assigned' | 'work_rescheduled' | 'work_canceled' | 'problem'
+  type: 'stay_changed' | 'work_assigned' | 'work_rescheduled' | 'work_canceled' | 'problem' | 'manager_expense_report_published'
   title: string
   body: string
   href: string

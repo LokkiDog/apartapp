@@ -3,7 +3,7 @@ import { apartmentInputSchema, apartmentTypeInputSchema, cleaningAssignmentInput
 import { formatEuroInput, parseEuroInput } from '../src/shared/lib/money'
 import { apartmentCalendarColor } from '../src/shared/lib/calendar'
 import { calculateFifoUsage } from '../server/modules/inventory/fifo'
-import { inventoryThresholdSchema, reportQuerySchema } from '../shared/contracts/report'
+import { inventoryThresholdSchema, managerExpenseReportSaveSchema, reportQuerySchema } from '../shared/contracts/report'
 
 describe('CRM contracts', () => {
   it('accepts valid hotel coordinates and rejects invalid ones', () => {
@@ -157,5 +157,17 @@ describe('CRM contracts', () => {
     expect(inventoryThresholdSchema.safeParse({ consumableId, minimumQuantity: 5, targetQuantity: 10 }).success).toBe(true)
     expect(inventoryThresholdSchema.safeParse({ consumableId, minimumQuantity: 5.5, targetQuantity: 10 }).success).toBe(false)
     expect(inventoryThresholdSchema.safeParse({ consumableId, minimumQuantity: 5, targetQuantity: 5 }).success).toBe(false)
+  })
+
+  it('validates manager expense report lines with optional dates and signed amounts', () => {
+    const valid = { month: '2026-08', lines: [
+      { category: 'cleaning', description: 'Уборка после выезда', occurredOn: '2026-08-12', amountEur: 18.555 },
+      { category: 'inventory', description: 'Расходники', occurredOn: null, amountEur: -3.5 },
+      { category: 'task', description: 'Замена замка', amountEur: 0 }
+    ] }
+    expect(managerExpenseReportSaveSchema.parse(valid).lines[0].amountEur).toBe(18.56)
+    expect(managerExpenseReportSaveSchema.safeParse({ ...valid, month: '2026-13' }).success).toBe(false)
+    expect(managerExpenseReportSaveSchema.safeParse({ ...valid, lines: [{ ...valid.lines[0], occurredOn: '2026-09-01' }] }).success).toBe(false)
+    expect(managerExpenseReportSaveSchema.safeParse({ ...valid, lines: [{ ...valid.lines[0], category: 'guest_service' }] }).success).toBe(false)
   })
 })

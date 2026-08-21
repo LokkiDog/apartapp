@@ -18,7 +18,7 @@ const objects: NavItem[] = [
   { to: '/hotels', label: 'Отели', icon: 'i-lucide-hotel' },
   { to: '/inventory', label: 'Остатки', icon: 'i-lucide-package' }
 ]
-const reports: NavItem[] = [{ to: '/reports', label: 'Сводные отчёты', icon: 'i-lucide-chart-no-axes-combined' }]
+const reports: NavItem[] = [{ to: '/reports', label: 'Сводные отчёты', icon: 'i-lucide-chart-no-axes-combined' }, { to: '/statement', label: 'Расходы управляющих', icon: 'i-lucide-wallet-cards' }]
 const managerFinance: NavItem[] = [{ to: '/statement', label: 'Мои расходы', icon: 'i-lucide-wallet-cards' }]
 const settings: NavItem[] = [
   { to: '/settings/users', label: 'Пользователи', icon: 'i-lucide-users' },

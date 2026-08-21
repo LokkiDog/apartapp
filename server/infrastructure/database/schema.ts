@@ -30,7 +30,8 @@ export const taskPriorityEnum = pgEnum('task_priority', ['low', 'normal', 'high'
 export const inventoryMovementEnum = pgEnum('inventory_movement', ['replenishment', 'usage', 'adjustment_in', 'adjustment_out'])
 export const financialEntryTypeEnum = pgEnum('financial_entry_type', ['cleaning_charge', 'inventory_charge', 'task_charge', 'guest_service_charge', 'compensation'])
 export const visibilityEnum = pgEnum('entry_visibility', ['administrator', 'manager'])
-export const notificationTypeEnum = pgEnum('notification_type', ['stay_changed', 'work_assigned', 'work_rescheduled', 'work_canceled', 'problem'])
+export const notificationTypeEnum = pgEnum('notification_type', ['stay_changed', 'work_assigned', 'work_rescheduled', 'work_canceled', 'problem', 'manager_expense_report_published'])
+export const managerExpenseCategoryEnum = pgEnum('manager_expense_category', ['cleaning', 'inventory', 'task'])
 export const authTokenTypeEnum = pgEnum('auth_token_type', ['invitation', 'password_reset'])
 
 export const organizations = pgTable('organizations', {
@@ -290,6 +291,30 @@ export const notifications = pgTable('notifications', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 })
 
+export const managerExpenseReports = pgTable('manager_expense_reports', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  organizationId: uuid('organization_id').notNull().references(() => organizations.id),
+  apartmentId: uuid('apartment_id').notNull().references(() => apartments.id, { onDelete: 'cascade' }),
+  month: date('month').notNull(),
+  publishedAt: timestamp('published_at', { withTimezone: true }),
+  publishedById: uuid('published_by_id').references(() => users.id, { onDelete: 'set null' }),
+  ...timestamps
+}, table => [
+  uniqueIndex('manager_expense_report_apartment_month_unique').on(table.organizationId, table.apartmentId, table.month),
+  index('manager_expense_report_month_idx').on(table.organizationId, table.month)
+])
+
+export const managerExpenseReportLines = pgTable('manager_expense_report_lines', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  reportId: uuid('report_id').notNull().references(() => managerExpenseReports.id, { onDelete: 'cascade' }),
+  category: managerExpenseCategoryEnum('category').notNull(),
+  description: text('description').notNull(),
+  occurredOn: date('occurred_on'),
+  amountEur: numeric('amount_eur', { precision: 12, scale: 2, mode: 'number' }).notNull(),
+  position: integer('position').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+}, table => [index('manager_expense_report_line_order_idx').on(table.reportId, table.category, table.position)])
+
 export const pushSubscriptions = pgTable('push_subscriptions', {
   id: uuid('id').primaryKey().defaultRandom(),
   userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
@@ -361,7 +386,16 @@ export const apartmentsRelations = relations(apartments, ({ one, many }) => ({
   type: one(apartmentTypes, { fields: [apartments.apartmentTypeId], references: [apartmentTypes.id] }),
   stays: many(stays),
   cleanings: many(cleanings),
-  tasks: many(tasks)
+  tasks: many(tasks),
+  managerExpenseReports: many(managerExpenseReports)
+}))
+export const managerExpenseReportsRelations = relations(managerExpenseReports, ({ one, many }) => ({
+  apartment: one(apartments, { fields: [managerExpenseReports.apartmentId], references: [apartments.id] }),
+  publishedBy: one(users, { fields: [managerExpenseReports.publishedById], references: [users.id] }),
+  lines: many(managerExpenseReportLines)
+}))
+export const managerExpenseReportLinesRelations = relations(managerExpenseReportLines, ({ one }) => ({
+  report: one(managerExpenseReports, { fields: [managerExpenseReportLines.reportId], references: [managerExpenseReports.id] })
 }))
 
 export const staysRelations = relations(stays, ({ one, many }) => ({

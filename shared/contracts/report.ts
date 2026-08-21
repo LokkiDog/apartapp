@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import Decimal from 'decimal.js'
 
 const reportDateSchema = z.iso.date()
 
@@ -38,6 +39,31 @@ export const inventoryThresholdSchema = z.object({
     context.addIssue({ code: 'custom', path: ['targetQuantity'], message: 'Целевой остаток должен быть больше порога пополнения' })
   }
 })
+
+export const managerExpenseCategorySchema = z.enum(['cleaning', 'inventory', 'task'])
+export const managerExpenseMonthSchema = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Укажите месяц в формате ГГГГ-ММ')
+const managerExpenseAmountSchema = z.coerce.number().finite().min(-9_999_999_999.99).max(9_999_999_999.99)
+  .transform(value => Number(new Decimal(value).toDecimalPlaces(2, Decimal.ROUND_HALF_UP)))
+
+export const managerExpenseReportLineSchema = z.object({
+  category: managerExpenseCategorySchema,
+  description: z.string().trim().min(1, 'Введите название').max(200),
+  occurredOn: z.iso.date().nullable().optional(),
+  amountEur: managerExpenseAmountSchema
+})
+
+export const managerExpenseReportSaveSchema = z.object({
+  month: managerExpenseMonthSchema,
+  lines: z.array(managerExpenseReportLineSchema).max(500)
+}).superRefine((value, context) => {
+  for (const [index, line] of value.lines.entries()) {
+    if (line.occurredOn && !line.occurredOn.startsWith(value.month)) {
+      context.addIssue({ code: 'custom', path: ['lines', index, 'occurredOn'], message: 'Дата должна входить в месяц отчёта' })
+    }
+  }
+})
+
+export const managerExpenseReportMonthSchema = z.object({ month: managerExpenseMonthSchema })
 
 export type ReportQuery = z.infer<typeof reportQuerySchema>
 
