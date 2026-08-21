@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import Decimal from 'decimal.js'
 import type { Apartment } from '#fsd/entities/apartment'
 import type { Stay } from '#fsd/entities/stay'
 import type { Hotel } from '#fsd/entities/hotel'
+import type { DateValue } from '@internationalized/date'
 import { filterApartmentsByScope, isPropertyScopeReady, propertyScopeQuery, PropertyScopeFilter, type PropertyScopeValue } from '#fsd/features/select-property-scope'
 import { apartmentCalendarColor, formatDate, formatEuro } from '#fsd/shared/lib'
 import { useCurrentUser } from '#fsd/shared/auth'
@@ -34,6 +34,7 @@ function emptyStayForm(): StayForm {
 
 const user = useCurrentUser()
 const propertyScope = reactive<PropertyScopeValue>({ scope: 'all', hotelId: 'all', apartmentIds: [] })
+const calendarViewStorageKey = 'aparts.calendar.view'
 const calendarView = ref<CalendarView>('agenda')
 const eventsOnly = ref(false)
 const cursor = ref(todayKey())
@@ -79,7 +80,6 @@ const formServices = computed<SpecialServiceOption[]>(() => {
   }
   return [...available.values()]
 })
-const suggestedCashEur = computed(() => Number(formServices.value.filter(service => form.serviceIds.includes(service.id)).reduce((sum, service) => sum.plus(service.priceEur), new Decimal(0)).toDecimalPlaces(2)))
 const visibleApartments = computed(() => filterApartmentsByScope(apartments.value ?? [], selectedScope.value))
 const weekDays = computed(() => daysBetween(range.value.from, range.value.to))
 const monthDays = computed(() => daysBetween(range.value.from, range.value.to))
@@ -93,6 +93,15 @@ const monthWeekLayouts = computed(() => assignMonthWeekLanes(
 const heading = computed(() => calendarView.value === 'month'
   ? new Intl.DateTimeFormat('ru-RU', { month: 'long', year: 'numeric', timeZone: 'Europe/Sofia' }).format(dateFromKey(cursor.value))
   : `${formatDate(range.value.from)} — ${formatDate(addDays(range.value.to, -1))}`)
+
+onMounted(() => {
+  const storedView = localStorage.getItem(calendarViewStorageKey)
+  if (storedView === 'agenda' || storedView === 'week' || storedView === 'month') calendarView.value = storedView
+})
+
+watch(calendarView, value => {
+  if (import.meta.client) localStorage.setItem(calendarViewStorageKey, value)
+})
 
 watch(visibleApartments, value => {
   if (form.apartmentId && !value.some(apartment => apartment.id === form.apartmentId)) form.apartmentId = ''
@@ -124,6 +133,16 @@ function stayArrives(stay: Stay, day: string) { return stay.checkInOn === day }
 function stayDeparts(stay: Stay, day: string) { return stay.checkOutOn === day }
 function staysForApartmentWeek(apartmentId: string) { return (stays.value ?? []).filter(stay => stay.apartmentId === apartmentId && stay.checkInOn < range.value.to && stay.checkOutOn >= range.value.from) }
 function weekSegmentsForApartment(apartmentId: string) { return createWeekSegments(staysForApartmentWeek(apartmentId), range.value.from, range.value.to) }
+function isStayDateDisabled(date: DateValue) {
+  if (!form.apartmentId) return false
+  const day = date.toString()
+  const selectedStart = form.checkInOn
+  return (stays.value ?? [])
+    .filter(stay => stay.apartmentId === form.apartmentId && stay.id !== editingStay.value?.id)
+    .some(stay => selectedStart
+      ? day > stay.checkInOn && day < stay.checkOutOn
+      : day >= stay.checkInOn && day < stay.checkOutOn)
+}
 function segmentGrid(segment: CalendarStaySegment<Stay>, lane?: number) { return { gridColumn: `${segment.startHalf + 1} / ${segment.endHalf + 1}`, ...(lane === undefined ? {} : { gridRow: String(lane + 1) }) } }
 function weekMarkerGrid(value: string) { const dayIndex = weekDays.value.indexOf(value); return { gridColumn: `${dayIndex * 2 + 1} / span 2` } }
 function monthMarkerEntries(day: string) { return (stays.value ?? []).filter(stay => stayArrives(stay, day) || stayDeparts(stay, day)) }
@@ -251,8 +270,8 @@ async function saveStay() {
           </div>
         </div>
         <div class="calendar-controls__views">
-          <UButton v-if="calendarView !== 'agenda'" :variant="eventsOnly ? 'solid' : 'soft'" color="primary" icon="i-lucide-arrow-left-right" class="min-h-11 active:scale-[0.96] transition-transform" @click="eventsOnly = !eventsOnly">{{ eventsOnly ? 'Заезды и выезды' : 'Проживания' }}</UButton>
-          <UFieldGroup><UButton :variant="calendarView === 'agenda' ? 'solid' : 'soft'" @click="calendarView = 'agenda'">По датам</UButton><UButton :variant="calendarView === 'week' ? 'solid' : 'soft'" @click="calendarView = 'week'">Неделя</UButton><UButton :variant="calendarView === 'month' ? 'solid' : 'soft'" @click="calendarView = 'month'">Месяц</UButton></UFieldGroup>
+          <UButton v-if="calendarView !== 'agenda'" :variant="eventsOnly ? 'solid' : 'soft'" color="primary" icon="i-lucide-arrow-left-right" class="calendar-events-toggle min-h-11 active:scale-[0.96] transition-transform" @click="eventsOnly = !eventsOnly">{{ eventsOnly ? 'Заезды и выезды' : 'Проживания' }}</UButton>
+          <UFieldGroup class="calendar-view-switch"><UButton :variant="calendarView === 'agenda' ? 'solid' : 'soft'" @click="calendarView = 'agenda'">По датам</UButton><UButton :variant="calendarView === 'week' ? 'solid' : 'soft'" @click="calendarView = 'week'">Неделя</UButton><UButton :variant="calendarView === 'month' ? 'solid' : 'soft'" @click="calendarView = 'month'">Месяц</UButton></UFieldGroup>
         </div>
       </div>
       <PropertyScopeFilter
@@ -304,8 +323,8 @@ async function saveStay() {
                   <div class="stay-agenda-item__actions">
                     <NuxtLink v-if="user?.roles.includes('administrator')" :to="cleaningHref(item.stay)" class="stay-cleaning-indicator" :class="cleaningPresentation(item.stay).className" :title="cleaningPresentation(item.stay).label" :aria-label="cleaningPresentation(item.stay).label"><UIcon :name="cleaningPresentation(item.stay).icon" class="size-4" /></NuxtLink>
                     <span v-else class="stay-cleaning-indicator" :class="cleaningPresentation(item.stay).className" :title="cleaningPresentation(item.stay).label" role="img" :aria-label="cleaningPresentation(item.stay).label"><UIcon :name="cleaningPresentation(item.stay).icon" class="size-4" /></span>
-                    <UButton v-if="canEditStays" color="neutral" variant="ghost" icon="i-lucide-pencil" :aria-label="`Изменить заезд ${item.stay.apartment.name}`" @click="openEdit(item.stay)" />
-                    <UButton v-if="user?.roles.includes('administrator')" color="error" variant="ghost" icon="i-lucide-trash-2" :aria-label="`Удалить заезд ${item.stay.apartment.name}`" @click="openDelete(item.stay)" />
+                    <UButton v-if="canEditStays" color="neutral" variant="ghost" icon="i-lucide-pencil" class="stay-agenda-action" :aria-label="`Изменить заезд ${item.stay.apartment.name}`" @click="openEdit(item.stay)" />
+                    <UButton v-if="user?.roles.includes('administrator')" color="error" variant="ghost" icon="i-lucide-trash-2" class="stay-agenda-action" :aria-label="`Удалить заезд ${item.stay.apartment.name}`" @click="openDelete(item.stay)" />
                   </div>
                 </article>
               </div>
@@ -332,7 +351,7 @@ async function saveStay() {
                 :stay="segment.stay"
                 :context="segment.hasActualArrival ? 'arrival' : 'stay'"
                 :left-label="segment.stay.apartment.name"
-                :right-label="segment.hasActualDeparture ? 'Выезд' : ''"
+                :right-label="segment.hasActualDeparture ? segment.stay.apartment.name : ''"
                 event-class="calendar-stay calendar-stay-bar calendar-week-stay"
                 :event-style="{ ...eventStyle(segment.stay), ...segmentGrid(segment) }"
                 :continues-left="segment.continuesLeft"
@@ -410,7 +429,7 @@ async function saveStay() {
                   :stay="segment.stay"
                   :context="segment.hasActualArrival ? 'arrival' : 'stay'"
                   :left-label="segment.stay.apartment.name"
-                  :right-label="segment.hasActualDeparture ? 'Выезд' : ''"
+                  :right-label="segment.hasActualDeparture ? segment.stay.apartment.name : ''"
                   event-class="calendar-stay calendar-stay-bar calendar-month-stay"
                   :event-style="{ ...eventStyle(segment.stay), ...segmentGrid(segment, segment.lane) }"
                   :continues-left="segment.continuesLeft"
@@ -433,7 +452,7 @@ async function saveStay() {
 
     <USlideover v-model:open="open" :title="editingStay ? 'Изменить заезд' : 'Новый заезд'">
       <template #body>
-        <form class="form-grid" @submit.prevent="saveStay">
+        <form class="form-grid stay-form-grid" @submit.prevent="saveStay">
           <UFormField label="Апартамент">
             <USelect
               v-model="form.apartmentId"
@@ -443,29 +462,25 @@ async function saveStay() {
               required
             />
           </UFormField>
-          <UFormField label="Период проживания"><DateRangeInput v-model:start="form.checkInOn" v-model:end="form.checkOutOn" required /></UFormField>
+          <UFormField label="Период проживания"><DateRangeInput v-model:start="form.checkInOn" v-model:end="form.checkOutOn" :is-date-disabled="isStayDateDisabled" required /></UFormField>
           <p class="text-sm text-[var(--color-muted)]">День выезда свободен для нового заезда.</p>
           <div class="grid grid-cols-2 gap-3">
             <UFormField label="Взрослые"><UInput v-model.number="form.adultCount" type="number" min="1" /></UFormField>
             <UFormField label="Дети"><UInput v-model.number="form.childCount" type="number" min="0" /></UFormField>
           </div>
           <USeparator />
-          <UFormField label="Имя гостя"><UInput v-model="form.guestName" /></UFormField>
-          <UFormField label="Телефон гостя"><UInput v-model="form.guestPhone" type="tel" /></UFormField>
-          <UFormField label="Комментарий гостя"><UTextarea v-model="form.guestComment" /></UFormField>
-          <UFormField label="Особые пожелания"><UTextarea v-model="form.specialRequests" /></UFormField>
-          <div v-if="formServices.length" class="rounded-xl bg-[#f4f8f6] p-4">
+          <UFormField label="Комментарий"><UTextarea v-model="form.guestComment" class="w-full" /></UFormField>
+          <div v-if="formServices.length" class="rounded-xl bg-[#f4f8f6] px-0 py-1">
             <p class="font-semibold">Дополнительные услуги</p>
-            <label v-for="service in formServices" :key="service.id" class="mt-3 flex min-h-11 items-center justify-between gap-3 text-sm">
+            <label v-for="service in formServices" :key="service.id" class="mt-1 flex min-h-11 items-center justify-between gap-3 text-sm">
               <span class="flex items-center gap-3">
                 <UCheckbox :model-value="form.serviceIds.includes(service.id)" :value="service.id" @update:model-value="setServiceSelected(service.id, $event)" />
                 <span>{{ service.name }} <span v-if="!service.active" class="text-[var(--color-muted)]">(недоступна для новых заездов)</span></span>
               </span>
               <span class="font-semibold tabular-nums">{{ formatEuro(service.priceEur) }}</span>
             </label>
-            <p class="mt-3 text-sm text-[var(--color-muted)]">Рекомендуемая наличная сумма: <strong class="text-[var(--color-ink)]">{{ formatEuro(suggestedCashEur) }}</strong></p>
           </div>
-          <UFormField label="Наличные при заезде" help="Если оставить пустым, будет использована сумма выбранных услуг."><MoneyInput v-model="form.cashAmountEur" /></UFormField>
+          <UFormField label="Наличные при заезде"><MoneyInput v-model="form.cashAmountEur" /></UFormField>
           <UAlert v-if="error" color="error" variant="soft" :description="error" />
           <div class="form-actions">
             <UButton color="neutral" variant="ghost" @click="open = false">Отмена</UButton>

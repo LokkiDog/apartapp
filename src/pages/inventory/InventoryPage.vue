@@ -7,6 +7,7 @@ type Stock = { id: string; consumable: { id: string; name: string; unit: string 
 type Consumable = { id: string; name: string; category: string; unit: string }
 type InventoryDiscrepancy = { id: string; consumable: { name: string; unit: string }; cleaning: { apartment: { name: string; hotel: { name: string } } }; discrepancyQuantity: number; remainingQuantity: number; reportedAt: string }
 const user = useCurrentUser()
+if (user.value?.roles.includes('manager') && !user.value.roles.includes('administrator')) await navigateTo('/')
 const tab = ref<'stocks' | 'catalog'>('stocks')
 const isAdministrator = computed(() => user.value?.roles.includes('administrator') ?? false)
 const selectedApartment = ref('')

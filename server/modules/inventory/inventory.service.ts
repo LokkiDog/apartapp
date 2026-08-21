@@ -109,6 +109,7 @@ export async function listCleaningInventoryDiscrepancies(actor: Actor) {
 }
 
 export async function inventoryForApartment(actor: Actor, apartmentId: string) {
+  if (actor.roles.includes('manager') && !actor.roles.includes('administrator')) throw createError({ statusCode: 403, statusMessage: 'Управляющим недоступны остатки' })
   const canRead = await canManageApartment(actor, apartmentId) || await (async () => {
     if (!actor.roles.includes('cleaner')) return false
     const assignedCleaning = await db.select({ id: cleanings.id }).from(cleaningAssignments)

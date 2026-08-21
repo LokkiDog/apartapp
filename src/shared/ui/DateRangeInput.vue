@@ -8,12 +8,14 @@ const props = withDefaults(defineProps<{
   placeholder?: string
   disabled?: boolean
   required?: boolean
+  isDateDisabled?: (date: DateValue) => boolean
 }>(), {
   start: '',
   end: '',
   placeholder: 'Выберите даты',
   disabled: false,
-  required: false
+  required: false,
+  isDateDisabled: undefined
 })
 
 const emit = defineEmits<{
@@ -81,6 +83,7 @@ function clear() {
           size="md"
           month-controls
           year-controls
+          :is-date-disabled="isDateDisabled"
         />
         <div class="date-range-input-popover__hint">
           <span><strong>Заезд</strong>{{ formatValue(start) }}</span>

@@ -31,7 +31,7 @@ const groups = computed(() => {
     { label: 'Работа', items: work }, { label: 'Объекты', items: objects }, { label: 'Отчёты', items: reports }, { label: 'Настройки', items: settings }
   ]
   if (user.value?.roles.includes('manager')) return [
-    { label: 'Работа', items: work }, { label: 'Объекты', items: objects.filter(item => item.to !== '/hotels') }, { label: 'Финансы', items: managerFinance }
+    { label: 'Работа', items: work }, { label: 'Объекты', items: objects.filter(item => !['/hotels', '/inventory'].includes(item.to)) }, { label: 'Финансы', items: managerFinance }
   ]
   return [{ label: 'Работа', items: work.filter(item => ['/', '/work'].includes(item.to)) }]
 })

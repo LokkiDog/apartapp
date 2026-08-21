@@ -38,7 +38,7 @@ const canProgress = computed(() => Boolean(work.value && !['completed', 'cancele
 const canComplete = computed(() => canProgress.value)
 const inventoryEditable = computed(() => Boolean(isAdministrator.value && cleaning.value?.status === 'completed'))
 const managesApartment = computed(() => Boolean(work.value && isManager.value && work.value.apartment.managerId === currentUser.value?.id))
-const canStock = computed(() => Boolean(work.value && (isAdministrator.value || managesApartment.value || assignedToCurrent.value)))
+const canStock = computed(() => Boolean(work.value && (isAdministrator.value || (!isManager.value && assignedToCurrent.value))))
 const canManage = computed(() => Boolean(isAdministrator.value || (props.kind === 'task' && managesApartment.value)))
 const statusLabels: Record<string, string> = { unassigned: 'Без исполнителя', assigned: 'Назначено', in_progress: 'В работе', completed: 'Завершено', canceled: 'Отменено', open: 'Открыта' }
 const statusTones: Record<string, 'neutral' | 'success' | 'warning' | 'danger' | 'info'> = { unassigned: 'warning', assigned: 'info', in_progress: 'warning', completed: 'success', canceled: 'neutral', open: 'info' }
