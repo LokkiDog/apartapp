@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { apartmentInputSchema, apartmentTypeInputSchema, cleaningAssignmentInputSchema, cleaningInputSchema, cleaningRouteUpdateSchema, cleaningTariffOverrideSchema, cleaningUpdateSchema, completionInputSchema, hotelInputSchema, specialServiceInputSchema, stayInputSchema, stayListQuerySchema, taskInputSchema, workProgressInputSchema } from '../shared/contracts/crm'
+import { apartmentInputSchema, apartmentTypeInputSchema, apartmentUpdateSchema, cleaningAssignmentInputSchema, cleaningInputSchema, cleaningRouteUpdateSchema, cleaningTariffOverrideSchema, cleaningUpdateSchema, completionInputSchema, consumableInputSchema, hotelInputSchema, specialServiceInputSchema, stayInputSchema, stayListQuerySchema, taskInputSchema, workProgressInputSchema } from '../shared/contracts/crm'
 import { formatEuroInput, parseEuroInput } from '../src/shared/lib/money'
 import { apartmentCalendarColor } from '../src/shared/lib/calendar'
 import { calculateFifoUsage } from '../server/modules/inventory/fifo'
+import { resolveCompletionInventoryReports } from '../server/modules/inventory/cleaning-inventory'
 import { inventoryThresholdSchema, managerExpenseReportSaveSchema, reportQuerySchema } from '../shared/contracts/report'
 
 describe('CRM contracts', () => {
@@ -20,7 +21,7 @@ describe('CRM contracts', () => {
   it('normalizes and validates an apartment building', () => {
     const base = {
       hotelId: '00000000-0000-4000-8000-000000000001',
-      managerId: '00000000-0000-4000-8000-000000000002',
+      managerIds: ['00000000-0000-4000-8000-000000000002'],
       apartmentTypeId: '00000000-0000-4000-8000-000000000003',
       name: 'Mountain View 12',
       internalCode: 'MV-12',
@@ -30,6 +31,10 @@ describe('CRM contracts', () => {
       checkOutTime: '11:00'
     }
     expect(apartmentInputSchema.parse(base).building).toBe('')
+    expect(apartmentInputSchema.parse({ ...base, managerIds: [] }).managerIds).toEqual([])
+    expect(apartmentInputSchema.safeParse({ ...base, managerIds: [base.managerIds[0], base.managerIds[0]] }).success).toBe(false)
+    expect(apartmentInputSchema.safeParse({ ...base, managerIds: ['not-a-uuid'] }).success).toBe(false)
+    expect(apartmentUpdateSchema.parse({ name: 'Новое имя' }).managerIds).toBeUndefined()
     expect(apartmentInputSchema.parse({ ...base, building: '  B  ' }).building).toBe('B')
     expect(apartmentInputSchema.safeParse({ ...base, building: 'B'.repeat(101) }).success).toBe(false)
   })
@@ -68,7 +73,7 @@ describe('CRM contracts', () => {
   it('validates combined cleaning updates', () => {
     const tariff = { cleanerPoolEur: 5, laundryEur: 4, serviceEur: 3 }
     const cleanerId = '00000000-0000-4000-8000-000000000001'
-    expect(cleaningUpdateSchema.safeParse({ ...tariff, cleanerIds: [], scheduledOn: null }).success).toBe(true)
+    expect(cleaningUpdateSchema.safeParse({ ...tariff, cleanerIds: [], scheduledOn: null }).success).toBe(false)
     expect(cleaningUpdateSchema.safeParse({ ...tariff, cleanerIds: [cleanerId], scheduledOn: '2026-01-10' }).success).toBe(true)
     expect(cleaningUpdateSchema.safeParse({ ...tariff, cleanerIds: [cleanerId], scheduledOn: null }).success).toBe(false)
     expect(cleaningUpdateSchema.safeParse({ ...tariff, cleanerIds: [], scheduledOn: '2026-01-10T12:00:00Z' }).success).toBe(false)
@@ -80,6 +85,21 @@ describe('CRM contracts', () => {
     expect(completionInputSchema.safeParse({ checklist: [], inventoryReports: [{ consumableId, usedQuantity: -1, remainingQuantity: 2 }] }).success).toBe(false)
   })
 
+  it('validates and normalizes consumable auto write-off settings', () => {
+    const base = { name: 'Туалетная бумага', category: 'Ванная', unit: 'шт.' }
+    expect(consumableInputSchema.parse(base)).toMatchObject({ autoWriteOffEnabled: false, autoWriteOffQuantity: 0 })
+    expect(consumableInputSchema.parse({ ...base, autoWriteOffEnabled: false, autoWriteOffQuantity: 3 })).toMatchObject({ autoWriteOffEnabled: false, autoWriteOffQuantity: 0 })
+    expect(consumableInputSchema.parse({ ...base, autoWriteOffEnabled: true, autoWriteOffQuantity: 1.5 })).toMatchObject({ autoWriteOffEnabled: true, autoWriteOffQuantity: 1.5 })
+    expect(consumableInputSchema.safeParse({ ...base, autoWriteOffEnabled: true, autoWriteOffQuantity: 0 }).success).toBe(false)
+  })
+
+  it('prioritizes manual and draft inventory reports over automatic write-off', () => {
+    const configured = [{ consumableId: 'guest', consumable: { autoWriteOffEnabled: true, autoWriteOffQuantity: 2 } }, { consumableId: 'cleaner', consumable: { autoWriteOffEnabled: false, autoWriteOffQuantity: 0 } }]
+    expect(resolveCompletionInventoryReports({ configured, balances: [{ consumableId: 'guest', quantity: 7 }, { consumableId: 'cleaner', quantity: 4 }], savedReports: [] })).toEqual([{ consumableId: 'guest', usedQuantity: 2, remainingQuantity: 5 }])
+    expect(resolveCompletionInventoryReports({ configured, balances: [{ consumableId: 'guest', quantity: 7 }], savedReports: [{ consumableId: 'guest', usedQuantity: 1, remainingQuantity: 6 }] })).toEqual([{ consumableId: 'guest', usedQuantity: 1, remainingQuantity: 6 }])
+    expect(resolveCompletionInventoryReports({ configured, balances: [{ consumableId: 'guest', quantity: 7 }], savedReports: [{ consumableId: 'guest', usedQuantity: 1, remainingQuantity: 6 }], submittedReports: [{ consumableId: 'guest', usedQuantity: 0, remainingQuantity: 7 }] })).toEqual([{ consumableId: 'guest', usedQuantity: 0, remainingQuantity: 7 }])
+  })
+
   it('validates a saved work draft without requiring completion', () => {
     expect(workProgressInputSchema.safeParse({ checklist: [{ label: 'Проверить санузел', checked: false }], comment: '', hasProblem: false }).success).toBe(true)
     expect(workProgressInputSchema.safeParse({ checklist: [], hasProblem: true, problemDescription: '' }).success).toBe(false)
@@ -89,11 +109,13 @@ describe('CRM contracts', () => {
     const apartmentId = '00000000-0000-4000-8000-000000000001'
     const cleanerId = '00000000-0000-4000-8000-000000000002'
     const tariff = { cleanerPoolEur: 5, laundryEur: 4, serviceEur: 3 }
-    expect(cleaningInputSchema.safeParse({ ...tariff, apartmentId, stayId: null, cleanerIds: [], scheduledOn: null }).success).toBe(true)
+    expect(cleaningInputSchema.safeParse({ ...tariff, apartmentId, stayId: null, cleanerIds: [], scheduledOn: null }).success).toBe(false)
     expect(cleaningInputSchema.safeParse({ ...tariff, apartmentId, cleanerIds: [cleanerId], scheduledOn: null }).success).toBe(false)
     expect(cleaningInputSchema.safeParse({ ...tariff, apartmentId, cleanerIds: [cleanerId], scheduledOn: '2026-01-10' }).success).toBe(true)
-    expect(cleaningInputSchema.parse({ ...tariff, apartmentId, cleanerIds: [], scheduledOn: null }).checklist).toBeUndefined()
-    expect(cleaningInputSchema.safeParse({ ...tariff, apartmentId, cleanerIds: [], scheduledOn: null, checklist: [{ label: 'Проверить окна', checked: false }] }).success).toBe(true)
+    expect(cleaningInputSchema.safeParse({ ...tariff, apartmentId, cleanerIds: [], scheduledOn: '' }).success).toBe(false)
+    expect(cleaningInputSchema.safeParse({ ...tariff, apartmentId, cleanerIds: [], scheduledOn: '2026-01-10T12:00:00Z' }).success).toBe(false)
+    expect(cleaningInputSchema.parse({ ...tariff, apartmentId, cleanerIds: [], scheduledOn: '2026-01-10' }).checklist).toBeUndefined()
+    expect(cleaningInputSchema.safeParse({ ...tariff, apartmentId, cleanerIds: [], scheduledOn: '2026-01-10', checklist: [{ label: 'Проверить окна', checked: false }] }).success).toBe(true)
   })
 
   it('validates a unique cleaning route order', () => {
@@ -160,7 +182,7 @@ describe('CRM contracts', () => {
   })
 
   it('validates manager expense report lines with optional dates and signed amounts', () => {
-    const valid = { month: '2026-08', lines: [
+    const valid = { month: '2026-08', categoryVisibility: { cleaning: true, inventory: false, task: true }, lines: [
       { category: 'cleaning', description: 'Уборка после выезда', occurredOn: '2026-08-12', amountEur: 18.555 },
       { category: 'inventory', description: 'Расходники', occurredOn: null, amountEur: -3.5 },
       { category: 'task', description: 'Замена замка', amountEur: 0 }
@@ -169,5 +191,7 @@ describe('CRM contracts', () => {
     expect(managerExpenseReportSaveSchema.safeParse({ ...valid, month: '2026-13' }).success).toBe(false)
     expect(managerExpenseReportSaveSchema.safeParse({ ...valid, lines: [{ ...valid.lines[0], occurredOn: '2026-09-01' }] }).success).toBe(false)
     expect(managerExpenseReportSaveSchema.safeParse({ ...valid, lines: [{ ...valid.lines[0], category: 'guest_service' }] }).success).toBe(false)
+    expect(managerExpenseReportSaveSchema.safeParse({ ...valid, categoryVisibility: { cleaning: true, inventory: false } }).success).toBe(false)
+    expect(managerExpenseReportSaveSchema.safeParse({ ...valid, categoryVisibility: { ...valid.categoryVisibility, task: 'yes' } }).success).toBe(false)
   })
 })

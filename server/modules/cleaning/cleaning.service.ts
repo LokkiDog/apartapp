@@ -1,23 +1,15 @@
-import { and, eq, inArray, isNull, ne } from 'drizzle-orm'
+import { and, eq, inArray, ne } from 'drizzle-orm'
 import { cleaningAssignmentInputSchema, cleaningInputSchema, cleaningRouteUpdateSchema, cleaningTariffOverrideSchema, cleaningUpdateSchema, completionInputSchema, workProgressInputSchema } from '@contracts/crm'
-import { requireRole, type Actor } from '../../infrastructure/auth/actor'
+import { requireRole, requireWorkSectionAccess, type Actor } from '../../infrastructure/auth/actor'
 import { writeAuditLog } from '../../infrastructure/audit/log'
 import { db } from '../../infrastructure/database/client'
 import { apartments, cleaningAssignments, cleanings, inventoryMovements, stays, users } from '../../infrastructure/database/schema'
 import { administratorsForOrganization, notifyUsers } from '../../infrastructure/notification/publish'
 import { createFinancialEntry } from '../finance/finance.service'
-import { apartmentTariff } from '../apartment/apartment.service'
+import { serializeApartment } from '../apartment/apartment-view'
 import { deleteWorkRecord } from '../work/work-record.service'
 import { cleaningTariffHasChanged } from '../work/work-policy'
-import { applyCleaningInventoryReports } from '../inventory/inventory.service'
-
-export async function createCleaningForStay(input: { organizationId: string, stayId: string, apartmentId: string }) {
-  const tariff = await apartmentTariff(input.apartmentId)
-  const apartment = await db.query.apartments.findFirst({ where: eq(apartments.id, input.apartmentId), with: { type: true } })
-  const checklist = (apartment?.type.defaultChecklist ?? []).map(label => ({ label, checked: false }))
-  const [cleaning] = await db.insert(cleanings).values({ ...input, tariffSnapshot: tariff, checklist }).returning()
-  return cleaning
-}
+import { applyCleaningInventoryReports, saveCleaningInventoryDrafts } from '../inventory/inventory.service'
 
 export async function createCleaning(actor: Actor, input: unknown) {
   requireRole(actor, 'administrator')
@@ -38,7 +30,7 @@ export async function createCleaning(actor: Actor, input: unknown) {
     const [created] = await tx.insert(cleanings).values({ organizationId: actor.organizationId, apartmentId: data.apartmentId, stayId: data.stayId ?? null, scheduledOn: data.scheduledOn, status, tariffSnapshot: { ownerTotalEur: data.ownerTotalEur, cleanerPoolEur: data.cleanerPoolEur, laundryEur: data.laundryEur, serviceEur: data.serviceEur }, checklist }).returning()
     if (!created) throw createError({ statusCode: 500, statusMessage: 'Не удалось создать уборку' })
     for (const cleanerId of data.cleanerIds) {
-      const occupied = await tx.select({ routePosition: cleaningAssignments.routePosition }).from(cleaningAssignments).innerJoin(cleanings, eq(cleaningAssignments.cleaningId, cleanings.id)).where(and(eq(cleaningAssignments.cleanerId, cleanerId), data.scheduledOn ? eq(cleanings.scheduledOn, data.scheduledOn) : isNull(cleanings.scheduledOn)))
+      const occupied = await tx.select({ routePosition: cleaningAssignments.routePosition }).from(cleaningAssignments).innerJoin(cleanings, eq(cleaningAssignments.cleaningId, cleanings.id)).where(and(eq(cleaningAssignments.cleanerId, cleanerId), eq(cleanings.scheduledOn, data.scheduledOn)))
       const routePosition = occupied.reduce((max, row) => Math.max(max, row.routePosition), -1) + 1
       await tx.insert(cleaningAssignments).values({ cleaningId: created.id, cleanerId, routePosition })
     }
@@ -50,21 +42,17 @@ export async function createCleaning(actor: Actor, input: unknown) {
 }
 
 export async function listCleanings(actor: Actor) {
+  requireWorkSectionAccess(actor)
   const all = await db.query.cleanings.findMany({
     where: eq(cleanings.organizationId, actor.organizationId),
-    with: { apartment: { with: { hotel: true } }, assignments: { with: { cleaner: true } }, stay: true },
+    with: { apartment: { with: { hotel: true, managerAssignments: { with: { manager: { columns: { id: true, name: true } } } } } }, assignments: { with: { cleaner: true } }, stay: true },
     orderBy: (cleanings, { asc }) => [asc(cleanings.scheduledOn)]
   })
-  if (actor.roles.includes('administrator')) return all
-  const assigned = actor.roles.includes('cleaner')
-    ? await db.select({ cleaningId: cleaningAssignments.cleaningId }).from(cleaningAssignments).where(eq(cleaningAssignments.cleanerId, actor.id))
-    : []
-  return all.filter(cleaning => cleaning.apartment.managerId === actor.id || assigned.some(item => item.cleaningId === cleaning.id)).map(cleaning => {
-    if (cleaning.apartment.managerId === actor.id) {
-      return { ...cleaning, tariffSnapshot: { ownerTotalEur: cleaning.tariffSnapshot.ownerTotalEur } }
-    }
+  if (actor.roles.includes('administrator')) return all.map(cleaning => ({ ...cleaning, apartment: serializeApartment(cleaning.apartment) }))
+  return all.filter(cleaning => cleaning.assignments.some(item => item.cleanerId === actor.id)).map(cleaning => {
+    const apartment = serializeApartment(cleaning.apartment)
     const safeStay = cleaning.stay ? (({ guestName: _guestName, guestPhone: _guestPhone, guestComment: _guestComment, cashAmountEur: _cashAmountEur, ...rest }) => rest)(cleaning.stay) : null
-    return { ...cleaning, stay: safeStay, tariffSnapshot: { cleanerPoolEur: cleaning.tariffSnapshot.cleanerPoolEur } }
+    return { ...cleaning, apartment, stay: safeStay, tariffSnapshot: { cleanerPoolEur: cleaning.tariffSnapshot.cleanerPoolEur } }
   })
 }
 
@@ -109,7 +97,7 @@ export async function completeCleaning(actor: Actor, cleaningId: string, input: 
     if (!assignment) throw createError({ statusCode: 403, statusMessage: 'Уборка не назначена вам' })
   }
   const updated = await db.transaction(async tx => {
-    if (data.inventoryReports) await applyCleaningInventoryReports(tx, actor, cleaning, data.inventoryReports)
+    await applyCleaningInventoryReports(tx, actor, cleaning, data.inventoryReports)
     const [completed] = await tx.update(cleanings).set({ status: 'completed', checklist: data.checklist, comment: data.comment, hasProblem: data.hasProblem, problemDescription: data.problemDescription, completedAt: new Date(), updatedAt: new Date() }).where(eq(cleanings.id, cleaningId)).returning()
     await createFinancialEntry({ organizationId: actor.organizationId, apartmentId: cleaning.apartmentId, type: 'cleaning_charge', visibility: 'manager', amountEur: cleaning.tariffSnapshot.ownerTotalEur, occurredOn: new Date().toISOString().slice(0, 10), description: 'Уборка', sourceType: 'cleaning', sourceId: cleaningId, createdById: actor.id }, tx as unknown as typeof db)
     return completed
@@ -130,7 +118,7 @@ export async function saveCleaningProgress(actor: Actor, cleaningId: string, inp
     if (!assignment) throw createError({ statusCode: 403, statusMessage: 'Уборка не назначена вам' })
   }
   const updated = await db.transaction(async tx => {
-    if (data.inventoryReports) await applyCleaningInventoryReports(tx, actor, cleaning, data.inventoryReports)
+    if (data.inventoryReports) await saveCleaningInventoryDrafts(tx, actor, cleaning, data.inventoryReports)
     const [saved] = await tx.update(cleanings).set({ checklist: data.checklist, comment: data.comment, hasProblem: data.hasProblem, problemDescription: data.problemDescription, updatedAt: new Date() }).where(eq(cleanings.id, cleaningId)).returning()
     return saved
   })
@@ -221,7 +209,7 @@ export async function updateCleaning(actor: Actor, cleaningId: string, input: un
       const occupied = await tx.select({ routePosition: cleaningAssignments.routePosition })
         .from(cleaningAssignments)
         .innerJoin(cleanings, eq(cleaningAssignments.cleaningId, cleanings.id))
-        .where(and(eq(cleaningAssignments.cleanerId, cleanerId), scheduledOn ? eq(cleanings.scheduledOn, scheduledOn) : isNull(cleanings.scheduledOn), ne(cleaningAssignments.cleaningId, cleaningId)))
+        .where(and(eq(cleaningAssignments.cleanerId, cleanerId), eq(cleanings.scheduledOn, scheduledOn), ne(cleaningAssignments.cleaningId, cleaningId)))
       positions.set(cleanerId, occupied.reduce((max, row) => Math.max(max, row.routePosition), -1) + 1)
     }
     await tx.delete(cleaningAssignments).where(eq(cleaningAssignments.cleaningId, cleaningId))

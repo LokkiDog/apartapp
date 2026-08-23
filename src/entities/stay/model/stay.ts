@@ -11,7 +11,7 @@ export interface Stay {
   cashAmountEur?: number | null
   apartmentId: string
   apartment: { name: string; hotel: { name: string } }
-  cleaning?: { id: string; status: string; scheduledOn: string | null } | null
+  cleaning?: { id: string; status: string; scheduledOn: string } | null
   services?: Array<{
     id: string
     specialServiceId: string

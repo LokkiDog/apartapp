@@ -2,14 +2,14 @@
 import { useCurrentUser } from '#fsd/shared/auth'
 import { EmptyState, PageHeader, StatusBadge } from '#fsd/shared/ui'
 
-type Apartment = { id: string; name: string; internalCode: string; building: string; status: string; capacity: number; rooms: number; locationDetails?: string; hotel: { id: string; name: string }; manager: { id: string; name: string } | null; type: { name: string } }
+type Apartment = { id: string; name: string; internalCode: string; building: string; status: string; capacity: number; rooms: number; locationDetails?: string; hotel: { id: string; name: string }; managers: Array<{ id: string; name: string }>; type: { name: string } }
 type Attachment = { id: string; fileName: string }
 const user = useCurrentUser()
-const { data: apartments, status } = await useAsyncData('apartments', () => $fetch<Apartment[]>('/api/apartments'), { server: false })
+const { data: apartments, status } = await useAsyncData('apartments', () => user.value ? $fetch<Apartment[]>('/api/apartments') : Promise.resolve([]), { server: false, default: () => [], watch: [user] })
 const { data: photos } = await useAsyncData(
   'apartment-photos',
   async () => Object.fromEntries(await Promise.all((apartments.value ?? []).map(async apartment => [apartment.id, await $fetch<Attachment[]>('/api/attachments', { query: { entityType: 'apartment', entityId: apartment.id } })]))),
-  { server: false, watch: [apartments] }
+  { server: false, default: () => ({}), watch: [apartments] }
 )
 function hotelLabel(apartment: Apartment) { return [apartment.hotel.name, apartment.building ? `Корпус ${apartment.building}` : ''].filter(Boolean).join(' · ') }
 </script>
@@ -45,8 +45,8 @@ function hotelLabel(apartment: Apartment) { return [apartment.hotel.name, apartm
 
           <div class="apartment-card__footer">
             <div class="min-w-0">
-              <p class="text-xs text-[var(--color-muted)]">Управляющий</p>
-              <p class="truncate text-sm font-semibold">{{ apartment.manager?.name ?? 'Не назначен' }}</p>
+              <p class="text-xs text-[var(--color-muted)]">Управляющие</p>
+              <p class="truncate text-sm font-semibold">{{ apartment.managers.map(manager => manager.name).join(', ') || 'Не назначены' }}</p>
             </div>
             <UButton
               v-if="user?.roles.includes('administrator')"

@@ -14,5 +14,5 @@ export type Task = {
   problemDescription: string
   completedAt: string | null
   assignee?: { id: string; name: string } | null
-  apartment: { name: string; managerId: string; hotel: { name: string; address: string; latitude: string; longitude: string } }
+  apartment: { name: string; managers: Array<{ id: string; name: string }>; hotel: { name: string; address: string; latitude: string; longitude: string } }
 }

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { apartmentsForCleanings, buildCleaningPlan, routesForDay } from '../src/pages/work/model/work-planning'
 import type { Cleaning } from '../src/entities/cleaning'
 
-function cleaning(id: string, scheduledOn: string | null, status = 'assigned', assignments: Array<[string, string, number]> = [['cleaner-1', 'Анна', 0]]): Cleaning {
+function cleaning(id: string, scheduledOn: string, status = 'assigned', assignments: Array<[string, string, number]> = [['cleaner-1', 'Анна', 0]]): Cleaning {
   return {
     id,
     status,
@@ -11,7 +11,7 @@ function cleaning(id: string, scheduledOn: string | null, status = 'assigned', a
     hasProblem: false,
     problemDescription: '',
     apartmentId: `apartment-${id}`,
-    apartment: { name: `A-${id}`, managerId: 'manager-1', hotel: { name: 'Hotel', address: 'Address', latitude: '1', longitude: '1' } },
+    apartment: { name: `A-${id}`, managers: [{ id: 'manager-1', name: 'Manager' }], hotel: { name: 'Hotel', address: 'Address', latitude: '1', longitude: '1' } },
     assignments: assignments.map(([cleanerId, name, routePosition]) => ({ cleanerId, routePosition, cleaner: { id: cleanerId, name } })),
     tariffSnapshot: {}
   }
@@ -21,13 +21,12 @@ describe('cleaning planning', () => {
   it('separates attention, horizon, later dates and history', () => {
     const plan = buildCleaningPlan([
       cleaning('today', '2026-08-11'),
-      cleaning('undated', null),
       cleaning('unassigned', '2026-08-12', 'unassigned', []),
       cleaning('later', '2026-08-30'),
       cleaning('old-done', '2026-08-05', 'completed'),
       cleaning('current-done', '2026-08-12', 'completed')
     ], '2026-08-11')
-    expect(plan.attention.map(item => item.id)).toEqual(['undated', 'unassigned'])
+    expect(plan.attention.map(item => item.id)).toEqual(['unassigned'])
     expect(plan.days.map(day => day.date)).toEqual(['2026-08-11', '2026-08-12'])
     expect(plan.later.map(item => item.id)).toEqual(['later'])
     expect(plan.history.map(item => item.id)).toEqual(['old-done'])
@@ -60,10 +59,9 @@ describe('cleaning planning', () => {
     expect(groups[0]?.days[1]?.cleanings.map(item => item.id)).toEqual(['a-shared'])
   })
 
-  it('keeps undated cleanings out of apartment groups and filters finished items when requested', () => {
-    const undated = cleaning('undated', null)
+  it('filters finished cleanings from apartment groups when requested', () => {
     const done = cleaning('done', '2026-08-11', 'completed')
-    expect(apartmentsForCleanings([undated, done]).flatMap(group => group.days.flatMap(day => day.cleanings)).map(item => item.id)).toEqual(['done'])
+    expect(apartmentsForCleanings([done]).flatMap(group => group.days.flatMap(day => day.cleanings)).map(item => item.id)).toEqual(['done'])
     expect(apartmentsForCleanings([done], false)).toEqual([])
   })
 })

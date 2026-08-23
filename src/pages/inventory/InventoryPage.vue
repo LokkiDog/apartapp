@@ -3,23 +3,23 @@ import type { Apartment } from '#fsd/entities/apartment'
 import { useCurrentUser } from '#fsd/shared/auth'
 import { DeleteConfirmModal, EmptyState, MoneyInput, PageHeader, StatusBadge } from '#fsd/shared/ui'
 
-type Stock = { id: string; consumable: { id: string; name: string; unit: string }; quantity: number; minimumQuantity: number; targetQuantity: number; isLow: boolean }
-type Consumable = { id: string; name: string; category: string; unit: string }
+type Stock = { id: string; consumable: { id: string; name: string; unit: string; autoWriteOffEnabled: boolean; autoWriteOffQuantity: number }; quantity: number; minimumQuantity: number; targetQuantity: number; isLow: boolean }
+type Consumable = { id: string; name: string; category: string; unit: string; autoWriteOffEnabled: boolean; autoWriteOffQuantity: number }
 type InventoryDiscrepancy = { id: string; consumable: { name: string; unit: string }; cleaning: { apartment: { name: string; hotel: { name: string } } }; discrepancyQuantity: number; remainingQuantity: number; reportedAt: string }
 const user = useCurrentUser()
 if (user.value?.roles.includes('manager') && !user.value.roles.includes('administrator')) await navigateTo('/')
 const tab = ref<'stocks' | 'catalog'>('stocks')
 const isAdministrator = computed(() => user.value?.roles.includes('administrator') ?? false)
 const selectedApartment = ref('')
-const { data: apartments } = await useAsyncData('inventory-apartments', () => $fetch<Apartment[]>('/api/apartments'), { server: false })
+const { data: apartments } = await useAsyncData('inventory-apartments', () => user.value ? $fetch<Apartment[]>('/api/apartments') : Promise.resolve([]), { server: false, default: () => [], watch: [user] })
 watchEffect(() => { if (!selectedApartment.value && apartments.value?.[0]) selectedApartment.value = apartments.value[0].id })
-const { data: stocks, refresh, status } = await useAsyncData('inventory-stocks', () => selectedApartment.value ? $fetch<Stock[]>(`/api/inventory/${selectedApartment.value}`) : Promise.resolve([]), { server: false, watch: [selectedApartment] })
-const { data: consumables, refresh: refreshConsumables } = await useAsyncData('inventory-consumables', () => isAdministrator.value ? $fetch<Consumable[]>('/api/consumables') : Promise.resolve([] as Consumable[]), { server: false, watch: [isAdministrator] })
-const { data: discrepancies } = await useAsyncData('inventory-discrepancies', () => user.value?.roles.includes('administrator') ? $fetch<InventoryDiscrepancy[]>('/api/inventory/discrepancies') : Promise.resolve([]), { server: false, watch: [user] })
+const { data: stocks, refresh, status } = await useAsyncData('inventory-stocks', () => selectedApartment.value ? $fetch<Stock[]>(`/api/inventory/${selectedApartment.value}`) : Promise.resolve([]), { server: false, default: () => [], watch: [selectedApartment] })
+const { data: consumables, refresh: refreshConsumables } = await useAsyncData('inventory-consumables', () => isAdministrator.value ? $fetch<Consumable[]>('/api/consumables') : Promise.resolve([] as Consumable[]), { server: false, default: () => [], watch: [isAdministrator] })
+const { data: discrepancies } = await useAsyncData('inventory-discrepancies', () => user.value?.roles.includes('administrator') ? $fetch<InventoryDiscrepancy[]>('/api/inventory/discrepancies') : Promise.resolve([]), { server: false, default: () => [], watch: [user] })
 const replenishOpen = ref(false), catalogOpen = ref(false), minimumOpen = ref(false), deleteOpen = ref(false)
 const pending = ref(false), minimumPending = ref(false), error = ref('')
 const replenish = reactive({ consumableId: '', quantity: 1, unitCostEur: 0 as number | null, note: '' })
-const catalog = reactive({ name: '', category: '', unit: 'шт.' })
+const catalog = reactive({ name: '', category: '', unit: 'шт.', autoWriteOffEnabled: false, autoWriteOffQuantity: 0 })
 const minimum = reactive({ consumableId: '', quantity: 0, targetQuantity: 0, name: '', unit: '' })
 const editingConsumableId = ref<string | null>(null)
 const consumableToDelete = ref<Consumable | null>(null)
@@ -46,9 +46,9 @@ async function addConsumable() {
   catch (cause: any) { error.value = cause?.data?.statusMessage ?? 'Не удалось сохранить расходник' }
   finally { pending.value = false }
 }
-function openCreateCatalog() { error.value = ''; editingConsumableId.value = null; Object.assign(catalog, { name: '', category: '', unit: 'шт.' }); catalogOpen.value = true }
-function openEditCatalog(item: Consumable) { error.value = ''; editingConsumableId.value = item.id; Object.assign(catalog, { name: item.name, category: item.category, unit: item.unit }); catalogOpen.value = true }
-function closeCatalog() { catalogOpen.value = false; editingConsumableId.value = null; Object.assign(catalog, { name: '', category: '', unit: 'шт.' }) }
+function openCreateCatalog() { error.value = ''; editingConsumableId.value = null; Object.assign(catalog, { name: '', category: '', unit: 'шт.', autoWriteOffEnabled: false, autoWriteOffQuantity: 0 }); catalogOpen.value = true }
+function openEditCatalog(item: Consumable) { error.value = ''; editingConsumableId.value = item.id; Object.assign(catalog, { name: item.name, category: item.category, unit: item.unit, autoWriteOffEnabled: item.autoWriteOffEnabled, autoWriteOffQuantity: Number(item.autoWriteOffQuantity) }); catalogOpen.value = true }
+function closeCatalog() { catalogOpen.value = false; editingConsumableId.value = null; Object.assign(catalog, { name: '', category: '', unit: 'шт.', autoWriteOffEnabled: false, autoWriteOffQuantity: 0 }) }
 function confirmDeleteConsumable(item: Consumable) { error.value = ''; consumableToDelete.value = item; deleteOpen.value = true }
 async function deleteCatalogItem() {
   if (!consumableToDelete.value) return
@@ -89,7 +89,7 @@ async function saveMinimum() {
       <div v-else-if="stocks?.length" class="surface divide-y divide-[var(--color-line)] px-4 sm:px-6">
         <div v-for="stock in stocks" :key="stock.id" class="flex min-h-16 items-center gap-3 py-2 sm:gap-4">
           <div class="grid size-9 shrink-0 place-items-center rounded-[10px] bg-[var(--color-primary-soft)] text-[var(--color-primary)]"><UIcon name="i-lucide-package" class="size-4" /></div>
-          <div class="min-w-0 flex-1"><p class="truncate font-semibold">{{ stock.consumable.name }}</p><UButton v-if="user?.roles.includes('administrator')" color="neutral" variant="link" size="xs" class="-ml-2" @click="openMinimum(stock)">Порог: {{ stock.minimumQuantity }} · Цель: {{ stock.targetQuantity }} {{ stock.consumable.unit }}</UButton><p v-else class="truncate text-sm text-[var(--color-muted)]">Порог: {{ stock.minimumQuantity }} · Цель: {{ stock.targetQuantity }} {{ stock.consumable.unit }}</p></div>
+          <div class="min-w-0 flex-1"><p class="truncate font-semibold">{{ stock.consumable.name }}</p><UButton v-if="user?.roles.includes('administrator')" color="neutral" variant="link" size="xs" class="-ml-2" @click="openMinimum(stock)">Порог: {{ stock.minimumQuantity }} · Цель: {{ stock.targetQuantity }} {{ stock.consumable.unit }}</UButton><p v-else class="truncate text-sm text-[var(--color-muted)]">Порог: {{ stock.minimumQuantity }} · Цель: {{ stock.targetQuantity }} {{ stock.consumable.unit }}</p><p v-if="stock.consumable.autoWriteOffEnabled" class="truncate text-xs text-[var(--color-muted)]">Авто: {{ stock.consumable.autoWriteOffQuantity }} {{ stock.consumable.unit }} после уборки</p></div>
           <div class="text-right"><p class="text-base font-semibold tabular-nums">{{ stock.quantity }} {{ stock.consumable.unit }}</p><StatusBadge v-if="stock.isLow" label="Низкий остаток" tone="danger" /></div>
         </div>
       </div>
@@ -103,7 +103,7 @@ async function saveMinimum() {
           </div>
           <div class="min-w-0 flex-1">
             <p class="truncate font-semibold">{{ item.name }}</p>
-            <p class="truncate text-sm text-[var(--color-muted)]">{{ item.category }}</p>
+            <p class="truncate text-sm text-[var(--color-muted)]">{{ item.category }}<span v-if="item.autoWriteOffEnabled"> · Авто: {{ item.autoWriteOffQuantity }} {{ item.unit }} после уборки</span></p>
           </div>
           <p class="shrink-0 text-sm font-medium text-[var(--color-muted)]">{{ item.unit }}</p>
           <div v-if="user?.roles.includes('administrator')" class="flex shrink-0 items-center gap-1">
@@ -122,6 +122,10 @@ async function saveMinimum() {
           <UFormField label="Название"><UInput v-model="catalog.name" placeholder="Туалетная бумага" required /></UFormField>
           <UFormField label="Категория"><UInput v-model="catalog.category" placeholder="Ванная" required /></UFormField>
           <UFormField label="Единица измерения"><UInput v-model="catalog.unit" placeholder="шт., л, упаковка" required /></UFormField>
+          <UCheckbox v-model="catalog.autoWriteOffEnabled" label="Автосписание после уборки" class="min-h-11 items-center font-medium" />
+          <UFormField v-if="catalog.autoWriteOffEnabled" label="Количество на одну уборку">
+            <UInput v-model.number="catalog.autoWriteOffQuantity" type="number" min=".001" step=".001" required><template #trailing>{{ catalog.unit || 'ед.' }}</template></UInput>
+          </UFormField>
           <UAlert v-if="error" color="error" variant="soft" :description="error" />
           <div class="form-actions">
             <UButton color="neutral" variant="ghost" @click="closeCatalog">Отмена</UButton>

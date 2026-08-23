@@ -10,6 +10,17 @@ Mobile-first CRM для управления апартаментами в Ба�
 
 Первый администратор создается идемпотентно при старте сервера из переменных окружения.
 
+## Production
+
+Production работает в Docker Compose за общим edge Nginx на
+`https://aparts.izvekov-alex.ru`. Образ приложения собирается на Node 22,
+PostgreSQL и фотографии хранятся в отдельных Docker volumes, а миграции
+выполняются одноразовым контейнером перед запуском новой версии.
+
+Подготовка VPS, DNS, TLS, `.env.production`, внешний SMTP и ручной сценарий
+обновления описаны в [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md). GitHub Actions и
+автоматические резервные копии в текущую схему не входят.
+
 ## Проверки
 
 `npm run typecheck` — TypeScript и Vue.

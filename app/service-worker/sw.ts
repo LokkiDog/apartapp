@@ -9,7 +9,7 @@ precacheAndRoute(self.__WB_MANIFEST)
 
 self.addEventListener('push', event => {
   const data = event.data?.json() as { title?: string; body?: string; href?: string } | undefined
-  event.waitUntil(self.registration.showNotification(data?.title || 'Aparts CRM', { body: data?.body || '', icon: '/pwa-192x192.png', data: { href: data?.href || '/' } }))
+  event.waitUntil(self.registration.showNotification(data?.title || 'Aparts CRM', { body: data?.body || '', icon: '/pwa-192x192.png', badge: '/pwa-192x192.png', data: { href: data?.href || '/' } }))
 })
 
 self.addEventListener('notificationclick', event => {

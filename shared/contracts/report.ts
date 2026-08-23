@@ -41,6 +41,11 @@ export const inventoryThresholdSchema = z.object({
 })
 
 export const managerExpenseCategorySchema = z.enum(['cleaning', 'inventory', 'task'])
+export const managerExpenseCategoryVisibilitySchema = z.object({
+  cleaning: z.boolean(),
+  inventory: z.boolean(),
+  task: z.boolean()
+}).strict()
 export const managerExpenseMonthSchema = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Укажите месяц в формате ГГГГ-ММ')
 const managerExpenseAmountSchema = z.coerce.number().finite().min(-9_999_999_999.99).max(9_999_999_999.99)
   .transform(value => Number(new Decimal(value).toDecimalPlaces(2, Decimal.ROUND_HALF_UP)))
@@ -54,6 +59,7 @@ export const managerExpenseReportLineSchema = z.object({
 
 export const managerExpenseReportSaveSchema = z.object({
   month: managerExpenseMonthSchema,
+  categoryVisibility: managerExpenseCategoryVisibilitySchema,
   lines: z.array(managerExpenseReportLineSchema).max(500)
 }).superRefine((value, context) => {
   for (const [index, line] of value.lines.entries()) {
@@ -125,7 +131,7 @@ export interface ReportFinanceEntry {
   apartmentId: string
   apartmentName: string
   hotelName: string
-  managerName: string
+  managerNames: string[]
   type: string
   amountEur: number
   occurredOn: string
@@ -154,7 +160,6 @@ export interface GlobalReportResponse {
   procurement: ProcurementRow[]
   workload: {
     days: WorkloadDay[]
-    unscheduledCleanings: WorkloadCleaningRow[]
     overdueTasks: WorkloadTaskRow[]
     undatedTasks: WorkloadTaskRow[]
   }

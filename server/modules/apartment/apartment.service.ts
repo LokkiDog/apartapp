@@ -1,11 +1,12 @@
 import { and, eq, inArray, or } from 'drizzle-orm'
 import Decimal from 'decimal.js'
 import { apartmentInputSchema, apartmentTypeInputSchema, apartmentUpdateSchema } from '@contracts/crm'
-import { requireRole, type Actor } from '../../infrastructure/auth/actor'
+import { canManageApartment, managedApartmentIds, requireRole, type Actor } from '../../infrastructure/auth/actor'
 import { writeAuditLog } from '../../infrastructure/audit/log'
 import { db } from '../../infrastructure/database/client'
-import { apartmentConsumables, apartmentTypes, apartments, attachments, cleaningAssignments, cleanings, financialEntries, hotels, inventoryLots, inventoryMovements, stays, tasks, users, type CleaningTariff } from '../../infrastructure/database/schema'
+import { apartmentConsumables, apartmentManagers, apartmentTypes, apartments, attachments, cleaningAssignments, cleanings, financialEntries, hotels, inventoryLots, inventoryMovements, stays, tasks, users, type CleaningTariff } from '../../infrastructure/database/schema'
 import { fileStorage } from '../../infrastructure/storage/local'
+import { serializeApartment } from './apartment-view'
 
 function validateTariff(data: { ownerTotalEur: number, cleanerPoolEur: number, laundryEur: number, serviceEur: number }) {
   const components = new Decimal(data.cleanerPoolEur).plus(data.laundryEur).plus(data.serviceEur)
@@ -63,55 +64,84 @@ export async function updateApartmentType(actor: Actor, apartmentTypeId: string,
 export async function listApartments(actor: Actor, hotelId?: string) {
   const criteria = [eq(apartments.organizationId, actor.organizationId)]
   if (hotelId) criteria.push(eq(apartments.hotelId, hotelId))
-  if (!actor.roles.includes('administrator')) criteria.push(eq(apartments.managerId, actor.id))
-  return db.query.apartments.findMany({ where: and(...criteria), with: { hotel: true, manager: true, type: true }, orderBy: (apartments, { asc }) => [asc(apartments.name)] })
+  const managedIds = await managedApartmentIds(actor)
+  if (managedIds && !managedIds.length) return []
+  if (managedIds) criteria.push(inArray(apartments.id, managedIds))
+  const rows = await db.query.apartments.findMany({
+    where: and(...criteria),
+    with: { hotel: true, managerAssignments: { with: { manager: { columns: { id: true, name: true } } } }, type: true },
+    orderBy: (apartments, { asc }) => [asc(apartments.name)]
+  })
+  return rows.map(serializeApartment)
+}
+
+async function validateManagers(actor: Actor, managerIds: string[]) {
+  if (!managerIds.length) return
+  const managers = await db.query.users.findMany({
+    where: and(inArray(users.id, managerIds), eq(users.organizationId, actor.organizationId), eq(users.status, 'active'))
+  })
+  if (managers.length !== managerIds.length || managers.some(manager => !manager.roles.includes('manager'))) {
+    throw createError({ statusCode: 400, statusMessage: 'Выберите активных управляющих' })
+  }
+}
+
+async function replaceApartmentManagers(tx: any, organizationId: string, apartmentId: string, managerIds: string[]) {
+  await tx.delete(apartmentManagers).where(eq(apartmentManagers.apartmentId, apartmentId))
+  if (managerIds.length) await tx.insert(apartmentManagers).values(managerIds.map(userId => ({ organizationId, apartmentId, userId })))
 }
 
 export async function createApartment(actor: Actor, input: unknown) {
   requireRole(actor, 'administrator')
   const data = apartmentInputSchema.parse(input)
+  const { managerIds, ...apartmentData } = data
   const hotel = await db.query.hotels.findFirst({ where: and(eq(hotels.id, data.hotelId), eq(hotels.organizationId, actor.organizationId)) })
   if (!hotel || hotel.status !== 'active') throw createError({ statusCode: 400, statusMessage: 'Выберите активный отель' })
-  const manager = await db.query.users.findFirst({ where: and(eq(users.id, data.managerId), eq(users.organizationId, actor.organizationId)) })
-  if (!manager || !manager.roles.includes('manager')) throw createError({ statusCode: 400, statusMessage: 'Выберите управляющего' })
+  await validateManagers(actor, managerIds)
   const type = await db.query.apartmentTypes.findFirst({ where: and(eq(apartmentTypes.id, data.apartmentTypeId), eq(apartmentTypes.organizationId, actor.organizationId)) })
   if (!type) throw createError({ statusCode: 400, statusMessage: 'Тип апартамента не найден' })
   if (data.tariffOverride) validateTariff(data.tariffOverride)
-  const [apartment] = await db.insert(apartments).values({ ...data, organizationId: actor.organizationId, tariffOverride: data.tariffOverride ?? null }).returning()
+  const apartment = await db.transaction(async tx => {
+    const [created] = await tx.insert(apartments).values({ ...apartmentData, organizationId: actor.organizationId, tariffOverride: apartmentData.tariffOverride ?? null }).returning()
+    if (!created) throw createError({ statusCode: 500, statusMessage: 'Не удалось создать апартамент' })
+    await replaceApartmentManagers(tx, actor.organizationId, created.id, managerIds)
+    return created
+  })
   if (!apartment) throw createError({ statusCode: 500, statusMessage: 'Не удалось создать апартамент' })
   await writeAuditLog({ organizationId: actor.organizationId, actorId: actor.id, action: 'apartment.created', entityType: 'apartment', entityId: apartment.id, payload: { hotelId: data.hotelId } })
-  return apartment
+  return getApartment(actor, apartment.id)
 }
 
 export async function getApartment(actor: Actor, apartmentId: string) {
-  const apartment = await db.query.apartments.findFirst({ where: and(eq(apartments.id, apartmentId), eq(apartments.organizationId, actor.organizationId)), with: { hotel: true, manager: true, type: true } })
+  const apartment = await db.query.apartments.findFirst({ where: and(eq(apartments.id, apartmentId), eq(apartments.organizationId, actor.organizationId)), with: { hotel: true, managerAssignments: { with: { manager: { columns: { id: true, name: true } } } }, type: true } })
   if (!apartment) throw createError({ statusCode: 404, statusMessage: 'Апартамент не найден' })
-  if (!actor.roles.includes('administrator') && apartment.managerId !== actor.id) throw createError({ statusCode: 403, statusMessage: 'Нет доступа к апартаменту' })
-  return apartment
+  if (!(await canManageApartment(actor, apartmentId))) throw createError({ statusCode: 403, statusMessage: 'Нет доступа к апартаменту' })
+  return serializeApartment(apartment)
 }
 
 export async function updateApartment(actor: Actor, apartmentId: string, input: unknown) {
   requireRole(actor, 'administrator')
   const data = apartmentUpdateSchema.parse(input)
+  const { managerIds, ...apartmentData } = data
   const existing = await db.query.apartments.findFirst({ where: and(eq(apartments.id, apartmentId), eq(apartments.organizationId, actor.organizationId)) })
   if (!existing) throw createError({ statusCode: 404, statusMessage: 'Апартамент не найден' })
   if (data.hotelId && data.hotelId !== existing.hotelId) {
     const hotel = await db.query.hotels.findFirst({ where: and(eq(hotels.id, data.hotelId), eq(hotels.organizationId, actor.organizationId), eq(hotels.status, 'active')) })
     if (!hotel) throw createError({ statusCode: 400, statusMessage: 'Нельзя перенести апартамент в неактивный отель' })
   }
-  if (data.managerId) {
-    const manager = await db.query.users.findFirst({ where: and(eq(users.id, data.managerId), eq(users.organizationId, actor.organizationId), eq(users.status, 'active')) })
-    if (!manager?.roles.includes('manager')) throw createError({ statusCode: 400, statusMessage: 'Выберите активного управляющего' })
-  }
+  if (managerIds !== undefined) await validateManagers(actor, managerIds)
   if (data.apartmentTypeId) {
     const type = await db.query.apartmentTypes.findFirst({ where: and(eq(apartmentTypes.id, data.apartmentTypeId), eq(apartmentTypes.organizationId, actor.organizationId)) })
     if (!type) throw createError({ statusCode: 400, statusMessage: 'Тип апартамента не найден' })
   }
   if (data.tariffOverride) validateTariff(data.tariffOverride)
-  const [updated] = await db.update(apartments).set({ ...data, updatedAt: new Date() }).where(eq(apartments.id, apartmentId)).returning()
+  const updated = await db.transaction(async tx => {
+    const [changed] = await tx.update(apartments).set({ ...apartmentData, updatedAt: new Date() }).where(eq(apartments.id, apartmentId)).returning()
+    if (managerIds !== undefined) await replaceApartmentManagers(tx, actor.organizationId, apartmentId, managerIds)
+    return changed
+  })
   if (!updated) throw createError({ statusCode: 500, statusMessage: 'Не удалось обновить апартамент' })
   await writeAuditLog({ organizationId: actor.organizationId, actorId: actor.id, action: data.hotelId !== existing.hotelId ? 'apartment.hotel_changed' : 'apartment.updated', entityType: 'apartment', entityId: apartmentId, payload: { before: { hotelId: existing.hotelId }, after: data } })
-  return updated
+  return getApartment(actor, updated.id)
 }
 
 export async function archiveApartment(actor: Actor, apartmentId: string) {

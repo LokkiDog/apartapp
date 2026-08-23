@@ -41,7 +41,7 @@ export function buildCleaningPlan(cleanings: Cleaning[], today = localDate()): C
   const history: Cleaning[] = []
   for (const cleaning of cleanings) {
     const finished = ['completed', 'canceled'].includes(cleaning.status)
-    if (!cleaning.scheduledOn || !cleaning.assignments.length) {
+    if (!cleaning.assignments.length) {
       if (!finished) attention.push(cleaning)
       else history.push(cleaning)
       continue
@@ -62,7 +62,7 @@ export function buildCleaningPlan(cleanings: Cleaning[], today = localDate()): C
     attention: sortRoute(attention),
     days: [...days.entries()].sort(([left], [right]) => left.localeCompare(right)).map(([date, items]) => ({ date, cleanings: sortRoute(items) })),
     later: sortRoute(later),
-    history: [...history].sort((left, right) => (right.scheduledOn ?? '').localeCompare(left.scheduledOn ?? ''))
+    history: [...history].sort((left, right) => right.scheduledOn.localeCompare(left.scheduledOn))
   }
 }
 
@@ -86,7 +86,7 @@ export function routesForCleanings(cleanings: Cleaning[], includeFinished = true
 export function apartmentsForCleanings(cleanings: Cleaning[], includeFinished = true): ApartmentCleaningGroup[] {
   const groups = new Map<string, { apartmentId: string; apartment: Cleaning['apartment']; days: Map<string, Cleaning[]> }>()
   for (const cleaning of cleanings) {
-    if (!cleaning.scheduledOn || (!includeFinished && ['completed', 'canceled'].includes(cleaning.status))) continue
+    if (!includeFinished && ['completed', 'canceled'].includes(cleaning.status)) continue
     const group = groups.get(cleaning.apartmentId) ?? { apartmentId: cleaning.apartmentId, apartment: cleaning.apartment, days: new Map<string, Cleaning[]>() }
     const day = group.days.get(cleaning.scheduledOn) ?? []
     day.push(cleaning)

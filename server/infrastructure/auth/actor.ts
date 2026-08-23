@@ -1,6 +1,6 @@
 import { and, eq } from 'drizzle-orm'
 import { db } from '../database/client'
-import { users } from '../database/schema'
+import { apartmentManagers, users } from '../database/schema'
 import type { UserRole } from '@contracts/crm'
 
 export interface Actor {
@@ -40,10 +40,35 @@ export function isAdministrator(actor: Actor) {
   return actor.roles.includes('administrator')
 }
 
+export function canAccessWorkSection(actor: Actor) {
+  return isAdministrator(actor) || actor.roles.includes('cleaner')
+}
+
+export function requireWorkSectionAccess(actor: Actor) {
+  if (!canAccessWorkSection(actor)) {
+    throw createError({ statusCode: 403, statusMessage: 'Недостаточно прав' })
+  }
+}
+
+export function canAccessAssignedWork(actor: Actor, assigneeId: string | null) {
+  return isAdministrator(actor) || (actor.roles.includes('cleaner') && assigneeId === actor.id)
+}
+
 export async function canManageApartment(actor: Actor, apartmentId: string) {
   if (isAdministrator(actor)) return true
-  const apartment = await db.query.apartments.findFirst({
-    where: (apartments, { and, eq }) => and(eq(apartments.id, apartmentId), eq(apartments.organizationId, actor.organizationId))
+  const assignment = await db.query.apartmentManagers.findFirst({
+    where: and(
+      eq(apartmentManagers.apartmentId, apartmentId),
+      eq(apartmentManagers.organizationId, actor.organizationId),
+      eq(apartmentManagers.userId, actor.id)
+    )
   })
-  return apartment?.managerId === actor.id
+  return Boolean(assignment)
+}
+
+export async function managedApartmentIds(actor: Actor) {
+  if (isAdministrator(actor)) return null
+  const rows = await db.select({ apartmentId: apartmentManagers.apartmentId }).from(apartmentManagers)
+    .where(and(eq(apartmentManagers.organizationId, actor.organizationId), eq(apartmentManagers.userId, actor.id)))
+  return rows.map(row => row.apartmentId)
 }

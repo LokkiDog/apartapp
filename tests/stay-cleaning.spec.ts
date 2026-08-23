@@ -9,7 +9,7 @@ describe('stay cleaning presentation', () => {
   })
 
   it('uses the cleaning status and links to the existing cleaning', () => {
-    const stay = { id: 'stay-1', cleaning: { id: 'cleaning-1', status: 'completed', scheduledOn: null } }
+    const stay = { id: 'stay-1', cleaning: { id: 'cleaning-1', status: 'completed', scheduledOn: '2026-08-12' } }
     expect(stayCleaningPresentation(stay)).toMatchObject({ label: 'Уборка завершена', className: 'stay-cleaning-indicator--completed' })
     expect(stayCleaningHref(stay)).toBe('/cleanings/cleaning-1')
   })

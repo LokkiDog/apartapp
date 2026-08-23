@@ -18,9 +18,9 @@ const [
   { data: users, status: usersStatus, error: usersError },
   { data: types, status: typesStatus, error: typesError }
 ] = await Promise.all([
-  useAsyncData('apartment-form-hotels', () => $fetch<ApartmentFormHotel[]>('/api/hotels'), { server: false }),
-  useAsyncData('apartment-form-users', () => $fetch<ApartmentFormManager[]>('/api/users'), { server: false }),
-  useAsyncData('apartment-form-types', () => $fetch<ApartmentFormType[]>('/api/apartment-types'), { server: false })
+  useAsyncData('apartment-form-hotels', () => currentUser.value ? $fetch<ApartmentFormHotel[]>('/api/hotels') : Promise.resolve([]), { server: false, default: () => [], watch: [currentUser] }),
+  useAsyncData('apartment-form-users', () => currentUser.value ? $fetch<ApartmentFormManager[]>('/api/users') : Promise.resolve([]), { server: false, default: () => [], watch: [currentUser] }),
+  useAsyncData('apartment-form-types', () => currentUser.value ? $fetch<ApartmentFormType[]>('/api/apartment-types') : Promise.resolve([]), { server: false, default: () => [], watch: [currentUser] })
 ])
 
 const loading = computed(() => [hotelsStatus.value, usersStatus.value, typesStatus.value].some(status => status === 'idle' || status === 'pending'))

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 type ChecklistItem = { label: string; checked: boolean }
-type InventoryItem = { consumable: { id: string; name: string; unit: string }; quantity: number; usedQuantity: number; remainingQuantity: number; discrepancyQuantity: number }
+type InventoryItem = { consumable: { id: string; name: string; unit: string; autoWriteOffEnabled?: boolean; autoWriteOffQuantity?: number }; quantity: number; usedQuantity: number; remainingQuantity: number; discrepancyQuantity: number; remainingTouched?: boolean }
 type ProgressPayload = { checklist: ChecklistItem[]; comment: string; hasProblem: boolean; problemDescription: string; inventoryReports?: Array<{ consumableId: string; usedQuantity: number; remainingQuantity: number }>; photo: File | null }
 
 const props = withDefaults(defineProps<{
@@ -32,8 +32,12 @@ watch(() => [props.checklist, props.comment, props.hasProblem, props.problemDesc
   comment.value = props.comment
   hasProblem.value = props.hasProblem
   problemDescription.value = props.problemDescription
-  inventoryReports.value = props.inventoryReports.map(item => ({ ...item, consumable: { ...item.consumable } }))
+  inventoryReports.value = props.inventoryReports.map(item => ({ ...item, consumable: { ...item.consumable }, remainingTouched: false }))
 }, { immediate: true, deep: true })
+
+function syncExpectedRemaining(item: InventoryItem) {
+  if (!item.remainingTouched) item.remainingQuantity = Math.max(0, Number(item.quantity) - (Number(item.usedQuantity) || 0))
+}
 
 function payload(): ProgressPayload {
   return {
@@ -54,11 +58,11 @@ const unfinished = computed(() => checklist.value.filter(item => !item.checked).
 <template>
   <form class="work-progress-form" @submit.prevent="save">
     <section v-if="kind === 'cleaning'" class="progress-section">
-      <div class="progress-section__heading"><div><h2>Остатки расходников</h2><p>Можно заполнить сейчас или обновить позже.</p></div><UIcon name="i-lucide-package" class="size-5 text-[var(--color-primary)]" /></div>
-      <div v-if="inventoryReports.length" class="space-y-3">
+      <div class="progress-section__heading"><div><h2>Остатки расходников</h2><p class="progress-section__mobile-description">Можно заполнить сейчас или обновить позже.</p></div><UIcon name="i-lucide-package" class="size-5 text-[var(--color-primary)]" /></div>
+      <div v-if="inventoryReports.length" class="progress-stock-list space-y-3">
         <div v-for="item in inventoryReports" :key="item.consumable.id" class="progress-stock-row">
-          <div class="flex items-start justify-between gap-3"><div><p class="font-medium">{{ item.consumable.name }}</p><p class="text-sm text-[var(--color-muted)]">Сейчас: {{ item.quantity }} {{ item.consumable.unit }}</p></div><span class="text-xs text-[var(--color-muted)]">{{ item.consumable.unit }}</span></div>
-          <div class="mt-3 grid gap-3 sm:grid-cols-2"><UFormField label="Израсходовано"><UInput v-model.number="item.usedQuantity" type="number" min="0" step=".001" :disabled="!editable && !inventoryEditable"><template #trailing>{{ item.consumable.unit }}</template></UInput></UFormField><UFormField label="Фактически осталось"><UInput v-model.number="item.remainingQuantity" type="number" min="0" step=".001" :disabled="!editable && !inventoryEditable"><template #trailing>{{ item.consumable.unit }}</template></UInput></UFormField></div>
+          <div><p class="font-medium">{{ item.consumable.name }}</p><p class="text-sm text-[var(--color-muted)]">Сейчас: {{ item.quantity }} {{ item.consumable.unit }}<span v-if="item.consumable.autoWriteOffEnabled"> · Авто: {{ item.consumable.autoWriteOffQuantity }} {{ item.consumable.unit }}</span></p></div>
+          <div class="progress-stock-fields mt-3 grid grid-cols-2 gap-3"><UFormField><template #label><span class="progress-stock-label--desktop">Израсходовано</span><span class="progress-stock-label--mobile">Доложено</span></template><UInput v-model.number="item.usedQuantity" type="number" min="0" step=".001" :disabled="!editable && !inventoryEditable" @update:model-value="syncExpectedRemaining(item)"><template #trailing>{{ item.consumable.unit }}</template></UInput></UFormField><UFormField label="Фактически осталось"><UInput v-model.number="item.remainingQuantity" type="number" min="0" step=".001" :disabled="!editable && !inventoryEditable" @update:model-value="item.remainingTouched = true"><template #trailing>{{ item.consumable.unit }}</template></UInput></UFormField></div>
           <p v-if="item.discrepancyQuantity" class="mt-2 text-xs text-amber-700">Расхождение: {{ item.discrepancyQuantity > 0 ? '+' : '' }}{{ item.discrepancyQuantity }} {{ item.consumable.unit }}</p>
         </div>
       </div>
@@ -76,9 +80,9 @@ const unfinished = computed(() => checklist.value.filter(item => !item.checked).
 
     <section class="progress-section">
       <div class="progress-section__heading"><div><h2>Комментарий и проблема</h2><p>Добавьте важные детали для управляющего.</p></div><UIcon name="i-lucide-message-square-text" class="size-5 text-[var(--color-primary)]" /></div>
-      <UFormField label="Комментарий"><UTextarea v-model="comment" :disabled="!editable" :rows="4" placeholder="Что важно знать об этой работе?" /></UFormField>
+      <UFormField label="Комментарий" class="w-full"><UTextarea v-model="comment" class="w-full" :disabled="!editable" :rows="4" placeholder="Что важно знать об этой работе?" /></UFormField>
       <UCheckbox v-model="hasProblem" label="Есть проблема" :disabled="!editable" class="mt-4 min-h-11 items-center font-medium" />
-      <UFormField v-if="hasProblem" label="Описание проблемы" class="mt-3"><UTextarea v-model="problemDescription" :disabled="!editable" required :rows="3" placeholder="Опишите, что произошло" /></UFormField>
+      <UFormField v-if="hasProblem" label="Описание проблемы" class="mt-3 w-full"><UTextarea v-model="problemDescription" class="w-full" :disabled="!editable" required :rows="3" placeholder="Опишите, что произошло" /></UFormField>
     </section>
 
     <section class="progress-section">
@@ -88,9 +92,18 @@ const unfinished = computed(() => checklist.value.filter(item => !item.checked).
     </section>
 
     <UAlert v-if="error" color="error" variant="soft" :description="error" />
-    <div v-if="editable || canComplete" class="work-progress-actions">
-      <UButton v-if="editable" type="submit" color="neutral" variant="soft" icon="i-lucide-save" :loading="busy">Сохранить</UButton>
-      <UButton v-if="canComplete" type="button" icon="i-lucide-circle-check" :loading="busy" @click="complete">Завершить</UButton>
+    <div v-if="editable || canComplete" class="work-progress-actions" :class="{ 'work-progress-actions--in-cleaning': kind === 'cleaning' }">
+      <template v-if="kind === 'cleaning'">
+        <div class="work-progress-actions__secondary"><slot name="actions-left" /></div>
+        <div class="work-progress-actions__primary">
+          <UButton v-if="editable" type="submit" color="neutral" variant="soft" icon="i-lucide-save" aria-label="Сохранить" :loading="busy" />
+          <UButton v-if="canComplete" type="button" icon="i-lucide-circle-check" :loading="busy" @click="complete">Завершить</UButton>
+        </div>
+      </template>
+      <template v-else>
+        <UButton v-if="editable" type="submit" color="neutral" variant="soft" icon="i-lucide-save" :loading="busy">Сохранить</UButton>
+        <UButton v-if="canComplete" type="button" icon="i-lucide-circle-check" :loading="busy" @click="complete">Завершить</UButton>
+      </template>
     </div>
   </form>
 </template>

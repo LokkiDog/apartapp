@@ -53,8 +53,8 @@ export function downloadReportCsv(report: GlobalReportResponse, tab: ReportTab) 
       if (day.departures) rows.push([day.date, `Выезды: ${day.departures}`, '', '', '', ''])
     }
   } else {
-    rows = [['Дата', 'Категория', 'Отель', 'Апартамент', 'Управляющий', 'Описание', 'Сумма, EUR']]
-    for (const item of report.finance.entries) rows.push([item.occurredOn, financeTypeLabels[item.type] ?? item.type, item.hotelName, item.apartmentName, item.managerName, item.description, item.amountEur])
+    rows = [['Дата', 'Категория', 'Отель', 'Апартамент', 'Управляющие', 'Описание', 'Сумма, EUR']]
+    for (const item of report.finance.entries) rows.push([item.occurredOn, financeTypeLabels[item.type] ?? item.type, item.hotelName, item.apartmentName, item.managerNames.join(', ') || 'Без управляющих', item.description, item.amountEur])
   }
 
   const blob = new Blob([csv(rows)], { type: 'text/csv;charset=utf-8' })

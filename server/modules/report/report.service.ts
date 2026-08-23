@@ -99,7 +99,7 @@ export async function globalReport(actor: Actor, query: ReportQuery): Promise<Gl
       : eq(apartments.organizationId, actor.organizationId)
   const apartmentRows = await db.query.apartments.findMany({
     where: apartmentWhere,
-    with: { hotel: true, manager: true }
+    with: { hotel: true }
   })
   if (query.scope === 'apartments' && apartmentRows.length !== query.apartmentIds.length) {
     throw createError({ statusCode: 404, statusMessage: 'Один или несколько апартаментов не найдены' })
@@ -197,7 +197,7 @@ export async function globalReport(actor: Actor, query: ReportQuery): Promise<Gl
   for (const cleaning of scopedCleanings) {
     if (!dateInRange(cleaning.scheduledOn, query)) continue
     const apartment = apartmentMap.get(cleaning.apartmentId)!
-    const day = workloadDay(cleaning.scheduledOn!)
+    const day = workloadDay(cleaning.scheduledOn)
     day.cleaningCounts[cleaning.status] = (day.cleaningCounts[cleaning.status] ?? 0) + 1
     day.cleanings.push(cleaningRow(cleaning, apartment))
   }
@@ -210,10 +210,6 @@ export async function globalReport(actor: Actor, query: ReportQuery): Promise<Gl
     if (dateInRange(stay.checkOutOn, query)) workloadDay(stay.checkOutOn).departures += 1
   }
 
-  const openStatuses = new Set(['unassigned', 'assigned', 'in_progress', 'open'])
-  const unscheduledCleanings = scopedCleanings
-    .filter(cleaning => !cleaning.scheduledOn && openStatuses.has(cleaning.status))
-    .map(cleaning => cleaningRow(cleaning, apartmentMap.get(cleaning.apartmentId)!))
   const today = dateInSofia(new Date())!
   const overdueTasks = scopedTasks
     .filter(task => task.dueOn && task.dueOn < today && ['open', 'in_progress'].includes(task.status))
@@ -237,13 +233,15 @@ export async function globalReport(actor: Actor, query: ReportQuery): Promise<Gl
 
   for (const entry of scopedFinance) {
     const apartment = apartmentMap.get(entry.apartmentId)!
-    const managerName = entry.managerId ? userNames.get(entry.managerId) ?? 'Удалённый пользователь' : 'Без управляющего'
+    const managerNames = entry.managerTeamSnapshot.map(manager => manager.name)
+    const managerKey = entry.managerTeamSnapshot.map(manager => manager.id).join(',') || 'unassigned'
+    const managerLabel = managerNames.join(', ') || 'Без управляющих'
     if (entry.type === 'guest_service_charge') guestServices = guestServices.plus(entry.amountEur)
     else operatingExpenses = operatingExpenses.plus(entry.amountEur)
     addAmount(byTypeMap, entry.type, financeTypeLabels[entry.type] ?? entry.type, entry.amountEur)
     addAmount(byHotelMap, apartment.hotel.id, apartment.hotel.name, entry.amountEur)
     addAmount(byApartmentMap, apartment.id, apartment.name, entry.amountEur)
-    addAmount(byManagerMap, entry.managerId ?? 'unassigned', managerName, entry.amountEur)
+    addAmount(byManagerMap, managerKey, managerLabel, entry.amountEur)
     if (entry.type === 'cleaning_charge' && entry.sourceType === 'cleaning') {
       const cleaning = cleaningMap.get(entry.sourceId)
       if (cleaning) {
@@ -258,7 +256,7 @@ export async function globalReport(actor: Actor, query: ReportQuery): Promise<Gl
       apartmentId: apartment.id,
       apartmentName: apartment.name,
       hotelName: apartment.hotel.name,
-      managerName,
+      managerNames,
       type: entry.type,
       amountEur: entry.amountEur,
       occurredOn: entry.occurredOn,
@@ -291,7 +289,6 @@ export async function globalReport(actor: Actor, query: ReportQuery): Promise<Gl
     procurement,
     workload: {
       days: [...workloadMap.values()].sort((a, b) => a.date.localeCompare(b.date)),
-      unscheduledCleanings,
       overdueTasks,
       undatedTasks
     },

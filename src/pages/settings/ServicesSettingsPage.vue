@@ -6,7 +6,7 @@ import { useCurrentUser } from '#fsd/shared/auth'
 const currentUser = useCurrentUser()
 if (!currentUser.value?.roles.includes('administrator')) await navigateTo('/')
 type Service = { id: string; name: string; priceEur: number; managerSharePercent: number; active: boolean }
-const { data: services, refresh, status } = await useAsyncData('settings-services', () => $fetch<Service[]>('/api/special-services'))
+const { data: services, refresh, status } = await useAsyncData('settings-services', () => currentUser.value ? $fetch<Service[]>('/api/special-services') : Promise.resolve([]), { server: false, default: () => [], watch: [currentUser] })
 const open = ref(false); const pending = ref(false); const error = ref('')
 const serviceToEdit = ref<Service | null>(null); const serviceToDelete = ref<Service | null>(null); const deleteOpen = ref(false); const deletePending = ref(false)
 const form = reactive({ name: '', priceEur: 0 as number | null, managerSharePercent: 0, active: true })

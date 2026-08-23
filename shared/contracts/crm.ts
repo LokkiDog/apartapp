@@ -37,10 +37,13 @@ function withCalculatedTariff<Shape extends z.ZodRawShape>(shape: Shape) {
 const checklistLabelsSchema = z.array(z.string().trim().min(1).max(200)).max(100)
 export const apartmentTypeInputSchema = withCalculatedTariff({ name: z.string().trim().min(1).max(100), defaultChecklist: checklistLabelsSchema.default(['Сменить белье и полотенца', 'Проверить санузел и кухню', 'Проверить расходники']) })
 const apartmentTariffInputSchema = withCalculatedTariff({})
+const apartmentManagerIdsSchema = z.array(z.uuid({ error: 'Выберите корректных управляющих' })).max(100).superRefine((managerIds, context) => {
+  if (new Set(managerIds).size !== managerIds.length) context.addIssue({ code: 'custom', message: 'Управляющие не должны повторяться' })
+})
 
 export const apartmentInputSchema = z.object({
   hotelId: z.uuid({ error: 'Выберите апарт-отель' }),
-  managerId: z.uuid({ error: 'Выберите управляющего' }),
+  managerIds: apartmentManagerIdsSchema.default([]),
   apartmentTypeId: z.uuid({ error: 'Выберите тип апартамента' }),
   name: z.string().trim().min(1, 'Введите название').max(160, 'Название не должно превышать 160 символов'),
   internalCode: z.string().trim().min(1, 'Введите внутренний код').max(50, 'Код не должен превышать 50 символов'),
@@ -54,7 +57,7 @@ export const apartmentInputSchema = z.object({
   status: apartmentStatusSchema.optional().default('active'),
   tariffOverride: apartmentTariffInputSchema.optional()
 })
-export const apartmentUpdateSchema = apartmentInputSchema.partial()
+export const apartmentUpdateSchema = apartmentInputSchema.partial().extend({ managerIds: apartmentManagerIdsSchema.optional() })
 
 export const specialServiceInputSchema = z.object({
   name: z.string().trim().min(1).max(120),
@@ -107,22 +110,16 @@ export const cleaningInputSchema = withCalculatedTariff({
   apartmentId: z.uuid(),
   stayId: z.uuid().nullable().optional(),
   cleanerIds: z.array(z.uuid()).default([]),
-  scheduledOn: z.iso.date().nullable(),
+  scheduledOn: z.iso.date(),
   checklist: cleaningChecklistSchema.optional()
-}).superRefine((value, context) => {
-  if (value.cleanerIds.length && !value.scheduledOn) context.addIssue({ code: 'custom', path: ['scheduledOn'], message: 'Укажите дату уборки для выбранных исполнителей' })
 })
 export const cleaningUpdateSchema = withCalculatedTariff({
   cleanerIds: z.array(z.uuid()).default([]),
-  scheduledOn: z.iso.date().nullable(),
+  scheduledOn: z.iso.date(),
   apartmentId: z.uuid().optional(),
   stayId: z.uuid().nullable().optional(),
   checklist: cleaningChecklistSchema.optional(),
   reason: z.string().trim().max(1000).default('')
-}).superRefine((value, context) => {
-  if (value.cleanerIds.length && !value.scheduledOn) {
-    context.addIssue({ code: 'custom', path: ['scheduledOn'], message: 'Укажите дату уборки для выбранных исполнителей' })
-  }
 })
 
 export const cleaningRouteUpdateSchema = z.object({
@@ -191,7 +188,16 @@ export const taskUpdateSchema = taskInputSchema.partial().extend({ status: taskS
 export const consumableInputSchema = z.object({
   name: z.string().trim().min(1).max(160),
   category: z.string().trim().min(1).max(100),
-  unit: z.string().trim().min(1).max(32)
+  unit: z.string().trim().min(1).max(32),
+  autoWriteOffEnabled: z.boolean().default(false),
+  autoWriteOffQuantity: z.coerce.number().finite().nonnegative().max(9_999_999.999).default(0)
+}).transform(value => ({
+  ...value,
+  autoWriteOffQuantity: value.autoWriteOffEnabled ? value.autoWriteOffQuantity : 0
+})).superRefine((value, context) => {
+  if (value.autoWriteOffEnabled && value.autoWriteOffQuantity <= 0) {
+    context.addIssue({ code: 'custom', path: ['autoWriteOffQuantity'], message: 'Укажите количество для автосписания' })
+  }
 })
 
 export const inventoryReplenishmentInputSchema = z.object({

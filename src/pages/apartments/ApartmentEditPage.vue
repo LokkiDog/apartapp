@@ -9,9 +9,9 @@ import {
 import { useCurrentUser } from '#fsd/shared/auth'
 import { DeleteConfirmModal, PageHeader, StatusBadge } from '#fsd/shared/ui'
 
-type ApartmentRecord = Omit<ApartmentInput, 'managerId'> & {
+type ApartmentRecord = ApartmentInput & {
   id: string
-  managerId: string | null
+  managers: Array<{ id: string, name: string }>
 }
 
 const route = useRoute()
@@ -27,10 +27,10 @@ const [
   { data: users, status: usersStatus, error: usersError },
   { data: types, status: typesStatus, error: typesError }
 ] = await Promise.all([
-  useAsyncData(`apartment-edit-${apartmentId}`, () => $fetch<ApartmentRecord>(`/api/apartments/${apartmentId}`), { server: false }),
-  useAsyncData('apartment-form-hotels', () => $fetch<ApartmentFormHotel[]>('/api/hotels'), { server: false }),
-  useAsyncData('apartment-form-users', () => $fetch<ApartmentFormManager[]>('/api/users'), { server: false }),
-  useAsyncData('apartment-form-types', () => $fetch<ApartmentFormType[]>('/api/apartment-types'), { server: false })
+  useAsyncData(`apartment-edit-${apartmentId}`, () => currentUser.value ? $fetch<ApartmentRecord>(`/api/apartments/${apartmentId}`) : Promise.resolve(null), { server: false, default: () => null, watch: [currentUser] }),
+  useAsyncData('apartment-form-hotels', () => currentUser.value ? $fetch<ApartmentFormHotel[]>('/api/hotels') : Promise.resolve([]), { server: false, default: () => [], watch: [currentUser] }),
+  useAsyncData('apartment-form-users', () => currentUser.value ? $fetch<ApartmentFormManager[]>('/api/users') : Promise.resolve([]), { server: false, default: () => [], watch: [currentUser] }),
+  useAsyncData('apartment-form-types', () => currentUser.value ? $fetch<ApartmentFormType[]>('/api/apartment-types') : Promise.resolve([]), { server: false, default: () => [], watch: [currentUser] })
 ])
 
 const loading = computed(() => [apartmentStatus.value, hotelsStatus.value, usersStatus.value, typesStatus.value].some(status => status === 'idle' || status === 'pending'))
@@ -38,7 +38,7 @@ const loadError = computed(() => apartmentError.value || hotelsError.value || us
 
 const initialValue = computed<Partial<ApartmentInput>>(() => apartment.value ? {
   hotelId: apartment.value.hotelId,
-  managerId: apartment.value.managerId ?? '',
+  managerIds: apartment.value.managers.map(manager => manager.id),
   apartmentTypeId: apartment.value.apartmentTypeId,
   name: apartment.value.name,
   internalCode: apartment.value.internalCode,

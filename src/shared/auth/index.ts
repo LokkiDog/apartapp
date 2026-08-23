@@ -1,1 +1,1 @@
-export { useCurrentUser, type SessionUser } from './session'
+export { canAccessWorkSection, useCurrentUser, usesManagerOnlyNavigation, type SessionUser } from './session'

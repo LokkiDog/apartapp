@@ -4,7 +4,7 @@ import type { Actor } from '../../infrastructure/auth/actor'
 import { requireRole } from '../../infrastructure/auth/actor'
 import { writeAuditLog } from '../../infrastructure/audit/log'
 import { db } from '../../infrastructure/database/client'
-import { apartments, attachments, authTokens, cleaningAssignments, cleanings, financialEntries, inventoryLots, inventoryMovements, notifications, stays, stayServices, tasks, users } from '../../infrastructure/database/schema'
+import { apartmentManagers, attachments, authTokens, cleaningAssignments, cleanings, financialEntries, inventoryLots, inventoryMovements, notifications, stays, stayServices, tasks, users } from '../../infrastructure/database/schema'
 import { sendAccountLink } from '../../infrastructure/mail/send'
 import { fileStorage } from '../../infrastructure/storage/local'
 
@@ -94,8 +94,7 @@ export async function archiveUser(actor: Actor, userId: string) {
   if (user.status === 'archived') return { ok: true }
   const storageKeys = await db.transaction(async tx => {
     const files = await deleteAssignedWork(tx, userId)
-    await tx.update(apartments).set({ managerId: null, updatedAt: new Date() }).where(eq(apartments.managerId, userId))
-    await tx.update(financialEntries).set({ managerId: null }).where(eq(financialEntries.managerId, userId))
+    await tx.delete(apartmentManagers).where(eq(apartmentManagers.userId, userId))
     await tx.update(users).set({ status: 'archived', updatedAt: new Date() }).where(eq(users.id, userId))
     return files
   })
@@ -128,8 +127,7 @@ export async function deleteUserPermanently(actor: Actor, userId: string, confir
       await tx.delete(inventoryMovements).where(inArray(inventoryMovements.id, authoredMovements.map((row: { id: string }) => row.id)))
     }
     await tx.delete(financialEntries).where(eq(financialEntries.createdById, userId))
-    await tx.update(apartments).set({ managerId: null, updatedAt: new Date() }).where(eq(apartments.managerId, userId))
-    await tx.update(financialEntries).set({ managerId: null }).where(eq(financialEntries.managerId, userId))
+    await tx.delete(apartmentManagers).where(eq(apartmentManagers.userId, userId))
     await tx.delete(notifications).where(eq(notifications.userId, userId))
     await tx.update(users).set({ status: 'archived' }).where(eq(users.id, userId))
     await tx.delete(users).where(eq(users.id, userId))

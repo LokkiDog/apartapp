@@ -1,0 +1,16 @@
+.git
+.github
+.nuxt
+.output
+.data
+node_modules
+coverage
+playwright-report
+test-results
+.env
+.env.*
+!.env.example
+!.env.production.example
+Dockerfile*
+docker-compose*.yml
+deploy

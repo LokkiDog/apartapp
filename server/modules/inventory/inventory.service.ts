@@ -1,14 +1,15 @@
-import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, inArray, isNotNull, sql } from 'drizzle-orm'
 import Decimal from 'decimal.js'
 import { cleaningInventoryReportInputSchema, consumableInputSchema, inventoryReplenishmentInputSchema, inventoryUsageInputSchema } from '@contracts/crm'
-import { canManageApartment, requireRole, type Actor } from '../../infrastructure/auth/actor'
+import { canAccessAssignedWork, requireRole, type Actor } from '../../infrastructure/auth/actor'
 import { writeAuditLog } from '../../infrastructure/audit/log'
 import { db } from '../../infrastructure/database/client'
 import { apartmentConsumables, apartments, cleaningAssignments, cleaningInventoryReports, cleanings, consumables, financialEntries, inventoryLots, inventoryMovements, tasks } from '../../infrastructure/database/schema'
 import { createFinancialEntry } from '../finance/finance.service'
+import { resolveCompletionInventoryReports, type CleaningInventoryReport } from './cleaning-inventory'
 import { calculateFifoUsage } from './fifo'
 
-type InventoryReport = { consumableId: string; usedQuantity: number; remainingQuantity: number }
+type InventoryReport = CleaningInventoryReport
 
 async function cleaningAccess(actor: Actor, cleaningId: string) {
   const cleaning = await db.query.cleanings.findFirst({ where: and(eq(cleanings.id, cleaningId), eq(cleanings.organizationId, actor.organizationId)) })
@@ -30,11 +31,12 @@ async function removeQuantity(tx: any, apartmentId: string, consumableId: string
   return fifo
 }
 
-export async function applyCleaningInventoryReports(tx: any, actor: Actor, cleaning: { id: string; organizationId: string; apartmentId: string }, reports: InventoryReport[]) {
-  const configured = await tx.query.apartmentConsumables.findMany({ where: and(eq(apartmentConsumables.apartmentId, cleaning.apartmentId), eq(apartmentConsumables.active, true)), with: { consumable: true } })
-  const configuredIds = new Set(configured.map((item: any) => item.consumableId))
+function validateInventoryReports(reports: InventoryReport[], configuredIds: Set<string>) {
   if (reports.some(report => !configuredIds.has(report.consumableId))) throw createError({ statusCode: 400, statusMessage: 'Можно указывать только расходники, настроенные для апартамента' })
+  if (new Set(reports.map(report => report.consumableId)).size !== reports.length) throw createError({ statusCode: 400, statusMessage: 'Расходники в отчёте не должны повторяться' })
+}
 
+async function reverseCleaningInventoryEffects(tx: any, cleaning: { id: string }) {
   const previousMovements = await tx.select().from(inventoryMovements).where(and(eq(inventoryMovements.sourceType, 'cleaning'), eq(inventoryMovements.sourceId, cleaning.id), eq(inventoryMovements.origin, 'cleaning_report'))).orderBy(desc(inventoryMovements.createdAt))
   for (const movement of previousMovements) {
     if (movement.type === 'usage') await tx.insert(inventoryLots).values({ apartmentId: movement.apartmentId, consumableId: movement.consumableId, remainingQuantity: movement.quantity, unitCostEur: movement.quantity === '0' ? 0 : Number(new Decimal(movement.totalCostEur).dividedBy(movement.quantity).toDecimalPlaces(2, Decimal.ROUND_HALF_UP)) })
@@ -45,7 +47,18 @@ export async function applyCleaningInventoryReports(tx: any, actor: Actor, clean
     await tx.delete(financialEntries).where(inArray(financialEntries.sourceId, previousMovements.map((movement: any) => movement.id)))
     await tx.delete(inventoryMovements).where(inArray(inventoryMovements.id, previousMovements.map((movement: any) => movement.id)))
   }
+}
+
+export async function applyCleaningInventoryReports(tx: any, actor: Actor, cleaning: { id: string; organizationId: string; apartmentId: string }, submittedReports?: InventoryReport[]) {
+  const configured = await tx.query.apartmentConsumables.findMany({ where: and(eq(apartmentConsumables.apartmentId, cleaning.apartmentId), eq(apartmentConsumables.active, true)), with: { consumable: true } })
+  const configuredIds = new Set<string>(configured.map((item: any) => item.consumableId))
+  validateInventoryReports(submittedReports ?? [], configuredIds)
+  const savedReports = await tx.query.cleaningInventoryReports.findMany({ where: eq(cleaningInventoryReports.cleaningId, cleaning.id) })
+  await reverseCleaningInventoryEffects(tx, cleaning)
   await tx.delete(cleaningInventoryReports).where(eq(cleaningInventoryReports.cleaningId, cleaning.id))
+
+  const balances = (await tx.select({ consumableId: inventoryLots.consumableId, quantity: sql<string>`coalesce(sum(${inventoryLots.remainingQuantity}), 0)` }).from(inventoryLots).where(eq(inventoryLots.apartmentId, cleaning.apartmentId)).groupBy(inventoryLots.consumableId)).map((balance: any) => ({ consumableId: balance.consumableId, quantity: Number(balance.quantity) }))
+  const reports = resolveCompletionInventoryReports({ configured, balances, submittedReports, savedReports: savedReports.map((report: any) => ({ consumableId: report.consumableId, usedQuantity: Number(report.usedQuantity), remainingQuantity: Number(report.remainingQuantity) })) })
 
   const saved = []
   for (const report of reports) {
@@ -70,7 +83,23 @@ export async function applyCleaningInventoryReports(tx: any, actor: Actor, clean
       await removeQuantity(tx, cleaning.apartmentId, report.consumableId, Math.abs(delta.toNumber()))
       await tx.insert(inventoryMovements).values({ apartmentId: cleaning.apartmentId, consumableId: report.consumableId, type: 'adjustment_out', quantity: Math.abs(delta.toNumber()).toFixed(3), totalCostEur: 0, sourceType: 'cleaning', sourceId: cleaning.id, origin: 'cleaning_report', note: 'Корректировка по фактическому остатку', createdById: actor.id })
     }
-    const [savedReport] = await tx.insert(cleaningInventoryReports).values({ organizationId: actor.organizationId, cleaningId: cleaning.id, consumableId: report.consumableId, usedQuantity: String(report.usedQuantity), remainingQuantity: String(report.remainingQuantity), discrepancyQuantity: delta.toFixed(3), reportedById: actor.id }).returning()
+    const [savedReport] = await tx.insert(cleaningInventoryReports).values({ organizationId: actor.organizationId, cleaningId: cleaning.id, consumableId: report.consumableId, usedQuantity: String(report.usedQuantity), remainingQuantity: String(report.remainingQuantity), discrepancyQuantity: delta.toFixed(3), reportedById: actor.id, appliedAt: new Date() }).returning()
+    if (savedReport) saved.push(savedReport)
+  }
+  return saved
+}
+
+export async function saveCleaningInventoryDrafts(tx: any, actor: Actor, cleaning: { id: string; organizationId: string; apartmentId: string }, reports: InventoryReport[]) {
+  const configured = await tx.query.apartmentConsumables.findMany({ where: and(eq(apartmentConsumables.apartmentId, cleaning.apartmentId), eq(apartmentConsumables.active, true)), with: { consumable: true } })
+  validateInventoryReports(reports, new Set<string>(configured.map((item: any) => item.consumableId)))
+  await reverseCleaningInventoryEffects(tx, cleaning)
+  await tx.delete(cleaningInventoryReports).where(eq(cleaningInventoryReports.cleaningId, cleaning.id))
+  const balances = await tx.select({ consumableId: inventoryLots.consumableId, quantity: sql<string>`coalesce(sum(${inventoryLots.remainingQuantity}), 0)` }).from(inventoryLots).where(eq(inventoryLots.apartmentId, cleaning.apartmentId)).groupBy(inventoryLots.consumableId)
+  const saved = []
+  for (const report of reports) {
+    const quantity = new Decimal(balances.find((balance: any) => balance.consumableId === report.consumableId)?.quantity ?? 0)
+    const discrepancyQuantity = new Decimal(report.remainingQuantity).minus(quantity.minus(report.usedQuantity)).toFixed(3)
+    const [savedReport] = await tx.insert(cleaningInventoryReports).values({ organizationId: actor.organizationId, cleaningId: cleaning.id, consumableId: report.consumableId, usedQuantity: String(report.usedQuantity), remainingQuantity: String(report.remainingQuantity), discrepancyQuantity, reportedById: actor.id }).returning()
     if (savedReport) saved.push(savedReport)
   }
   return saved
@@ -86,14 +115,18 @@ export async function inventoryForCleaning(actor: Actor, cleaningId: string) {
   return items.map(item => {
     const quantity = Number(balances.find(balance => balance.consumableId === item.consumableId)?.quantity ?? 0)
     const report = reports.find(value => value.consumableId === item.consumableId)
-    return { consumable: item.consumable, quantity, usedQuantity: report ? Number(report.usedQuantity) : 0, remainingQuantity: report ? Number(report.remainingQuantity) : quantity, discrepancyQuantity: report ? Number(report.discrepancyQuantity) : 0 }
+    const autoWriteOffQuantity = !['completed', 'canceled'].includes(cleaning.status) && item.consumable.autoWriteOffEnabled ? Number(item.consumable.autoWriteOffQuantity) : 0
+    return { consumable: item.consumable, quantity, usedQuantity: report ? Number(report.usedQuantity) : autoWriteOffQuantity, remainingQuantity: report ? Number(report.remainingQuantity) : Math.max(0, quantity - autoWriteOffQuantity), discrepancyQuantity: report ? Number(report.discrepancyQuantity) : 0 }
   })
 }
 
 export async function updateCleaningInventory(actor: Actor, cleaningId: string, input: unknown) {
   const cleaning = await cleaningAccess(actor, cleaningId)
   const data = cleaningInventoryReportInputSchema.parse(input)
-  const reports = await db.transaction(tx => applyCleaningInventoryReports(tx, actor, cleaning, data.reports))
+  if (cleaning.status === 'canceled') throw createError({ statusCode: 409, statusMessage: 'Отмененную уборку нельзя изменить' })
+  const reports = await db.transaction(tx => ['completed', 'canceled'].includes(cleaning.status)
+    ? applyCleaningInventoryReports(tx, actor, cleaning, data.reports)
+    : saveCleaningInventoryDrafts(tx, actor, cleaning, data.reports))
   await writeAuditLog({ organizationId: actor.organizationId, actorId: actor.id, action: 'cleaning.inventory_updated', entityType: 'cleaning', entityId: cleaningId, payload: { reports: data.reports.length } })
   return reports
 }
@@ -101,7 +134,7 @@ export async function updateCleaningInventory(actor: Actor, cleaningId: string, 
 export async function listCleaningInventoryDiscrepancies(actor: Actor) {
   requireRole(actor, 'administrator')
   const rows = await db.query.cleaningInventoryReports.findMany({
-    where: and(eq(cleaningInventoryReports.organizationId, actor.organizationId), sql`${cleaningInventoryReports.discrepancyQuantity} <> 0`),
+    where: and(eq(cleaningInventoryReports.organizationId, actor.organizationId), isNotNull(cleaningInventoryReports.appliedAt), sql`${cleaningInventoryReports.discrepancyQuantity} <> 0`),
     with: { cleaning: { with: { apartment: { with: { hotel: true } } } }, consumable: true, reportedBy: true },
     orderBy: (reports, { desc }) => [desc(reports.reportedAt)]
   })
@@ -109,8 +142,7 @@ export async function listCleaningInventoryDiscrepancies(actor: Actor) {
 }
 
 export async function inventoryForApartment(actor: Actor, apartmentId: string) {
-  if (actor.roles.includes('manager') && !actor.roles.includes('administrator')) throw createError({ statusCode: 403, statusMessage: 'Управляющим недоступны остатки' })
-  const canRead = await canManageApartment(actor, apartmentId) || await (async () => {
+  const canRead = actor.roles.includes('administrator') || await (async () => {
     if (!actor.roles.includes('cleaner')) return false
     const assignedCleaning = await db.select({ id: cleanings.id }).from(cleaningAssignments)
       .innerJoin(cleanings, eq(cleaningAssignments.cleaningId, cleanings.id))
@@ -125,9 +157,9 @@ export async function inventoryForApartment(actor: Actor, apartmentId: string) {
   return items.map(item => ({ ...item, quantity: Number(balances.find(balance => balance.consumableId === item.consumableId)?.quantity ?? 0), isLow: Number(balances.find(balance => balance.consumableId === item.consumableId)?.quantity ?? 0) <= Number(item.minimumQuantity) }))
 }
 
-export async function createConsumable(actor: Actor, input: { name: string, category: string, unit: string }) {
+export async function createConsumable(actor: Actor, input: unknown) {
   requireRole(actor, 'administrator')
-  return (await db.insert(consumables).values({ ...input, organizationId: actor.organizationId }).returning())[0]
+  return (await db.insert(consumables).values({ ...consumableInputSchema.parse(input), organizationId: actor.organizationId }).returning())[0]
 }
 
 export async function listConsumables(actor: Actor) {
@@ -188,7 +220,7 @@ export async function useStock(actor: Actor, apartmentId: string, input: unknown
     ? await db.query.cleanings.findFirst({ where: and(eq(cleanings.id, data.sourceId), eq(cleanings.apartmentId, apartmentId), eq(cleanings.organizationId, actor.organizationId)) }).then(Boolean)
     : await db.query.tasks.findFirst({ where: and(eq(tasks.id, data.sourceId), eq(tasks.apartmentId, apartmentId), eq(tasks.organizationId, actor.organizationId)) }).then(Boolean)
   if (!sourceBelongsToApartment) throw createError({ statusCode: 404, statusMessage: 'Исходная работа не найдена в этом апартаменте' })
-  const canUse = await canManageApartment(actor, apartmentId) || await (async () => {
+  const canUse = actor.roles.includes('administrator') || await (async () => {
     if (!actor.roles.includes('cleaner')) return false
     if (data.sourceType === 'cleaning') {
       const assignment = await db.query.cleaningAssignments.findFirst({
@@ -197,8 +229,8 @@ export async function useStock(actor: Actor, apartmentId: string, input: unknown
       })
       return assignment?.cleaning.apartmentId === apartmentId
     }
-    const task = await db.query.tasks.findFirst({ where: and(eq(tasks.id, data.sourceId), eq(tasks.assigneeId, actor.id), eq(tasks.organizationId, actor.organizationId)) })
-    return task?.apartmentId === apartmentId
+    const task = await db.query.tasks.findFirst({ where: and(eq(tasks.id, data.sourceId), eq(tasks.organizationId, actor.organizationId)) })
+    return task?.apartmentId === apartmentId && canAccessAssignedWork(actor, task.assigneeId)
   })()
   if (!canUse) throw createError({ statusCode: 403, statusMessage: 'Нет доступа к расходникам' })
   const result = await db.transaction(async tx => {

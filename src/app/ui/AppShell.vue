@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useCurrentUser } from '#fsd/shared/auth'
+import { canAccessWorkSection, useCurrentUser, usesManagerOnlyNavigation } from '#fsd/shared/auth'
 import { useNetworkStatus } from '#fsd/shared/lib'
 
 type NavItem = { to: string; label: string; icon: string }
@@ -20,6 +20,11 @@ const objects: NavItem[] = [
 ]
 const reports: NavItem[] = [{ to: '/reports', label: 'Сводные отчёты', icon: 'i-lucide-chart-no-axes-combined' }, { to: '/statement', label: 'Расходы управляющих', icon: 'i-lucide-wallet-cards' }]
 const managerFinance: NavItem[] = [{ to: '/statement', label: 'Мои расходы', icon: 'i-lucide-wallet-cards' }]
+const managerPrimary: NavItem[] = [
+  { to: '/calendar', label: 'Заезды', icon: 'i-lucide-calendar-days' },
+  { to: '/apartments', label: 'Апарты', icon: 'i-lucide-building-2' },
+  ...managerFinance
+]
 const settings: NavItem[] = [
   { to: '/settings/users', label: 'Пользователи', icon: 'i-lucide-users' },
   { to: '/settings/apartment-types', label: 'Типы и тарифы', icon: 'i-lucide-badge-euro' },
@@ -30,17 +35,20 @@ const groups = computed(() => {
   if (user.value?.roles.includes('administrator')) return [
     { label: 'Работа', items: work }, { label: 'Объекты', items: objects }, { label: 'Отчёты', items: reports }, { label: 'Настройки', items: settings }
   ]
+  if (usesManagerOnlyNavigation(user.value)) return [{ label: '', items: managerPrimary }]
   if (user.value?.roles.includes('manager')) return [
-    { label: 'Работа', items: work }, { label: 'Объекты', items: objects.filter(item => !['/hotels', '/inventory'].includes(item.to)) }, { label: 'Финансы', items: managerFinance }
+    { label: 'Работа', items: work.filter(item => item.to !== '/work' || canAccessWorkSection(user.value)) }, { label: 'Объекты', items: objects.filter(item => !['/hotels', '/inventory'].includes(item.to)) }, { label: 'Финансы', items: managerFinance }
   ]
   return [{ label: 'Работа', items: work.filter(item => ['/', '/work'].includes(item.to)) }]
 })
 const allItems = computed(() => groups.value.flatMap(group => group.items))
 const mobilePrimary = computed(() => {
+  if (usesManagerOnlyNavigation(user.value)) return allItems.value
   const preferred = ['/', '/calendar', '/work', '/apartments']
   return preferred.map(path => allItems.value.find(item => item.to === path)).filter(Boolean) as NavItem[]
 })
 const mobileMore = computed(() => allItems.value.filter(item => !mobilePrimary.value.some(primary => primary.to === item.to)))
+const homeHref = computed(() => usesManagerOnlyNavigation(user.value) ? '/calendar' : '/')
 const roleLabel = computed(() => user.value?.roles.includes('administrator') ? 'Администратор' : user.value?.roles.includes('manager') ? 'Управляющий' : 'Исполнитель')
 function active(to: string) { return to === '/' ? route.path === '/' : route.path.startsWith(to) }
 async function logout() { await $fetch('/api/auth/logout', { method: 'POST' }); await navigateTo('/login') }
@@ -51,11 +59,11 @@ async function logout() { await $fetch('/api/auth/logout', { method: 'POST' }); 
     <p v-if="!online" class="offline-banner">Нет соединения с интернетом. Данные CRM сейчас недоступны.</p>
 
     <aside class="desktop-sidebar">
-      <NuxtLink to="/" class="brand-mark">aparts<span>.</span></NuxtLink>
+      <NuxtLink :to="homeHref" class="brand-mark">aparts<span>.</span></NuxtLink>
       <nav class="mt-8 flex-1 space-y-6" aria-label="Основная навигация">
         <section v-for="group in groups" :key="group.label">
-          <p class="nav-group-label">{{ group.label }}</p>
-          <div class="mt-2 space-y-1">
+          <p v-if="group.label" class="nav-group-label">{{ group.label }}</p>
+          <div :class="group.label ? 'mt-2 space-y-1' : 'space-y-1'">
             <NuxtLink v-for="item in group.items" :key="item.to" :to="item.to" class="nav-item" :class="{ 'nav-item--active': active(item.to) }">
               <UIcon :name="item.icon" class="size-5" /><span>{{ item.label }}</span>
             </NuxtLink>
@@ -70,10 +78,10 @@ async function logout() { await $fetch('/api/auth/logout', { method: 'POST' }); 
 
     <div class="app-content">
       <header class="app-topbar">
-        <NuxtLink to="/" class="brand-mark lg:hidden">aparts<span>.</span></NuxtLink>
+        <NuxtLink :to="homeHref" class="brand-mark lg:hidden">aparts<span>.</span></NuxtLink>
         <div class="ml-auto flex items-center gap-1">
-          <UButton to="/notifications" color="neutral" variant="ghost" icon="i-lucide-bell" aria-label="Уведомления" />
-          <UButton class="lg:hidden" color="neutral" variant="ghost" icon="i-lucide-log-out" aria-label="Выйти" @click="logout" />
+          <UButton to="/notifications" class="topbar-action" color="neutral" variant="ghost" icon="i-lucide-bell" aria-label="Уведомления" />
+          <UButton class="topbar-action lg:hidden" color="neutral" variant="ghost" icon="i-lucide-log-out" aria-label="Выйти" @click="logout" />
         </div>
       </header>
       <main class="app-main"><slot /></main>

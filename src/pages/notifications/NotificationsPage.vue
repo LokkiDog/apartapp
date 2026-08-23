@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { EmptyState, PageHeader, StatusBadge } from '#fsd/shared/ui'
+import { useCurrentUser } from '#fsd/shared/auth'
 type Notification = { id: string; title: string; body: string; href: string; readAt: string | null; createdAt: string }
-const { data: items, refresh, status } = await useAsyncData('notifications', () => $fetch<Notification[]>('/api/notifications'))
+const currentUser = useCurrentUser()
+const { data: items, refresh, status } = await useAsyncData('notifications', () => currentUser.value ? $fetch<Notification[]>('/api/notifications') : Promise.resolve([]), { server: false, default: () => [], watch: [currentUser] })
 const formatTime = (value: string) => new Intl.DateTimeFormat('ru-RU', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
 async function read(item: Notification) { if (!item.readAt) await $fetch(`/api/notifications/${item.id}/read`, { method: 'POST' }); await refresh(); await navigateTo(item.href) }
 </script>

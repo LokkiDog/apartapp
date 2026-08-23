@@ -25,7 +25,7 @@ export type ApartmentFormType = {
 export function createApartmentFormState(initial: Partial<ApartmentFormState> = {}): ApartmentFormState {
   return {
     hotelId: '',
-    managerId: '',
+    managerIds: [],
     apartmentTypeId: '',
     name: '',
     internalCode: '',

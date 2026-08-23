@@ -3,9 +3,10 @@ import { hotelInputSchema } from '@contracts/crm'
 import { requireRole, type Actor } from '../../infrastructure/auth/actor'
 import { writeAuditLog } from '../../infrastructure/audit/log'
 import { db } from '../../infrastructure/database/client'
-import { apartments, cleaningAssignments, cleanings, hotels, tasks } from '../../infrastructure/database/schema'
+import { apartmentManagers, apartments, cleaningAssignments, cleanings, hotels, tasks } from '../../infrastructure/database/schema'
 import { fileStorage } from '../../infrastructure/storage/local'
 import { deleteApartmentRecords } from '../apartment/apartment.service'
+import { serializeApartment } from '../apartment/apartment-view'
 
 export async function listHotels(actor: Actor) {
   if (actor.roles.includes('administrator')) {
@@ -13,8 +14,9 @@ export async function listHotels(actor: Actor) {
   }
 
   const rows = await db.selectDistinct({ hotel: hotels }).from(apartments)
+    .innerJoin(apartmentManagers, eq(apartmentManagers.apartmentId, apartments.id))
     .innerJoin(hotels, eq(apartments.hotelId, hotels.id))
-    .where(and(eq(apartments.organizationId, actor.organizationId), eq(apartments.managerId, actor.id)))
+    .where(and(eq(apartments.organizationId, actor.organizationId), eq(apartmentManagers.organizationId, actor.organizationId), eq(apartmentManagers.userId, actor.id)))
   if (!actor.roles.includes('cleaner')) return rows.map(row => row.hotel)
   const assignedCleaningHotels = await db.selectDistinct({ hotel: hotels }).from(cleaningAssignments)
     .innerJoin(cleanings, eq(cleaningAssignments.cleaningId, cleanings.id))
@@ -46,8 +48,11 @@ export async function getHotel(actor: Actor, hotelId: string) {
   const hotel = await db.query.hotels.findFirst({ where: and(eq(hotels.id, hotelId), eq(hotels.organizationId, actor.organizationId)) })
   if (!hotel) throw createError({ statusCode: 404, statusMessage: 'Отель не найден' })
   if (!actor.roles.includes('administrator')) {
-    const allowed = await db.query.apartments.findFirst({ where: and(eq(apartments.hotelId, hotelId), eq(apartments.managerId, actor.id)) })
-    if (!allowed) {
+    const allowed = await db.select({ id: apartments.id }).from(apartments)
+      .innerJoin(apartmentManagers, eq(apartmentManagers.apartmentId, apartments.id))
+      .where(and(eq(apartments.hotelId, hotelId), eq(apartments.organizationId, actor.organizationId), eq(apartmentManagers.organizationId, actor.organizationId), eq(apartmentManagers.userId, actor.id)))
+      .limit(1)
+    if (!allowed.length) {
       const cleaningAccess = await db.select({ id: cleanings.id }).from(cleaningAssignments).innerJoin(cleanings, eq(cleaningAssignments.cleaningId, cleanings.id)).innerJoin(apartments, eq(cleanings.apartmentId, apartments.id)).where(and(eq(cleaningAssignments.cleanerId, actor.id), eq(apartments.hotelId, hotelId))).limit(1)
       const taskAccess = await db.select({ id: tasks.id }).from(tasks).innerJoin(apartments, eq(tasks.apartmentId, apartments.id)).where(and(eq(tasks.assigneeId, actor.id), eq(apartments.hotelId, hotelId))).limit(1)
       if (!cleaningAccess.length && !taskAccess.length) throw createError({ statusCode: 403, statusMessage: 'Нет доступа к отелю' })
@@ -99,7 +104,10 @@ export async function listHotelApartments(actor: Actor, hotelId: string) {
   return db.query.apartments.findMany({
     where: actor.roles.includes('administrator')
       ? and(eq(apartments.hotelId, hotelId), eq(apartments.organizationId, actor.organizationId))
-      : and(eq(apartments.hotelId, hotelId), eq(apartments.managerId, actor.id)),
-    with: { manager: true, type: true }
+      : and(eq(apartments.hotelId, hotelId), eq(apartments.organizationId, actor.organizationId)),
+    with: { managerAssignments: { with: { manager: { columns: { id: true, name: true } } } }, type: true }
   })
+    .then(rows => actor.roles.includes('administrator')
+      ? rows.map(serializeApartment)
+      : rows.filter(apartment => apartment.managerAssignments.some(assignment => assignment.userId === actor.id)).map(serializeApartment))
 }

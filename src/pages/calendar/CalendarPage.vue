@@ -13,6 +13,7 @@ import { createStayAgenda, stayAgendaQueryFrom, type StayAgendaStatus } from './
 import { stayCleaningHref, stayCleaningPresentation } from './model/stay-cleaning'
 
 type CalendarView = 'agenda' | 'week' | 'month'
+type CleaningAssignmentFilter = 'all' | 'assigned' | 'unassigned'
 type StayForm = {
   apartmentId: string
   checkInOn: string
@@ -37,6 +38,7 @@ const propertyScope = reactive<PropertyScopeValue>({ scope: 'all', hotelId: 'all
 const calendarViewStorageKey = 'aparts.calendar.view'
 const calendarView = ref<CalendarView>('agenda')
 const eventsOnly = ref(false)
+const cleaningAssignmentFilter = ref<CleaningAssignmentFilter>('all')
 const cursor = ref(todayKey())
 const open = ref(false)
 const editingStay = ref<Stay | null>(null)
@@ -81,13 +83,17 @@ const formServices = computed<SpecialServiceOption[]>(() => {
   return [...available.values()]
 })
 const visibleApartments = computed(() => filterApartmentsByScope(apartments.value ?? [], selectedScope.value))
+const filteredStays = computed(() => (stays.value ?? []).filter(stay => {
+  if (cleaningAssignmentFilter.value === 'all') return true
+  return cleaningAssignmentFilter.value === 'assigned' ? Boolean(stay.cleaning?.id) : !stay.cleaning?.id
+}))
 const weekDays = computed(() => daysBetween(range.value.from, range.value.to))
 const monthDays = computed(() => daysBetween(range.value.from, range.value.to))
 const monthWeeks = computed(() => Array.from({ length: Math.ceil(monthDays.value.length / 7) }, (_, index) => monthDays.value.slice(index * 7, index * 7 + 7)))
 const monthWeekdayHeadings = computed(() => monthWeeks.value[0] ?? [])
-const agendaDays = computed(() => createStayAgenda(stays.value ?? [], todayKey()))
+const agendaDays = computed(() => createStayAgenda(filteredStays.value, todayKey()))
 const monthWeekLayouts = computed(() => assignMonthWeekLanes(
-  stays.value ?? [],
+  filteredStays.value,
   monthWeeks.value.filter(week => week.length).map(week => ({ from: week[0]!, to: addDays(week[0]!, 7) }))
 ))
 const heading = computed(() => calendarView.value === 'month'
@@ -131,13 +137,13 @@ function weekday(day: string, short = false) { return new Intl.DateTimeFormat('r
 function dayNumber(day: string) { return dateFromKey(day).getUTCDate() }
 function stayArrives(stay: Stay, day: string) { return stay.checkInOn === day }
 function stayDeparts(stay: Stay, day: string) { return stay.checkOutOn === day }
-function staysForApartmentWeek(apartmentId: string) { return (stays.value ?? []).filter(stay => stay.apartmentId === apartmentId && stay.checkInOn < range.value.to && stay.checkOutOn >= range.value.from) }
+function staysForApartmentWeek(apartmentId: string) { return filteredStays.value.filter(stay => stay.apartmentId === apartmentId && stay.checkInOn < range.value.to && stay.checkOutOn >= range.value.from) }
 function weekSegmentsForApartment(apartmentId: string) { return createWeekSegments(staysForApartmentWeek(apartmentId), range.value.from, range.value.to) }
 function isStayDateDisabled(date: DateValue) {
   if (!form.apartmentId) return false
   const day = date.toString()
   const selectedStart = form.checkInOn
-  return (stays.value ?? [])
+  return filteredStays.value
     .filter(stay => stay.apartmentId === form.apartmentId && stay.id !== editingStay.value?.id)
     .some(stay => selectedStart
       ? day > stay.checkInOn && day < stay.checkOutOn
@@ -145,13 +151,13 @@ function isStayDateDisabled(date: DateValue) {
 }
 function segmentGrid(segment: CalendarStaySegment<Stay>, lane?: number) { return { gridColumn: `${segment.startHalf + 1} / ${segment.endHalf + 1}`, ...(lane === undefined ? {} : { gridRow: String(lane + 1) }) } }
 function weekMarkerGrid(value: string) { const dayIndex = weekDays.value.indexOf(value); return { gridColumn: `${dayIndex * 2 + 1} / span 2` } }
-function monthMarkerEntries(day: string) { return (stays.value ?? []).filter(stay => stayArrives(stay, day) || stayDeparts(stay, day)) }
+function monthMarkerEntries(day: string) { return filteredStays.value.filter(stay => stayArrives(stay, day) || stayDeparts(stay, day)) }
 function monthMarkerLabel(stay: Stay, day: string) { return `${stayArrives(stay, day) ? 'Заезд' : 'Выезд'} · ${stay.apartment.name}` }
-function agendaDateLabel(day: string) {
+function agendaDateLabel(day: string, compact = false) {
   const today = todayKey()
   const tomorrow = addDays(today, 1)
   const formatted = new Intl.DateTimeFormat('ru-RU', {
-    weekday: 'long',
+    ...(compact ? {} : { weekday: 'long' as const }),
     day: 'numeric',
     month: 'long',
     ...(day.slice(0, 4) === today.slice(0, 4) ? {} : { year: 'numeric' as const }),
@@ -180,6 +186,13 @@ function agendaGuestLabel(stay: Stay) {
   const mod10 = count % 10
   const word = mod100 >= 11 && mod100 <= 14 ? 'гостей' : mod10 === 1 ? 'гость' : mod10 >= 2 && mod10 <= 4 ? 'гостя' : 'гостей'
   return [stay.guestName, `${count} ${word}`].filter(Boolean).join(' · ')
+}
+function agendaGuestCountLabel(stay: Stay) {
+  const count = stay.adultCount + stay.childCount
+  const mod100 = count % 100
+  const mod10 = count % 10
+  const word = mod100 >= 11 && mod100 <= 14 ? 'гостей' : mod10 === 1 ? 'гость' : mod10 >= 2 && mod10 <= 4 ? 'гостя' : 'гостей'
+  return `${count} ${word}`
 }
 function isMonthWeekExpanded(weekKey: string) { return expandedMonthWeeks.value.has(weekKey) }
 function toggleMonthWeek(weekKey: string) {
@@ -284,6 +297,13 @@ async function saveStay() {
         scope-label="Показывать"
         class="calendar-controls__scope"
       />
+      <UFormField label="Уборка" class="calendar-controls__cleaning-filter">
+        <USelect v-model="cleaningAssignmentFilter" :items="[
+          { label: 'Все заезды', value: 'all' },
+          { label: 'Назначено', value: 'assigned' },
+          { label: 'Не назначено', value: 'unassigned' }
+        ]" class="w-full" />
+      </UFormField>
     </div>
 
     <div v-if="status === 'pending'" class="grid gap-3"><USkeleton v-for="item in 6" :key="item" class="h-20 rounded-2xl" /></div>
@@ -291,10 +311,13 @@ async function saveStay() {
     <EmptyState v-else-if="!scopeReady" icon="i-lucide-list-filter" title="Выберите область календаря" :description="propertyScope.scope === 'hotel' ? 'Выберите апарт-отель, чтобы показать его заезды.' : 'Выберите хотя бы один апартамент, чтобы показать его заезды.'" />
 
     <div v-else-if="calendarView === 'agenda' && agendaDays.length" class="stay-agenda">
-      <UCollapsible v-for="day in agendaDays" :key="day.date" as="section" :default-open="true" class="stay-agenda-day surface">
+      <UCollapsible v-for="(day, dayIndex) in agendaDays" :key="day.date" as="section" :default-open="dayIndex === 0" class="stay-agenda-day surface">
         <template #default="{ open }">
           <button type="button" class="stay-agenda-day__header">
-            <div><h2>{{ agendaDateLabel(day.date) }}</h2><p>{{ agendaEventCount(day.totalCount) }}</p></div>
+            <div class="stay-agenda-day__date">
+              <h2><span class="stay-agenda-day__date-full">{{ agendaDateLabel(day.date) }}</span><span class="stay-agenda-day__date-compact">{{ agendaDateLabel(day.date, true) }}</span></h2>
+              <p>{{ agendaEventCount(day.totalCount) }}</p>
+            </div>
             <div class="stay-agenda-day__controls">
               <div class="stay-agenda-day__summary" aria-label="Сводка за день">
                 <span class="stay-agenda-count stay-agenda-count--departure" :aria-label="`Выездов: ${day.counts.departure}`"><UIcon name="i-lucide-log-out" class="size-3.5" />{{ day.counts.departure }}</span>
@@ -307,22 +330,27 @@ async function saveStay() {
         </template>
         <template #content>
           <div class="stay-agenda-day__content">
-            <section v-for="category in day.categories" :key="category.status" class="stay-agenda-category" :class="`stay-agenda-category--${category.status}`">
+            <section v-for="category in day.categories.filter(category => category.items.length)" :key="category.status" class="stay-agenda-category" :class="`stay-agenda-category--${category.status}`">
               <header class="stay-agenda-category__header">
                 <span class="stay-agenda-category__icon"><UIcon :name="agendaCategory(category.status).icon" class="size-5" /></span>
                 <h3>{{ agendaCategory(category.status).label }}</h3>
                 <span class="stay-agenda-category__count">{{ category.items.length }}</span>
               </header>
-              <p v-if="!category.items.length" class="stay-agenda-category__empty">{{ agendaCategory(category.status).emptyLabel }}</p>
-              <div v-else class="stay-agenda-category__items">
+              <div class="stay-agenda-category__items">
                 <article v-for="item in category.items" :key="`${day.date}-${item.stay.id}-${item.status}`" class="stay-agenda-item">
                   <div class="stay-agenda-item__content">
-                    <p class="stay-agenda-item__apartment">{{ item.stay.apartment.name }} <span>· {{ item.stay.apartment.hotel.name }}</span></p>
-                    <p class="stay-agenda-item__meta"><span>{{ agendaGuestLabel(item.stay) }}</span><span>{{ formatDate(item.stay.checkInOn) }} → {{ formatDate(item.stay.checkOutOn) }}</span></p>
+                    <div class="stay-agenda-item__title-row">
+                      <p class="stay-agenda-item__apartment">{{ item.stay.apartment.name }} <span>· {{ item.stay.apartment.hotel.name }}</span></p>
+                      <span class="stay-agenda-item__guest-count">{{ agendaGuestCountLabel(item.stay) }}</span>
+                    </div>
+                    <p class="stay-agenda-item__meta">
+                      <span class="stay-agenda-item__guest-details">{{ agendaGuestLabel(item.stay) }}</span>
+                      <span v-if="item.stay.guestName" class="stay-agenda-item__guest-name">{{ item.stay.guestName }}</span>
+                      <span class="stay-agenda-item__dates">{{ formatDate(item.stay.checkInOn) }} → {{ formatDate(item.stay.checkOutOn) }}</span>
+                    </p>
                   </div>
                   <div class="stay-agenda-item__actions">
                     <NuxtLink v-if="user?.roles.includes('administrator')" :to="cleaningHref(item.stay)" class="stay-cleaning-indicator" :class="cleaningPresentation(item.stay).className" :title="cleaningPresentation(item.stay).label" :aria-label="cleaningPresentation(item.stay).label"><UIcon :name="cleaningPresentation(item.stay).icon" class="size-4" /></NuxtLink>
-                    <span v-else class="stay-cleaning-indicator" :class="cleaningPresentation(item.stay).className" :title="cleaningPresentation(item.stay).label" role="img" :aria-label="cleaningPresentation(item.stay).label"><UIcon :name="cleaningPresentation(item.stay).icon" class="size-4" /></span>
                     <UButton v-if="canEditStays" color="neutral" variant="ghost" icon="i-lucide-pencil" class="stay-agenda-action" :aria-label="`Изменить заезд ${item.stay.apartment.name}`" @click="openEdit(item.stay)" />
                     <UButton v-if="user?.roles.includes('administrator')" color="error" variant="ghost" icon="i-lucide-trash-2" class="stay-agenda-action" :aria-label="`Удалить заезд ${item.stay.apartment.name}`" @click="openDelete(item.stay)" />
                   </div>

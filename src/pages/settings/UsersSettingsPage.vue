@@ -6,7 +6,7 @@ const currentUser = useCurrentUser()
 if (!currentUser.value?.roles.includes('administrator')) await navigateTo('/')
 
 type Member = { id: string; name: string; email: string; roles: string[]; status: string }
-const { data: users, refresh, status } = await useAsyncData('settings-users', () => $fetch<Member[]>('/api/users'))
+const { data: users, refresh, status } = await useAsyncData('settings-users', () => currentUser.value ? $fetch<Member[]>('/api/users') : Promise.resolve([]), { server: false, default: () => [], watch: [currentUser] })
 const open = ref(false)
 const pending = ref(false)
 const error = ref('')

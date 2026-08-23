@@ -30,7 +30,6 @@ const activeHotels = computed(() => props.hotels.filter(hotel => hotel.status ==
 const activeManagers = computed(() => props.managers.filter(member => member.status === 'active' && member.roles.includes('manager')))
 const missingReferences = computed(() => [
   activeHotels.value.length ? null : { label: 'Добавить отель', to: '/hotels' },
-  activeManagers.value.length ? null : { label: 'Добавить управляющего', to: '/settings/users' },
   props.apartmentTypes.length ? null : { label: 'Добавить тип и тариф', to: '/settings/apartment-types' }
 ].filter((item): item is { label: string; to: string } => Boolean(item)))
 const canSubmit = computed(() => missingReferences.value.length === 0 && !pending.value)
@@ -66,7 +65,7 @@ async function save(event: FormSubmitEvent<ApartmentInput>) {
       title="Сначала заполните необходимые справочники"
     >
       <template #description>
-        <p class="text-sm">Для апартамента нужны активный отель, управляющий и тип с тарифом.</p>
+        <p class="text-sm">Для апартамента нужны активный отель и тип с тарифом. Управляющих можно назначить позже.</p>
         <div class="mt-3 flex flex-wrap gap-2">
           <UButton
             v-for="item in missingReferences"
@@ -132,13 +131,14 @@ async function save(event: FormSubmitEvent<ApartmentInput>) {
       </div>
 
       <div class="apartment-form-fields apartment-form-fields--two mt-5">
-        <UFormField name="managerId" label="Управляющий" required>
+        <UFormField name="managerIds" label="Управляющие" help="Можно выбрать несколько управляющих или оставить поле пустым.">
           <USelect
-            v-model="form.managerId"
+            v-model="form.managerIds"
             :items="activeManagers.map(member => ({ label: member.name, value: member.id }))"
+            multiple
             class="w-full"
             size="xl"
-            placeholder="Выберите управляющего"
+            placeholder="Выберите управляющих"
           />
         </UFormField>
         <UFormField name="apartmentTypeId" label="Тип апартамента" required>

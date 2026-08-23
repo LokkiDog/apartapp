@@ -16,8 +16,9 @@ const router = useRouter()
 const currentUser = useCurrentUser()
 const id = String(route.params.id)
 const isAdministrator = computed(() => Boolean(currentUser.value?.roles.includes('administrator')))
-const isManager = computed(() => Boolean(currentUser.value?.roles.includes('manager')))
-const { data: work, status, refresh } = await useAsyncData(`work-detail-${props.kind}-${id}`, () => $fetch<Cleaning | Task>(`/api/${props.kind}s/${id}`), { server: false })
+const workRequest = await useAsyncData(`work-detail-${props.kind}-${id}`, () => currentUser.value ? $fetch<Cleaning | Task>(`/api/${props.kind}s/${id}`) : Promise.resolve(null), { server: false, default: () => null, watch: [currentUser] })
+const work = workRequest.data as Ref<Cleaning | Task | null>
+const { status, refresh } = workRequest
 const inventoryReports = ref<InventoryItem[]>([])
 const inventoryLoaded = ref(false)
 const attachments = ref<Array<{ id: string; fileName: string; mimeType: string }>>([])
@@ -37,9 +38,8 @@ const assignedToCurrent = computed(() => props.kind === 'cleaning'
 const canProgress = computed(() => Boolean(work.value && !['completed', 'canceled'].includes(work.value.status) && (isAdministrator.value || assignedToCurrent.value)))
 const canComplete = computed(() => canProgress.value)
 const inventoryEditable = computed(() => Boolean(isAdministrator.value && cleaning.value?.status === 'completed'))
-const managesApartment = computed(() => Boolean(work.value && isManager.value && work.value.apartment.managerId === currentUser.value?.id))
-const canStock = computed(() => Boolean(work.value && (isAdministrator.value || (!isManager.value && assignedToCurrent.value))))
-const canManage = computed(() => Boolean(isAdministrator.value || (props.kind === 'task' && managesApartment.value)))
+const canStock = computed(() => Boolean(work.value && (isAdministrator.value || assignedToCurrent.value)))
+const canManage = computed(() => isAdministrator.value)
 const statusLabels: Record<string, string> = { unassigned: 'Без исполнителя', assigned: 'Назначено', in_progress: 'В работе', completed: 'Завершено', canceled: 'Отменено', open: 'Открыта' }
 const statusTones: Record<string, 'neutral' | 'success' | 'warning' | 'danger' | 'info'> = { unassigned: 'warning', assigned: 'info', in_progress: 'warning', completed: 'success', canceled: 'neutral', open: 'info' }
 
@@ -61,7 +61,7 @@ onMounted(() => {
 })
 
 function title() { return props.kind === 'cleaning' ? `Уборка · ${cleaning.value?.apartment.name ?? ''}` : task.value?.title ?? 'Задача' }
-function subtitle() { return props.kind === 'cleaning' ? `${cleaning.value?.apartment.hotel.name ?? ''} · ${cleaning.value?.apartment.hotel.address ?? ''}` : `${task.value?.apartment.name ?? ''} · ${task.value?.apartment.hotel.name ?? ''}` }
+function subtitle() { return props.kind === 'cleaning' ? cleaning.value?.apartment.hotel.name ?? '' : `${task.value?.apartment.name ?? ''} · ${task.value?.apartment.hotel.name ?? ''}` }
 function checklist() { return work.value?.checklist ?? [] }
 function cleanerNames() { return cleaning.value?.assignments.map(item => item.cleaner.name).join(', ') || 'Исполнитель не назначен' }
 function draftBody(payload: ProgressPayload) { return { checklist: payload.checklist, comment: payload.comment, hasProblem: payload.hasProblem, problemDescription: payload.problemDescription, inventoryReports: props.kind === 'cleaning' && inventoryLoaded.value ? payload.inventoryReports : undefined } }
@@ -127,23 +127,28 @@ function requestComplete() {
 </script>
 
 <template>
-  <section class="page-wrap max-w-4xl space-y-5">
+  <section class="work-detail-page page-wrap max-w-4xl space-y-5">
     <UButton to="/work" color="neutral" variant="ghost" icon="i-lucide-arrow-left">Назад к работам</UButton>
     <div v-if="status === 'pending'" class="grid gap-4"><USkeleton class="h-36 rounded-2xl" /><USkeleton class="h-64 rounded-2xl" /></div>
     <template v-else-if="work">
-      <PageHeader :title="title()" :description="subtitle()">
+      <PageHeader class="work-detail-header" :title="title()" :description="subtitle()">
         <template #actions><StatusBadge :label="statusLabels[work.status] ?? work.status" :tone="statusTones[work.status] ?? 'neutral'" /></template>
       </PageHeader>
-      <section class="surface grid gap-4 p-5 sm:grid-cols-3 sm:p-6">
-        <div><p class="detail-label">Дата</p><p class="font-semibold">{{ 'scheduledOn' in work && work.scheduledOn ? formatDate(work.scheduledOn) : 'Без даты' }}</p></div>
+      <section class="work-detail-summary surface grid grid-cols-2 gap-x-4 gap-y-5 p-5 sm:grid-cols-3 sm:p-6">
+        <div><p class="detail-label">Дата</p><p class="font-semibold">{{ 'scheduledOn' in work ? formatDate(work.scheduledOn) : task?.dueOn ? formatDate(task.dueOn) : 'Без срока' }}</p></div>
         <div><p class="detail-label">Исполнитель</p><p class="font-semibold">{{ props.kind === 'cleaning' ? cleanerNames() : task?.assignee?.name ?? 'Не назначен' }}</p></div>
         <div><p class="detail-label">Апартамент</p><p class="font-semibold">{{ work.apartment.name }}</p></div>
         <div v-if="props.kind === 'cleaning' && cleaning?.tariffSnapshot.ownerTotalEur !== undefined"><p class="detail-label">Стоимость</p><p class="font-semibold tabular-nums">{{ formatEuro(cleaning.tariffSnapshot.ownerTotalEur) }}</p></div>
         <div v-if="props.kind === 'cleaning' && cleaning?.tariffSnapshot.cleanerPoolEur !== undefined"><p class="detail-label">Выплата исполнителю</p><p class="font-semibold tabular-nums">{{ formatEuro(cleaning.tariffSnapshot.cleanerPoolEur) }}</p></div>
       </section>
       <section v-if="attachments.length" class="surface p-5 sm:p-6"><div class="mb-3 flex items-center gap-2"><UIcon name="i-lucide-paperclip" class="size-5 text-[var(--color-primary)]" /><h2 class="font-semibold">Фотографии</h2></div><div class="flex flex-wrap gap-2"><a v-for="attachment in attachments" :key="attachment.id" :href="`/api/attachments/${attachment.id}/file`" target="_blank" rel="noreferrer" class="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[var(--color-surface-muted)] px-3 text-sm font-medium hover:bg-[var(--color-primary-soft)]"><UIcon name="i-lucide-image" class="size-4" />{{ attachment.fileName }}</a></div></section>
-      <WorkProgressForm :key="work.id" :kind="props.kind" :checklist="work.checklist" :comment="work.comment" :has-problem="work.hasProblem" :problem-description="work.problemDescription" :inventory-reports="inventoryReports" :editable="canProgress" :inventory-editable="inventoryEditable" :can-complete="canComplete" :can-stock="canStock" :busy="pending" :error="error" :finish-hint="finishHint" @save="payload => saveProgress(payload)" @complete="payload => saveProgress(payload, true)" @save-inventory="saveInventoryOnly" @stock="quickStock" />
-      <div v-if="canManage" class="flex flex-wrap gap-2"><UButton v-if="props.kind === 'cleaning'" :to="`/work?cleaningId=${encodeURIComponent(id)}`" color="neutral" variant="soft" icon="i-lucide-pencil">Изменить уборку</UButton><UButton v-else :to="`/work?taskId=${encodeURIComponent(id)}`" color="neutral" variant="soft" icon="i-lucide-pencil">Изменить задачу</UButton><UButton v-if="props.kind === 'task' && !['completed', 'canceled'].includes(work.status)" color="neutral" variant="soft" icon="i-lucide-ban" @click="cancelTask">Отменить</UButton><UButton v-if="isAdministrator" color="error" variant="soft" icon="i-lucide-trash-2" @click="deleteOpen = true">Удалить</UButton></div>
+      <WorkProgressForm :key="work.id" :kind="props.kind" :checklist="work.checklist" :comment="work.comment" :has-problem="work.hasProblem" :problem-description="work.problemDescription" :inventory-reports="inventoryReports" :editable="canProgress" :inventory-editable="inventoryEditable" :can-complete="canComplete" :can-stock="canStock" :busy="pending" :error="error" :finish-hint="finishHint" @save="payload => saveProgress(payload)" @complete="payload => saveProgress(payload, true)" @save-inventory="saveInventoryOnly" @stock="quickStock">
+        <template v-if="props.kind === 'cleaning' && canManage" #actions-left>
+          <UButton color="error" variant="soft" icon="i-lucide-trash-2" aria-label="Удалить уборку" @click="deleteOpen = true" />
+          <UButton :to="`/work?cleaningId=${encodeURIComponent(id)}`" color="neutral" variant="soft" icon="i-lucide-pencil" aria-label="Изменить уборку" />
+        </template>
+      </WorkProgressForm>
+      <div v-if="canManage && (props.kind === 'task' || !canProgress)" class="work-detail-manage-actions"><UButton v-if="props.kind === 'cleaning'" :to="`/work?cleaningId=${encodeURIComponent(id)}`" color="neutral" variant="soft" icon="i-lucide-pencil" aria-label="Изменить уборку" /><UButton v-else :to="`/work?taskId=${encodeURIComponent(id)}`" color="neutral" variant="soft" icon="i-lucide-pencil">Изменить задачу</UButton><UButton v-if="props.kind === 'task' && !['completed', 'canceled'].includes(work.status)" color="neutral" variant="soft" icon="i-lucide-ban" @click="cancelTask">Отменить</UButton><UButton v-if="isAdministrator" color="error" variant="soft" icon="i-lucide-trash-2" :aria-label="props.kind === 'cleaning' ? 'Удалить уборку' : undefined" @click="deleteOpen = true">{{ props.kind === 'cleaning' ? undefined : 'Удалить' }}</UButton></div>
     </template>
     <EmptyState v-else icon="i-lucide-search-x" title="Работа не найдена" description="Возможно, она была удалена или у вас больше нет доступа." />
     <USlideover v-model:open="stockOpen" title="Списать расходник"><template #body><form class="form-grid" @submit.prevent="recordUsage"><UFormField label="Расходник"><USelect v-model="usageForm.consumableId" :items="stockItems.map(item => ({ label: `${item.consumable.name} · осталось ${item.quantity} ${item.consumable.unit}`, value: item.consumable.id }))" required /></UFormField><UFormField label="Количество"><UInput v-model.number="usageForm.quantity" type="number" min=".001" step=".001" required /></UFormField><UFormField label="Комментарий"><UInput v-model="usageForm.note" /></UFormField><div class="form-actions"><UButton color="neutral" variant="ghost" @click="stockOpen = false">Отмена</UButton><UButton type="submit" :loading="pending">Списать</UButton></div></form></template></USlideover>

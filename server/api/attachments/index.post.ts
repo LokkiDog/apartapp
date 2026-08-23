@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { and, eq } from 'drizzle-orm'
-import { requireActor } from '../../infrastructure/auth/actor'
+import { canAccessAssignedWork, requireActor } from '../../infrastructure/auth/actor'
 import { db } from '../../infrastructure/database/client'
 import { apartments, attachments, cleanings, tasks } from '../../infrastructure/database/schema'
 import { fileStorage } from '../../infrastructure/storage/local'
@@ -23,13 +23,13 @@ export default defineEventHandler(async event => {
       return actor.roles.includes('administrator')
     }
     if (entityType === 'cleaning') {
-      const cleaning = await db.query.cleanings.findFirst({ where: and(eq(cleanings.id, entityId), eq(cleanings.organizationId, actor.organizationId)), with: { apartment: true, assignments: true } })
+      const cleaning = await db.query.cleanings.findFirst({ where: and(eq(cleanings.id, entityId), eq(cleanings.organizationId, actor.organizationId)), with: { assignments: true } })
       if (!cleaning) throw createError({ statusCode: 404, statusMessage: 'Уборка не найдена' })
-      return actor.roles.includes('administrator') || cleaning.apartment.managerId === actor.id || cleaning.assignments.some(item => item.cleanerId === actor.id)
+      return cleaning.assignments.some(item => canAccessAssignedWork(actor, item.cleanerId))
     }
-    const task = await db.query.tasks.findFirst({ where: and(eq(tasks.id, entityId), eq(tasks.organizationId, actor.organizationId)), with: { apartment: true } })
+    const task = await db.query.tasks.findFirst({ where: and(eq(tasks.id, entityId), eq(tasks.organizationId, actor.organizationId)) })
     if (!task) throw createError({ statusCode: 404, statusMessage: 'Задача не найдена' })
-    return actor.roles.includes('administrator') || task.apartment.managerId === actor.id || task.assigneeId === actor.id
+    return canAccessAssignedWork(actor, task.assigneeId)
   })()
   if (!allowed) throw createError({ statusCode: 403, statusMessage: 'Нет доступа к файлу' })
   const fileName = file.filename || 'photo.jpg'
