@@ -12,8 +12,8 @@ Mobile-first CRM для управления апартаментами в Ба�
 
 ## Production
 
-Production работает в Docker Compose за общим edge Nginx на
-`https://aparts.izvekov-alex.ru`. Образ приложения собирается на Node 22,
+Production работает в Docker Compose за host Nginx на отдельном VPS по адресу
+`https://crm.aparts-bansko.com`. Образ приложения собирается на Node 22,
 PostgreSQL и фотографии хранятся в отдельных Docker volumes, а миграции
 выполняются одноразовым контейнером перед запуском новой версии.
 

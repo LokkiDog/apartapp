@@ -1,140 +1,160 @@
 # Production deployment
 
-Aparts CRM разворачивается вручную по SSH на текущем VPS и доступна по адресу
-`https://aparts.izvekov-alex.ru`. Контейнер приложения не публикует порт на
-хосте: общий edge Nginx обращается к нему как к `aparts-app:3000` через внешнюю
-Docker-сеть `main-network`.
+Aparts CRM разворачивается вручную по SSH на отдельном VPS и доступна по адресу
+`https://crm.aparts-bansko.com`. PostgreSQL и Nuxt/Nitro работают в Docker.
+Приложение публикуется только на loopback-адресе `127.0.0.1:3000`, поэтому
+напрямую из интернета доступны только host Nginx на портах 80/443 и SSH.
 
-## Перед первым запуском
+## DNS и подготовка VPS
 
-Проверьте фактическую конфигурацию VPS до изменения общего proxy:
+Создайте A-запись `crm.aparts-bansko.com` на публичный IPv4 нового VPS.
+Добавляйте AAAA только если на VPS настроен IPv6. Дождитесь распространения DNS:
 
 ```sh
-docker ps --format 'table {{.Names}}\t{{.Image}}\t{{.Ports}}'
-docker network inspect main-network
-docker exec edge-nginx nginx -T
-docker inspect edge-nginx --format '{{json .Mounts}}'
+dig +short A crm.aparts-bansko.com
+dig +short AAAA crm.aparts-bansko.com
 ```
 
-Эти команды должны подтвердить имя edge-контейнера, наличие `main-network`,
-каталог Nginx-конфигураций, mounts `/etc/letsencrypt` и `/var/www/certbot`.
-Не изменяйте Compose и checkout Flow Music при добавлении Aparts CRM.
-
-Создайте DNS A-запись `aparts.izvekov-alex.ru` на IPv4 VPS. Добавляйте AAAA
-только когда VPS действительно принимает IPv6-трафик. Перед выпуском
-сертификата проверьте, что запись уже разрешается в адрес сервера:
+На Ubuntu/Debian установите Docker Engine с Compose plugin по официальной
+инструкции Docker, затем host Nginx и Certbot:
 
 ```sh
-dig +short A aparts.izvekov-alex.ru
-dig +short AAAA aparts.izvekov-alex.ru
+sudo apt update
+sudo apt install -y nginx certbot python3-certbot-nginx
+docker --version
+docker compose version
 ```
 
-## Checkout и секреты
-
-Пример использует `/opt/aparts`; каталог можно заменить, если все дальнейшие
-команды выполняются из фактического checkout:
+Если используется UFW, сначала сохраните SSH-доступ и только затем включайте
+firewall:
 
 ```sh
-git clone https://github.com/LokkiDog/apartapp.git /opt/aparts
+sudo ufw allow OpenSSH
+sudo ufw allow 'Nginx Full'
+sudo ufw enable
+sudo ufw status
+```
+
+Не открывайте наружу порты 3000 и 5432.
+
+## Checkout и production-секреты
+
+Пример использует `/opt/aparts`; замените путь, если checkout уже находится в
+другом каталоге:
+
+```sh
+sudo git clone https://github.com/LokkiDog/apartapp.git /opt/aparts
+sudo chown -R "$USER":"$USER" /opt/aparts
 cd /opt/aparts
 cp .env.production.example .env.production
 chmod 600 .env.production
 ```
 
-Заполните `.env.production`. Файл игнорируется Git и не должен попадать в
-коммиты, логи или сообщения. Обязательные секреты:
+Если `.env.production` уже существует, не перезаписывайте его example-файлом.
+Файл игнорируется Git и не должен попадать в коммиты или сообщения.
 
-- `POSTGRES_PASSWORD` и совпадающий с ним URL-encoded пароль в `DATABASE_URL`;
+Обязательные значения:
+
+- `POSTGRES_PASSWORD` и тот же URL-encoded пароль в `DATABASE_URL`;
 - `NUXT_SESSION_PASSWORD` длиной не менее 32 символов;
 - email и надежный пароль первого администратора;
 - учетные данные внешнего SMTP;
-- публичный и приватный VAPID-ключи.
+- публичный и приватный VAPID-ключи;
+- `NUXT_PUBLIC_APP_URL=https://crm.aparts-bansko.com`.
 
-Сгенерировать секрет сессии и VAPID-ключи можно локально:
+Для пароля PostgreSQL удобно использовать URL-safe hex, чтобы не кодировать
+спецсимволы отдельно:
 
 ```sh
+openssl rand -hex 32
 openssl rand -base64 48
-npx web-push generate-vapid-keys
+docker run --rm node:22-alpine sh -c "npx --yes web-push generate-vapid-keys"
 ```
 
-Для STARTTLS используйте `SMTP_PORT=587` и `SMTP_SECURE=false`. Для SMTPS
-используйте `SMTP_PORT=465` и `SMTP_SECURE=true`. `SMTP_USER` и
-`SMTP_PASSWORD` должны быть заданы вместе. `NUXT_PUBLIC_APP_URL` должен
-оставаться равным `https://aparts.izvekov-alex.ru`.
+Первое значение используйте одновременно в `POSTGRES_PASSWORD` и
+`DATABASE_URL`, второе — как `NUXT_SESSION_PASSWORD`. Для STARTTLS задайте
+`SMTP_PORT=587`, `SMTP_SECURE=false`; для SMTPS — `SMTP_PORT=465`,
+`SMTP_SECURE=true`. `SMTP_USER` и `SMTP_PASSWORD` задаются вместе.
 
-Первый администратор создается идемпотентно при первом успешном старте. После
-его создания изменение bootstrap-пароля в `.env.production` не меняет пароль
-существующей учетной записи.
+Первый администратор создается идемпотентно при первом успешном старте.
+Последующее изменение bootstrap-пароля не меняет существующую учетную запись.
 
 ## Первый запуск и обновления
 
-Проверьте production-конфигурацию и наличие общей сети:
+Проверьте production-конфигурацию:
 
 ```sh
-docker network inspect main-network >/dev/null
 docker compose --env-file .env.production -f docker-compose.prod.yml config --quiet
 ```
 
-Для первого запуска и каждого последующего обновления выполняйте:
+Для первого запуска и каждого обновления выполняйте:
 
 ```sh
 cd /opt/aparts
 ./deploy/deploy.sh
 ```
 
-Скрипт отказывается работать с грязным checkout, выполняет fast-forward из
-`origin/main`, собирает app и migrate images, ждет PostgreSQL, останавливает
-только старый app, применяет миграции и запускает новую версию. Ошибка сборки
-не останавливает работающую версию; ошибка миграции не запускает новую.
+Скрипт требует чистый checkout на ветке `main`, выполняет fast-forward из
+`origin/main`, собирает app и migrate images, запускает PostgreSQL, применяет
+Drizzle-миграции и ждет healthy-состояния приложения. Ошибка сборки не
+останавливает текущую версию; ошибка миграции не запускает новую.
 
-Не редактируйте production checkout вручную. Все изменения должны приходить
-из Git. Миграции PostgreSQL необратимы автоматически: откат к старому commit
-допустим только при совместимой схеме данных.
-
-## Edge Nginx и TLS
-
-До выпуска сертификата поместите временный HTTP-only virtual host
-`deploy/nginx/aparts-http.conf` в фактический каталог, смонтированный в
-`/etc/nginx/conf.d` edge-контейнера. Он обслуживает ACME challenge, но не
-открывает приложение по незащищенному HTTP. Перед reload проверьте
-конфигурацию:
+Проверьте локальный endpoint до настройки Nginx:
 
 ```sh
-docker exec edge-nginx nginx -t
-docker exec edge-nginx nginx -s reload
-```
-
-Если edge уже обслуживает `/.well-known/acme-challenge/` из общего webroot,
-выпустите сертификат тем же Certbot-контейнером или host-командой, которая
-используется для существующих доменов. Эквивалентная host-команда при
-доступном `/var/www/certbot`:
-
-```sh
-certbot certonly --webroot -w /var/www/certbot -d aparts.izvekov-alex.ru
-```
-
-Если общего webroot нет, остановите edge-контейнер на короткое окно, выпустите
-сертификат через `certbot certonly --standalone`, затем сразу запустите edge.
-Не запускайте host `certbot --nginx`, когда Nginx работает внутри Docker.
-
-После появления сертификата замените временный файл полным virtual host из
-`deploy/nginx/aparts.conf`, затем повторно выполните `nginx -t` и reload.
-Полный шаблон устанавливает HTTPS-редирект, proxy-заголовки и лимит запроса
-10 МБ для приложения, которое принимает фотографии размером до 8 МБ.
-
-## Проверка и диагностика
-
-```sh
+curl --fail --show-error http://127.0.0.1:3000/api/health
 docker compose --env-file .env.production -f docker-compose.prod.yml ps
 docker compose --env-file .env.production -f docker-compose.prod.yml logs --tail=100 app
-curl --fail --show-error https://aparts.izvekov-alex.ru/api/health
-curl --fail --show-error --head https://aparts.izvekov-alex.ru/manifest.webmanifest
+```
+
+## Host Nginx и TLS
+
+Сначала установите временный HTTP virtual host:
+
+```sh
+sudo cp deploy/nginx/aparts-http.conf /etc/nginx/sites-available/aparts-crm
+sudo ln -s /etc/nginx/sites-available/aparts-crm /etc/nginx/sites-enabled/aparts-crm
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+Если symlink уже существует, повторно создавать его не нужно. После того как
+`http://crm.aparts-bansko.com/api/health` отвечает, выпустите сертификат без
+автоматического переписывания конфигурации:
+
+```sh
+sudo certbot certonly --nginx -d crm.aparts-bansko.com
+```
+
+Замените временный virtual host полной HTTPS-конфигурацией и перезагрузите
+Nginx:
+
+```sh
+sudo cp deploy/nginx/aparts.conf /etc/nginx/sites-available/aparts-crm
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+Проверьте автоматическое продление сертификата:
+
+```sh
+sudo certbot renew --dry-run
+systemctl status certbot.timer --no-pager
+```
+
+Полный Nginx-конфиг устанавливает HTTPS-редирект, стандартные proxy-заголовки
+и лимит запроса 10 МБ для фотографий размером до 8 МБ.
+
+## Финальная проверка
+
+```sh
+curl --fail --show-error https://crm.aparts-bansko.com/api/health
+curl --fail --show-error --head https://crm.aparts-bansko.com/manifest.webmanifest
 ```
 
 Healthcheck возвращает только `{ "status": "ok" }` после успешного запроса к
-PostgreSQL. Проверьте вход bootstrap-администратором и отправьте приглашение на
-контролируемый email для проверки SMTP. Убедитесь, что app имеет mount
-`aparts_uploads_data` после пересоздания контейнера.
+PostgreSQL. Затем проверьте вход bootstrap-администратором и отправьте
+приглашение на контролируемый email для проверки SMTP.
 
 Автоматические резервные копии PostgreSQL и uploads в эту конфигурацию не
 входят. До их добавления потеря Docker volumes означает потерю production-

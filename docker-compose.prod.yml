@@ -44,15 +44,12 @@ services:
       NITRO_HOST: 0.0.0.0
       PORT: 3000
       FILE_STORAGE_PATH: /app/.data/uploads
-    expose:
-      - "3000"
+    ports:
+      - "127.0.0.1:3000:3000"
     volumes:
       - uploads_data:/app/.data/uploads
     networks:
-      main-network:
-        aliases:
-          - aparts-app
-      backend:
+      - backend
     depends_on:
       postgres:
         condition: service_healthy
@@ -64,10 +61,7 @@ services:
       start_period: 20s
 
 networks:
-  main-network:
-    external: true
-  backend:
-    internal: true
+  backend: {}
 
 volumes:
   postgres_data:
