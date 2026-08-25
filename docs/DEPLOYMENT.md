@@ -145,6 +145,32 @@ systemctl status certbot.timer --no-pager
 Полный Nginx-конфиг устанавливает HTTPS-редирект, стандартные proxy-заголовки
 и лимит запроса 10 МБ для фотографий размером до 8 МБ.
 
+## Статическая заглушка основного домена
+
+Основной домен `aparts-bansko.com` обслуживается отдельным virtual host и не
+проксируется в CRM. После создания DNS A-записи на IP VPS установите пустую
+HTML-страницу и временную HTTP-конфигурацию:
+
+```sh
+sudo mkdir -p /var/www/aparts-bansko
+sudo cp deploy/site/index.html /var/www/aparts-bansko/index.html
+sudo cp deploy/nginx/aparts-site-http.conf /etc/nginx/sites-available/aparts-site
+sudo ln -s /etc/nginx/sites-available/aparts-site /etc/nginx/sites-enabled/aparts-site
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+После проверки `http://aparts-bansko.com` выпустите отдельный сертификат и
+включите HTTPS:
+
+```sh
+sudo certbot certonly --nginx -d aparts-bansko.com
+sudo cp deploy/nginx/aparts-site.conf /etc/nginx/sites-available/aparts-site
+sudo nginx -t
+sudo systemctl reload nginx
+curl --fail --show-error https://aparts-bansko.com/
+```
+
 ## Финальная проверка
 
 ```sh
