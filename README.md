@@ -17,9 +17,9 @@ Production работает в Docker Compose за host Nginx на отдель�
 PostgreSQL и фотографии хранятся в отдельных Docker volumes, а миграции
 выполняются одноразовым контейнером перед запуском новой версии.
 
-Подготовка VPS, DNS, TLS, `.env.production`, внешний SMTP и ручной сценарий
-обновления описаны в [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md). GitHub Actions и
-автоматические резервные копии в текущую схему не входят.
+Подготовка VPS, DNS, TLS, `.env.production`, внешний SMTP и автоматический
+деплой через GitHub Actions описаны в [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+Автоматические резервные копии в текущую схему не входят.
 
 ## Проверки
 
