@@ -8,6 +8,8 @@ RUN npm ci
 
 FROM dependencies AS build
 
+ENV NODE_OPTIONS=--max-old-space-size=1536
+
 COPY . .
 RUN npm run prepare && npm run build
 
