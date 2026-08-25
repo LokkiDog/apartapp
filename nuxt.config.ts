@@ -7,11 +7,13 @@ export default defineNuxtConfig({
   app: {
     head: {
       title: 'Aparts CRM',
+      viewport: 'width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover',
       meta: [
         { name: 'description', content: 'Операционная CRM для апарт-отелей' },
         { name: 'theme-color', content: '#1f5d50' },
         { name: 'mobile-web-app-capable', content: 'yes' },
         { name: 'apple-mobile-web-app-capable', content: 'yes' },
+        { name: 'apple-mobile-web-app-title', content: 'Aparts' },
         { name: 'apple-mobile-web-app-status-bar-style', content: 'default' }
       ],
       link: [

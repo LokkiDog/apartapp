@@ -52,6 +52,25 @@ jobs:
       DEPLOY_PORT: ${{ vars.DEPLOY_PORT || '22' }}
       DEPLOY_PATH: ${{ vars.DEPLOY_PATH || '/home/aparts-bansko' }}
     steps:
+      - name: Validate deployment configuration
+        env:
+          DEPLOY_SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          missing=0
+          for name in \
+            DEPLOY_HOST \
+            DEPLOY_USER \
+            DEPLOY_SSH_PRIVATE_KEY \
+            DEPLOY_KNOWN_HOSTS
+          do
+            if [ -z "${!name}" ]; then
+              echo "::error::$name is missing from the production environment secrets"
+              missing=1
+            fi
+          done
+          exit "$missing"
+
       - name: Configure SSH
         env:
           DEPLOY_SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
