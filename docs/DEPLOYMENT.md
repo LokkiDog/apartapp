@@ -153,7 +153,7 @@ HTML-страницу и временную HTTP-конфигурацию:
 
 ```sh
 sudo mkdir -p /var/www/aparts-bansko
-sudo cp deploy/site/index.html /var/www/aparts-bansko/index.html
+sudo cp deploy/site/index.html deploy/site/bansko-hero.jpg /var/www/aparts-bansko/
 sudo cp deploy/nginx/aparts-site-http.conf /etc/nginx/sites-available/aparts-site
 sudo ln -s /etc/nginx/sites-available/aparts-site /etc/nginx/sites-enabled/aparts-site
 sudo nginx -t

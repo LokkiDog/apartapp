@@ -1,9 +1,179 @@
 <!doctype html>
-<html lang="en">
+<html lang="ru">
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Aparts Bansko</title>
+    <meta
+      name="description"
+      content="Скоро здесь появится каталог апартов Aparts Bansko."
+    >
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: "Avenir Next", "Segoe UI", sans-serif;
+        --accent: #c8e36b;
+        --accent-text: #17200f;
+        --text: #f4f7f1;
+        --muted: #d4ddd2;
+        --surface: #14202a;
+        --outline: #e1f5a5;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        min-height: 100%;
+        margin: 0;
+      }
+
+      body {
+        min-width: 320px;
+        background: var(--surface);
+        color: var(--text);
+      }
+
+      .hero {
+        position: relative;
+        isolation: isolate;
+        display: grid;
+        min-height: 100dvh;
+        overflow: hidden;
+        background-image:
+          linear-gradient(90deg, rgb(11 23 32 / 0.94) 0%, rgb(11 23 32 / 0.72) 38%, rgb(11 23 32 / 0.12) 78%),
+          linear-gradient(0deg, rgb(9 18 25 / 0.35), transparent 55%),
+          url("bansko-hero.jpg");
+        background-position: center;
+        background-size: cover;
+      }
+
+      .hero__content {
+        display: flex;
+        width: min(100%, 1440px);
+        margin: 0 auto;
+        padding: clamp(32px, 6vw, 88px);
+        align-items: center;
+      }
+
+      .hero__copy {
+        width: min(100%, 760px);
+      }
+
+      .brand {
+        margin: 0 0 24px;
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        max-width: 17ch;
+        margin: 0;
+        font-size: clamp(46px, 5.5vw, 78px);
+        font-weight: 600;
+        letter-spacing: -0.055em;
+        line-height: 0.98;
+        text-wrap: balance;
+      }
+
+      .lead {
+        max-width: 540px;
+        margin: 28px 0 0;
+        color: var(--muted);
+        font-size: clamp(17px, 1.6vw, 21px);
+        line-height: 1.55;
+      }
+
+      .cta {
+        display: inline-flex;
+        min-height: 52px;
+        margin-top: 36px;
+        padding: 0 24px;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid var(--accent);
+        border-radius: 14px;
+        background: var(--accent);
+        color: var(--accent-text);
+        font-size: 16px;
+        font-weight: 700;
+        text-decoration: none;
+        white-space: nowrap;
+        transition: background-color 180ms ease, border-color 180ms ease, transform 180ms ease;
+      }
+
+      .cta:hover {
+        border-color: #d7ed8d;
+        background: #d7ed8d;
+      }
+
+      .cta:active {
+        transform: translateY(1px);
+      }
+
+      .cta:focus-visible {
+        outline: 3px solid var(--outline);
+        outline-offset: 4px;
+      }
+
+      @media (max-width: 767px) {
+        .hero {
+          background-image:
+            linear-gradient(0deg, rgb(9 20 28 / 0.96) 0%, rgb(9 20 28 / 0.72) 58%, rgb(9 20 28 / 0.2) 100%),
+            url("bansko-hero.jpg");
+          background-position: 68% center;
+        }
+
+        .hero__content {
+          padding: 28px 20px 44px;
+          align-items: end;
+        }
+
+        .brand {
+          margin-bottom: 18px;
+        }
+
+        h1 {
+          max-width: 10ch;
+          font-size: clamp(42px, 14vw, 64px);
+          line-height: 1;
+        }
+
+        .lead {
+          margin-top: 20px;
+          font-size: 17px;
+        }
+
+        .cta {
+          width: 100%;
+          margin-top: 28px;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .cta {
+          transition: none;
+        }
+      }
+    </style>
   </head>
-  <body></body>
+  <body>
+    <main class="hero">
+      <div class="hero__content">
+        <div class="hero__copy">
+          <p class="brand">Aparts Bansko</p>
+          <h1>Скоро здесь будут все наши апарты</h1>
+          <p class="lead">
+            Мы готовим удобный каталог для отдыха и жизни у подножия Пирин.
+          </p>
+          <a class="cta" href="https://crm.aparts-bansko.com">Открыть CRM</a>
+        </div>
+      </div>
+    </main>
+  </body>
 </html>
