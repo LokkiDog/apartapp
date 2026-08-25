@@ -3,6 +3,8 @@ name: aparts
 services:
   postgres:
     image: postgres:17-alpine
+    ports:
+      - "127.0.0.1:15432:5432"
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required}
