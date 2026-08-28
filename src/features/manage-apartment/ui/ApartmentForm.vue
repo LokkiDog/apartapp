@@ -9,6 +9,7 @@ import {
   type ApartmentFormState,
   type ApartmentFormType
 } from '../model/apartment-form'
+import { useI18n } from 'vue-i18n'
 
 const props = withDefaults(defineProps<{
   mode: ApartmentFormMode
@@ -23,17 +24,18 @@ const props = withDefaults(defineProps<{
 })
 
 const form = reactive<ApartmentFormState>(createApartmentFormState(props.initialValue))
+const { t } = useI18n()
 const pending = ref(false)
 const error = ref('')
 
 const activeHotels = computed(() => props.hotels.filter(hotel => hotel.status === 'active'))
 const activeManagers = computed(() => props.managers.filter(member => member.status === 'active' && member.roles.includes('manager')))
 const missingReferences = computed(() => [
-  activeHotels.value.length ? null : { label: 'Добавить отель', to: '/hotels' },
-  props.apartmentTypes.length ? null : { label: 'Добавить тип и тариф', to: '/settings/apartment-types' }
+  activeHotels.value.length ? null : { label: t('hotels.add'), to: '/hotels' },
+  props.apartmentTypes.length ? null : { label: t('apartments.addType'), to: '/settings/apartment-types' }
 ].filter((item): item is { label: string; to: string } => Boolean(item)))
 const canSubmit = computed(() => missingReferences.value.length === 0 && !pending.value)
-const submitLabel = computed(() => props.mode === 'edit' ? 'Сохранить изменения' : 'Создать апартамент')
+const submitLabel = computed(() => props.mode === 'edit' ? t('apartments.saveChanges') : t('apartments.create'))
 
 async function save(event: FormSubmitEvent<ApartmentInput>) {
   if (!canSubmit.value) return
@@ -41,14 +43,14 @@ async function save(event: FormSubmitEvent<ApartmentInput>) {
   error.value = ''
   try {
     if (props.mode === 'edit') {
-      if (!props.apartmentId) throw new Error('Не указан апартамент')
+      if (!props.apartmentId) throw new Error(t('apartments.missingApartment'))
       await $fetch(`/api/apartments/${props.apartmentId}`, { method: 'PATCH', body: event.data })
     } else {
       await $fetch('/api/apartments', { method: 'POST', body: event.data })
     }
     await navigateTo('/apartments')
   } catch (cause: any) {
-    error.value = cause?.data?.statusMessage ?? cause?.message ?? 'Не удалось сохранить апартамент'
+    error.value = cause?.data?.statusMessage ?? cause?.message ?? t('apartments.saveError')
   } finally {
     pending.value = false
   }
@@ -62,10 +64,10 @@ async function save(event: FormSubmitEvent<ApartmentInput>) {
       color="warning"
       variant="soft"
       icon="i-lucide-triangle-alert"
-      title="Сначала заполните необходимые справочники"
+      :title="t('apartments.directoriesTitle')"
     >
       <template #description>
-        <p class="text-sm">Для апартамента нужны активный отель и тип с тарифом. Управляющих можно назначить позже.</p>
+        <p class="text-sm">{{ t('apartments.directoriesDescription') }}</p>
         <div class="mt-3 flex flex-wrap gap-2">
           <UButton
             v-for="item in missingReferences"
@@ -86,34 +88,34 @@ async function save(event: FormSubmitEvent<ApartmentInput>) {
       <div class="apartment-form-section__header">
         <div class="apartment-form-section__icon"><UIcon name="i-lucide-map-pin" class="size-5" /></div>
         <div>
-          <h2 class="text-lg font-semibold">Объект и расположение</h2>
-          <p class="mt-1 text-sm text-[var(--color-muted)]">Как объект называется и где его найти внутри отеля.</p>
+          <h2 class="text-lg font-semibold">{{ t('apartments.objectLocation') }}</h2>
+          <p class="mt-1 text-sm text-[var(--color-muted)]">{{ t('apartments.objectLocationHint') }}</p>
         </div>
       </div>
 
       <div class="apartment-form-fields apartment-form-fields--two mt-5">
-        <UFormField name="name" label="Название" required>
+        <UFormField name="name" :label="t('apartments.name')" required>
           <UInput v-model="form.name" class="w-full" size="xl" placeholder="Например, Mountain View 12" autocomplete="off" />
         </UFormField>
-        <UFormField name="internalCode" label="Внутренний код" help="Уникальное короткое обозначение для команды." required>
+        <UFormField name="internalCode" :label="t('apartments.internalCode')" :help="t('apartments.internalCodeHelp')" required>
           <UInput v-model="form.internalCode" class="w-full" size="xl" placeholder="Например, MV-12" autocomplete="off" />
         </UFormField>
-        <UFormField name="hotelId" label="Апарт-отель" required>
+        <UFormField name="hotelId" :label="t('apartments.hotel')" required>
           <USelect
             v-model="form.hotelId"
             :items="activeHotels.map(hotel => ({ label: hotel.name, value: hotel.id }))"
             class="w-full"
             size="xl"
-            placeholder="Выберите отель"
+            :placeholder="t('apartments.chooseHotel')"
           />
         </UFormField>
-        <UFormField name="building" label="Корпус" help="Оставьте пустым, если в отеле нет корпусов.">
+        <UFormField name="building" :label="t('apartments.building')" :help="t('apartments.buildingHelp')">
           <UInput v-model="form.building" class="w-full" size="xl" placeholder="Например, B" autocomplete="off" />
         </UFormField>
         <UFormField
           name="locationDetails"
-          label="Расположение"
-          help="Этаж, дверь и ориентиры, которые помогут быстро найти апартамент."
+          :label="t('apartments.location')"
+          :help="t('apartments.locationHelp')"
           class="apartment-form-field--wide"
         >
           <UInput v-model="form.locationDetails" class="w-full" size="xl" placeholder="Например, 3 этаж, дверь 12, рядом с лифтом" autocomplete="off" />
@@ -125,47 +127,47 @@ async function save(event: FormSubmitEvent<ApartmentInput>) {
       <div class="apartment-form-section__header">
         <div class="apartment-form-section__icon"><UIcon name="i-lucide-sliders-horizontal" class="size-5" /></div>
         <div>
-          <h2 class="text-lg font-semibold">Параметры и управление</h2>
-          <p class="mt-1 text-sm text-[var(--color-muted)]">Ответственный, тип объекта и основные параметры размещения.</p>
+          <h2 class="text-lg font-semibold">{{ t('apartments.parameters') }}</h2>
+          <p class="mt-1 text-sm text-[var(--color-muted)]">{{ t('apartments.parametersHint') }}</p>
         </div>
       </div>
 
       <div class="apartment-form-fields apartment-form-fields--two mt-5">
-        <UFormField name="managerIds" label="Управляющие" help="Можно выбрать несколько управляющих или оставить поле пустым.">
+        <UFormField name="managerIds" :label="t('apartments.managers')" :help="t('apartments.managersHelp')">
           <USelect
             v-model="form.managerIds"
             :items="activeManagers.map(member => ({ label: member.name, value: member.id }))"
             multiple
             class="w-full"
             size="xl"
-            placeholder="Выберите управляющих"
+            :placeholder="t('apartments.managers')"
           />
         </UFormField>
-        <UFormField name="apartmentTypeId" label="Тип апартамента" required>
+        <UFormField name="apartmentTypeId" :label="t('apartments.type')" required>
           <USelect
             v-model="form.apartmentTypeId"
             :items="apartmentTypes.map(type => ({ label: type.name, value: type.id }))"
             class="w-full"
             size="xl"
-            placeholder="Выберите тип"
+            :placeholder="t('apartments.chooseType')"
           />
         </UFormField>
       </div>
 
       <div class="apartment-form-fields apartment-form-fields--two mt-5">
-        <UFormField name="capacity" label="Гостей" required>
+        <UFormField name="capacity" :label="t('apartments.guests')" required>
           <UInput v-model.number="form.capacity" class="w-full tabular-nums" size="xl" type="number" min="1" max="50" />
         </UFormField>
-        <UFormField name="rooms" label="Комнат" required>
+        <UFormField name="rooms" :label="t('apartments.rooms')" required>
           <UInput v-model.number="form.rooms" class="w-full tabular-nums" size="xl" type="number" min="1" max="20" />
         </UFormField>
       </div>
 
       <div class="apartment-form-fields apartment-form-fields--two mt-5">
-        <UFormField name="checkInTime" label="Стандартный заезд" required>
+        <UFormField name="checkInTime" :label="t('apartments.standardCheckIn')" required>
           <UInput v-model="form.checkInTime" class="w-full tabular-nums" size="xl" type="time" />
         </UFormField>
-        <UFormField name="checkOutTime" label="Стандартный выезд" required>
+        <UFormField name="checkOutTime" :label="t('apartments.standardCheckOut')" required>
           <UInput v-model="form.checkOutTime" class="w-full tabular-nums" size="xl" type="time" />
         </UFormField>
       </div>
@@ -175,11 +177,11 @@ async function save(event: FormSubmitEvent<ApartmentInput>) {
       <div class="apartment-form-section__header">
         <div class="apartment-form-section__icon"><UIcon name="i-lucide-notebook-pen" class="size-5" /></div>
         <div>
-          <h2 class="text-lg font-semibold">Инструкции для команды</h2>
-          <p class="mt-1 text-sm text-[var(--color-muted)]">Ключи, доступ и особенности, которые важно знать управляющим и исполнителям.</p>
+          <h2 class="text-lg font-semibold">{{ t('apartments.teamInstructions') }}</h2>
+          <p class="mt-1 text-sm text-[var(--color-muted)]">{{ t('apartments.teamInstructionsHint') }}</p>
         </div>
       </div>
-      <UFormField name="instructions" label="Инструкции" class="mt-5">
+      <UFormField name="instructions" :label="t('apartments.instructions')" class="mt-5">
         <UTextarea
           v-model="form.instructions"
           :rows="5"
@@ -191,10 +193,10 @@ async function save(event: FormSubmitEvent<ApartmentInput>) {
       </UFormField>
     </section>
 
-    <UAlert v-if="error" color="error" variant="soft" icon="i-lucide-circle-alert" title="Не удалось сохранить" :description="error" />
+    <UAlert v-if="error" color="error" variant="soft" icon="i-lucide-circle-alert" :title="t('apartments.saveError')" :description="error" />
 
     <div class="apartment-form-actions surface">
-      <p class="hidden text-sm text-[var(--color-muted)] sm:block">Проверьте обязательные поля перед сохранением.</p>
+      <p class="hidden text-sm text-[var(--color-muted)] sm:block">{{ t('apartments.saveRequiredHint') }}</p>
       <div class="ml-auto flex items-center gap-2">
         <UButton
           to="/apartments"
@@ -202,7 +204,7 @@ async function save(event: FormSubmitEvent<ApartmentInput>) {
           variant="ghost"
           class="min-h-11 transition-transform duration-150 ease-out active:scale-[0.96]"
         >
-          Отмена
+          {{ t('common.cancel') }}
         </UButton>
         <UButton
           type="submit"

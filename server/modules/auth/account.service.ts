@@ -17,14 +17,14 @@ async function issueToken(userId: string, type: 'invitation' | 'password_reset')
   return token
 }
 
-export async function inviteUser(input: { organizationId: string; name: string; email: string; roles: Array<'administrator' | 'manager' | 'cleaner'> }) {
+export async function inviteUser(input: { organizationId: string; name: string; email: string; roles: Array<'administrator' | 'manager' | 'cleaner'>; locale?: 'ru' | 'en' | 'he' }) {
   const email = input.email.toLowerCase()
   const existing = await db.query.users.findFirst({ where: and(eq(users.organizationId, input.organizationId), eq(users.email, email)) })
   if (existing) throw createError({ statusCode: 409, statusMessage: 'Пользователь с этим email уже существует' })
-  const [user] = await db.insert(users).values({ organizationId: input.organizationId, name: input.name, email, roles: input.roles, passwordHash: await hashPassword(randomBytes(32).toString('hex')), status: 'invited' }).returning()
+  const [user] = await db.insert(users).values({ organizationId: input.organizationId, name: input.name, email, roles: input.roles, locale: input.locale ?? 'ru', passwordHash: await hashPassword(randomBytes(32).toString('hex')), status: 'invited' }).returning()
   if (!user) throw createError({ statusCode: 500, statusMessage: 'Не удалось создать приглашение' })
   const token = await issueToken(user.id, 'invitation')
-  await sendAccountLink({ to: user.email, name: user.name, type: 'invitation', token })
+  await sendAccountLink({ to: user.email, name: user.name, type: 'invitation', token, locale: user.locale })
   return { id: user.id, email: user.email }
 }
 
@@ -32,7 +32,7 @@ export async function requestPasswordReset(email: string) {
   const user = await db.query.users.findFirst({ where: eq(users.email, email.toLowerCase()) })
   if (!user || user.status === 'blocked') return
   const token = await issueToken(user.id, 'password_reset')
-  await sendAccountLink({ to: user.email, name: user.name, type: 'password_reset', token })
+  await sendAccountLink({ to: user.email, name: user.name, type: 'password_reset', token, locale: user.locale })
 }
 
 export async function setPassword(token: string, password: string) {

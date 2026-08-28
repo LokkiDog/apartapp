@@ -8,6 +8,7 @@ import {
 } from '#fsd/features/manage-apartment'
 import { useCurrentUser } from '#fsd/shared/auth'
 import { DeleteConfirmModal, PageHeader, StatusBadge } from '#fsd/shared/ui'
+import { useI18n } from 'vue-i18n'
 
 type ApartmentRecord = ApartmentInput & {
   id: string
@@ -17,6 +18,7 @@ type ApartmentRecord = ApartmentInput & {
 const route = useRoute()
 const apartmentId = String(route.params.id)
 const currentUser = useCurrentUser()
+const { t } = useI18n()
 if (currentUser.value && !currentUser.value.roles.includes('administrator')) {
   await navigateTo('/apartments')
 }
@@ -78,9 +80,9 @@ async function uploadPhoto() {
     await $fetch('/api/attachments', { method: 'POST', body })
     uploadOpen.value = false
     photo.value = null
-    actionSuccess.value = 'Фото добавлено.'
+    actionSuccess.value = t('apartments.photo')
   } catch (cause: any) {
-    actionError.value = cause?.data?.statusMessage ?? 'Не удалось загрузить фото'
+    actionError.value = cause?.data?.statusMessage ?? t('common.error')
   } finally {
     uploadPending.value = false
   }
@@ -93,9 +95,9 @@ async function archiveApartment() {
   try {
     await $fetch(`/api/apartments/${apartmentId}/archive`, { method: 'POST' })
     await refreshApartment()
-    actionSuccess.value = 'Апартамент перемещён в архив.'
+    actionSuccess.value = t('apartments.archived')
   } catch (cause: any) {
-    actionError.value = cause?.data?.statusMessage ?? 'Не удалось архивировать апартамент'
+    actionError.value = cause?.data?.statusMessage ?? t('common.error')
   } finally {
     archivePending.value = false
   }
@@ -115,7 +117,7 @@ async function removeApartment() {
     deleteOpen.value = false
     await navigateTo('/apartments')
   } catch (cause: any) {
-    actionError.value = cause?.data?.statusMessage ?? 'Не удалось удалить апартамент'
+    actionError.value = cause?.data?.statusMessage ?? t('common.error')
   } finally {
     deletePending.value = false
   }
@@ -124,7 +126,7 @@ async function removeApartment() {
 
 <template>
   <section class="page-wrap space-y-6">
-    <PageHeader title="Редактирование апартамента" description="Измените расположение, параметры или ответственного.">
+    <PageHeader :title="t('apartments.edit')">
       <template #actions>
         <UButton
           to="/apartments"
@@ -133,7 +135,7 @@ async function removeApartment() {
           icon="i-lucide-arrow-left"
           class="min-h-11 transition-transform duration-150 ease-out active:scale-[0.96]"
         >
-          К списку
+          {{ t('nav.apartments') }}
         </UButton>
       </template>
     </PageHeader>
@@ -148,8 +150,8 @@ async function removeApartment() {
       color="error"
       variant="soft"
       icon="i-lucide-circle-alert"
-      title="Апартамент не найден"
-      description="Вернитесь к списку и выберите существующий объект."
+      :title="t('apartments.emptyTitle')"
+      :description="t('apartments.emptyDescription')"
     />
     <ApartmentForm
       v-else
@@ -165,13 +167,13 @@ async function removeApartment() {
       <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <div class="flex flex-wrap items-center gap-2">
-            <h2 class="text-lg font-semibold">Управление апартаментом</h2>
+            <h2 class="text-lg font-semibold">{{ t('apartments.edit') }}</h2>
             <StatusBadge
-              :label="apartment.status === 'active' ? 'Активен' : apartment.status === 'inactive' ? 'Неактивен' : 'В архиве'"
+              :label="apartment.status === 'active' ? t('apartments.active') : apartment.status === 'inactive' ? t('apartments.inactive') : t('apartments.archived')"
               :tone="apartment.status === 'active' ? 'success' : 'neutral'"
             />
           </div>
-          <p class="mt-1 text-sm text-[var(--color-muted)]">Фото, архивирование и удаление объекта.</p>
+          <p class="mt-1 text-sm text-[var(--color-muted)]">{{ t('apartments.photo') }}</p>
         </div>
         <UButton
           color="neutral"
@@ -180,7 +182,7 @@ async function removeApartment() {
           class="min-h-11 transition-transform duration-150 ease-out active:scale-[0.96]"
           @click="uploadOpen = true"
         >
-          Добавить фото
+          {{ t('apartments.photo') }}
         </UButton>
       </div>
 
@@ -189,8 +191,8 @@ async function removeApartment() {
 
       <div class="apartment-danger-zone">
         <div class="min-w-0">
-          <h3 class="font-semibold">Опасная зона</h3>
-          <p class="mt-1 text-sm text-[var(--color-muted)]">Эти действия меняют доступность объекта или удаляют связанные данные.</p>
+          <h3 class="font-semibold">{{ t('common.irreversible') }}</h3>
+          <p class="mt-1 text-sm text-[var(--color-muted)]">{{ t('common.irreversible') }}</p>
         </div>
         <div class="flex flex-wrap items-center gap-2">
           <UButton
@@ -202,7 +204,7 @@ async function removeApartment() {
             class="min-h-11 transition-transform duration-150 ease-out active:scale-[0.96]"
             @click="archiveApartment"
           >
-            Архивировать
+            {{ t('hotels.archive') }}
           </UButton>
           <UButton
             color="error"
@@ -211,31 +213,33 @@ async function removeApartment() {
             class="min-h-11 transition-transform duration-150 ease-out active:scale-[0.96]"
             @click="askToDelete"
           >
-            Удалить навсегда
+            {{ t('common.deleteForever') }}
           </UButton>
         </div>
       </div>
     </section>
 
-    <UModal v-model:open="uploadOpen" title="Добавить фото апартамента">
+    <UModal v-model:open="uploadOpen" :title="t('apartments.photo')">
       <template #body>
-        <form class="form-grid" @submit.prevent="uploadPhoto">
-          <UFormField label="Изображение" help="JPG, PNG или WebP">
+        <form id="apartment-photo-form" class="form-grid" @submit.prevent="uploadPhoto">
+          <UFormField :label="t('apartments.photo')" help="JPG, PNG или WebP">
             <UInput type="file" accept="image/*" required @change="selectPhoto" />
           </UFormField>
           <UAlert v-if="actionError" color="error" variant="soft" :description="actionError" />
-          <div class="form-actions">
-            <UButton color="neutral" variant="ghost" @click="uploadOpen = false">Отмена</UButton>
-            <UButton type="submit" :loading="uploadPending" :disabled="!photo">Загрузить</UButton>
-          </div>
         </form>
+      </template>
+      <template #footer>
+        <div class="form-actions form-actions--footer">
+          <UButton type="button" color="neutral" variant="ghost" @click="uploadOpen = false">{{ t('common.cancel') }}</UButton>
+          <UButton type="submit" form="apartment-photo-form" :loading="uploadPending" :disabled="!photo">{{ t('common.add') }}</UButton>
+        </div>
       </template>
     </UModal>
 
     <DeleteConfirmModal
       v-model:open="deleteOpen"
-      title="Удалить апартамент?"
-      :description="`Апартамент «${apartment?.name ?? ''}» будет удалён вместе со всеми заездами, уборками, задачами, остатками, движениями расходников, финансовыми записями и фотографиями.`"
+      :title="t('common.deleteForever')"
+      :description="t('common.irreversible')"
       :loading="deletePending"
       :error="actionError"
       @confirm="removeApartment"

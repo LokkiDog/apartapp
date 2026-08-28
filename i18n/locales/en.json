@@ -1,0 +1,113 @@
+{
+  "common": {
+    "language": "Language",
+    "russian": "Русский",
+    "english": "English",
+    "hebrew": "עברית",
+    "checklistLinen": "Change linen and towels",
+    "checklistBathroom": "Check bathroom and kitchen",
+    "checklistSupplies": "Check consumables",
+    "selectedCleaners": "{count} assignees selected",
+    "assignCleaning": "Assign cleaning",
+    "notifications": "Notifications",
+    "logout": "Log out",
+    "more": "More",
+    "menu": "Menu",
+    "pageLoading": "Loading page",
+    "offline": "No internet connection. CRM data is currently unavailable.",
+    "save": "Save",
+    "cancel": "Cancel",
+    "close": "Close",
+    "error": "Something went wrong",
+    "mobileNavigation": "Mobile navigation",
+    "clear": "Clear",
+    "today": "Today",
+    "notSelected": "Not selected",
+    "localeSaveError": "Could not save language",
+    "irreversible": "This action cannot be undone.",
+    "deleteForever": "Delete permanently",
+    "chooseDate": "Choose date",
+    "chooseDates": "Choose dates",
+    "cleaningType": "Cleaning type", "unscheduled": "Unscheduled", "byBooking": "By booking", "booking": "Booking", "departure": "departure", "cleaningDate": "Cleaning date", "searchAssignee": "Search assignee", "hide": "Hide", "show": "Show", "laundry": "Laundry", "service": "Service", "total": "Total", "currentWeek": "Current week", "currentMonth": "Current month", "next7": "Next 7 days", "next30": "Next 30 days", "customPeriod": "Custom period", "afterCleaning": "after cleaning", "guestsPlural": "guest | guests", "open": "Open", "history": "History", "after": "after", "perCleaning": "per cleaning", "adjustment": "Adjustment", "checklist": "Checklist", "checklistHint": "Actions the cleaner will perform", "template": "Type template", "add": "Add", "action": "Action", "removeItem": "Remove item", "startedCleaningHint": "A started cleaning must retain at least one assignee.", "edit": "Edit", "delete": "Delete", "replenishStock": "Replenish stock", "thresholdHint": "When stock reaches the threshold, the report will suggest buying up to the target level.", "thresholdStock": "Replenishment threshold", "targetStock": "Target stock", "targetHelp": "For a positive threshold, the target must be higher.", "newConsumableType": "New consumable type", "unit": "Unit", "autoWriteOff": "Automatic write-off after cleaning", "quantityPerCleaning": "Quantity per cleaning", "deleteConsumable": "Delete consumable type?", "phone": "Phone", "notes": "Notes"
+  },
+  "calendarExtra": { "noBookings": "No bookings", "bookingActions": "Booking actions", "cleaningMissing": "Cleaning not assigned", "cleaningAssigned": "Cleaning assigned", "cleaningInProgress": "Cleaning in progress", "cleaningCompleted": "Cleaning completed", "cleaningCanceled": "Cleaning canceled", "cleaningUnassigned": "Cleaning created, no cleaner assigned", "chooseDeparture": "choose departure" },
+  "uiExtra": { "searchIcon": "Search icon", "noIcons": "No icons found", "chooseLocation": "Choose hotel location on the map", "locationHint": "Click the map or drag the marker to set the location." },
+  "statementExtra": { "reports": "Reports", "myExpenses": "My expenses", "downloadPdf": "Download PDF", "managersMissing": "No managers assigned", "accessOpen": "Access open", "draft": "Draft", "managersPending": "Managers are not assigned yet", "savedDraft": "Saved draft", "automaticDraft": "Automatic draft", "addExpense": "Add expense", "rebuild": "Rebuild", "save": "Save", "saveFirst": "Save changes first", "grantAccess": "Grant access", "closeAccess": "Close access", "previewHint": "Manager preview. Click a row to edit.", "noApartments": "No apartments", "addApartments": "Add apartments to prepare reports.", "unavailable": "Reports unavailable", "unavailableDescription": "The administrator will open the report for the selected month when it is ready.", "rebuildQuestion": "Rebuild report?", "rebuildDescription": "Manual lines will be replaced with current CRM expenses. This action cannot be undone." },
+  "workExtra": { "moveUp": "Move up in route", "moveDown": "Move down in route", "cleaningActions": "Cleaning actions", "later": "Later", "showCompleted": "Show completed", "historyTitle": "Cleaning history", "historyEmpty": "History is empty.", "noCleanings": "No cleanings yet", "noCleaningsDescription": "Create a cleaning manually or assign one from the bookings list.", "noTasks": "No tasks yet", "noTasksDescription": "Create a task and assign an assignee.", "problem": "Problem", "stockHint": "Enter usage and actual remaining stock. Optional.", "stockNow": "Now:", "usedQuantity": "Used", "remainingQuantity": "Actually remaining", "discrepancy": "Discrepancy:" },
+  "nav": {
+    "work": "Work",
+    "objects": "Properties",
+    "reports": "Reports",
+    "settings": "Settings",
+    "home": "Home",
+    "bookings": "Bookings",
+    "cleanings": "Cleanings",
+    "apartments": "Apartments",
+    "hotels": "Hotels",
+    "inventory": "Inventory",
+    "expenses": "Expenses",
+    "summary": "Summary",
+    "statement": "Statements",
+    "myExpenses": "My expenses",
+    "users": "Users",
+    "apartmentTypes": "Types & rates",
+    "services": "Extra services",
+    "finance": "Finance"
+  },
+  "roles": {
+    "administrator": "Administrator",
+    "manager": "Manager",
+    "cleaner": "Cleaner"
+  },
+  "pwa": {
+    "ariaLabel": "Install Aparts",
+    "iosTitle": "Open Aparts without Safari bars",
+    "installTitle": "Install Aparts",
+    "iosDescription": "Install the CRM from crm.aparts-bansko.com as a web app.",
+    "installDescription": "Quick access to CRM from your home screen.",
+    "instructions": "Instructions",
+    "install": "Install",
+    "dismiss": "Close Aparts installation prompt",
+    "iosStepsTitle": "Install the CRM as a web app",
+    "step1": "Open crm.aparts-bansko.com directly in Safari.",
+    "step2": "Tap Share",
+    "step3": "Choose Add to Home Screen.",
+    "step4": "Enable Open as Web App if the switch is shown.",
+    "step5": "Tap Add.",
+    "repairTitle": "If Safari bars still appear",
+    "repairText": "Remove the old Aparts icon from your Home Screen, then repeat the steps above."
+  },
+  "auth": {
+    "eyebrow": "Bansko operations",
+    "introTitle": "Every property and task in one calm rhythm.",
+    "introText": "Arrivals, cleanings, tasks and expenses — without the paper notebook.",
+    "welcome": "Welcome",
+    "loginText": "Sign in to your Aparts CRM workspace.",
+    "email": "Email",
+    "password": "Password",
+    "login": "Sign in",
+    "forgotPassword": "Forgot password?",
+    "accessNote": "Access is provided by your property management administrator.",
+    "resetTitle": "Reset password",
+    "resetDescription": "Enter the email address used for your invitation.",
+    "sendLink": "Send link",
+    "invalidLink": "This link is invalid or has expired",
+    "passwordMismatch": "Passwords do not match", "passwordSet": "Password set", "accountReady": "Your account is ready. You can now sign in to CRM.", "goToLogin": "Go to sign in", "createPassword": "Create a password", "passwordHint": "At least 8 characters. Do not use your email password.", "newPassword": "New password", "repeatPassword": "Repeat password", "savePassword": "Save password", "invalidPasswordSetup": "Could not set password"
+    ,"resetSent": "If the account exists, a link has been sent to the email address.", "loginError": "Could not sign in. Check your email and password."
+  },
+  "notifications": { "title": "Notifications", "new": "New", "emptyTitle": "No notifications yet", "emptyDescription": "Important arrival and work events will appear here." },
+  "reports": {
+    "title": "Summary", "downloadCsv": "Download CSV", "period": "Period", "range": "Range", "start": "Start", "end": "End", "scope": "Report scope", "generate": "Generate", "filtersChanged": "Filters changed", "refreshSummary": "Press Generate to refresh the summary.", "scopePrefix": "Scope:", "summary": "Summary", "procurement": "Procurement", "workload": "Workload", "finance": "Finance", "cleaningsInPeriod": "Cleanings in period", "positionsToBuy": "Items to purchase", "problems": "Problems", "operatingExpenses": "Operating expenses", "nearestWorkload": "Upcoming workload", "daysWithWork": "Days with work in the selected period", "details": "Details", "noWork": "No work in this period", "nothingScheduled": "Nothing is scheduled for the selected dates.", "needToBuy": "Needs purchasing", "mostImportant": "Most important items across all apartments", "allList": "Full list", "enoughStock": "Stock is sufficient", "aboveThreshold": "All items are above the replenishment threshold.", "purchaseList": "Purchase list", "purchaseDescription": "Amount to target stock, grouped by consumable.", "buy": "Buy", "currentTotal": "Current total", "current": "Current", "purchaseNotRequired": "No purchase required", "selectedAboveThreshold": "All selected properties are above the threshold.", "overdueTasks": "Overdue tasks", "undatedTasks": "Tasks without a due date", "noWorkload": "No workload in this period", "noWorkloadDescription": "There are no cleanings, tasks, arrivals or departures.", "attention": "Needs attention", "extraServices": "Extra services", "cleaning": "Cleaning", "laundryService": "Laundry and service", "byCategories": "By category", "operationsStructure": "Operations structure", "byHotels": "By property", "allOperations": "All financial operations", "dateAndCategory": "Date and category", "property": "Property", "managers": "Managers", "amount": "Amount", "noOperations": "No operations", "noOperationsDescription": "There are no financial records in the selected period." },
+  "apartments": { "title": "Apartments", "add": "Add apartment", "photo": "Property photo", "building": "Building", "active": "Active", "inactive": "Inactive", "archived": "Archived", "internalCode": "Internal code", "guests": "Guests", "rooms": "Rooms", "managers": "Managers", "notAssigned": "Not assigned", "edit": "Edit", "emptyTitle": "No apartments yet", "emptyDescription": "First add a property and apartment type, then create the first apartment." },
+  "hotels": { "title": "Properties", "add": "Add property", "active": "Active", "archived": "Archived", "apartmentsCount": "Apartments", "route": "Route", "actions": "Property actions", "emptyTitle": "No properties yet", "emptyDescription": "Add the first property, then you can create apartments.", "newTitle": "New property", "name": "Name", "location": "Location", "choosePoint": "Choose a point on the map — address and coordinates will be detected automatically.", "detectingAddress": "Detecting address…", "addressByPoint": "Address at selected point", "address": "Address", "addressHint": "Enter the address manually if the map could not detect it", "cancel": "Cancel", "save": "Save property", "archive": "Archive", "delete": "Delete" }
+  ,"apartmentTypes": { "title": "Types and rates", "add": "Add type", "edit": "Edit type and rate", "new": "New apartment type", "name": "Name", "total": "Total cost", "cleaning": "Cleaning", "laundry": "Laundry", "service": "Service", "checklist": "Standard checklist", "checklistCopy": "Copied to new cleanings of this type.", "addItem": "Add", "action": "Action", "moveUp": "Move item up", "moveDown": "Move item down", "removeItem": "Remove item", "checklistNote": "Template changes apply only to new cleanings. Existing cleanings keep their checklist.", "emptyTitle": "No types yet", "emptyDescription": "Create an apartment type and set its rate and standard checklist", "saveChanges": "Save changes", "create": "Create type", "noItems": "No items specified", "cancel": "Cancel" }
+  ,"services": { "title": "Extra services", "add": "Add service", "active": "Active", "disabled": "Disabled", "managerShare": "Manager share", "actions": "Service actions", "emptyTitle": "No services yet", "emptyDescription": "Add a transfer, late checkout or another guest service.", "edit": "Edit service", "new": "New service", "name": "Name", "icon": "Icon", "price": "Price", "sharePercent": "Manager share, %", "available": "Service available for new bookings", "saveChanges": "Save changes", "cancel": "Cancel", "toggleOn": "Enable", "toggleOff": "Disable", "delete": "Delete" }
+  ,"users": { "title": "Users", "current": "Current", "archive": "Archive", "invite": "Invite", "invited": "Invited", "blocked": "Blocked", "active": "Active", "archived": "Archived", "emptyArchive": "Archive is empty", "emptyTitle": "No users yet", "emptyArchiveDescription": "Archived users will appear here.", "emptyDescription": "Invite a manager or cleaner to assign properties and work.", "archiveAction": "Archive user", "deleteAction": "Delete user permanently", "new": "New user", "name": "Name", "emailHelp": "An account setup link will be sent to this address.", "roles": "Roles", "inviteLanguage": "Invitation language", "cancel": "Cancel", "sendInvite": "Send invitation", "inviteSent": "Invitation sent" }
+  ,"expenses": { "title": "Expenses", "add": "Add expense", "period": "Period", "apartment": "Apartment", "allApartments": "All apartments", "actions": "Expense actions", "emptyTitle": "No expenses in this period", "emptyDescription": "Add the first apartment expense.", "edit": "Edit expense", "new": "New expense", "date": "Date", "amount": "Amount, EUR", "description": "Description", "save": "Save", "delete": "Delete expense?", "deleteDescription": "The expense will be removed from summaries. Saved monthly reports will not change until rebuilt.", "cancel": "Cancel" }
+  ,"work": { "cleanings": "Cleanings", "tasks": "Tasks", "days": "By day", "cleaners": "By assignee", "apartments": "By apartment", "newCleaning": "New cleaning", "newTask": "New task", "statusUnassigned": "Unassigned", "statusAssigned": "Assigned", "statusProgress": "In progress", "statusCompleted": "Completed", "statusCanceled": "Canceled", "statusOpen": "Open", "priorityLow": "Low", "priorityNormal": "Normal", "priorityHigh": "High", "priorityUrgent": "Urgent", "notAssigned": "Assignee not set", "noStay": "No booking", "cost": "Cost", "pool": "Total pool", "saveRoute": "Save route", "complete": "Complete work", "cancel": "Cancel", "save": "Save", "delete": "Delete", "notFound": "Work not found", "notFoundDescription": "It may have been deleted or you may no longer have access.", "back": "Back to work", "date": "Date", "noDeadline": "No deadline", "assignee": "Assignee", "apartment": "Apartment", "payout": "Assignee payout", "photos": "Photos", "deleteCleaning": "Delete cleaning", "editCleaning": "Edit cleaning", "editTask": "Edit task", "cancelTask": "Cancel", "deleteTask": "Delete task", "deleteWorkTitle": "Delete {kind}?", "deleteWorkDescription": "The work, attachments, financial records and related inventory operations will be permanently deleted.", "stockTitle": "Write off consumable", "consumable": "Consumable", "stockRemaining": "{quantity} {unit} remaining", "quantity": "Quantity", "comment": "Comment", "writeOff": "Write off", "savedPhotoError": "Data saved, but the photo could not be uploaded. Please try again.", "saveStockError": "Could not save stock", "writeOffError": "Could not write off consumable", "deleteError": "Could not delete work", "cancelError": "Could not cancel task", "finishHint": "Check the checklist: all items must be checked to complete.", "incompleteHint": "Check all checklist items, then press Complete." }
+  ,"inventory": { "title": "Stock", "replenish": "Replenish", "addType": "Add type", "byApartments": "By apartment", "catalog": "Catalog", "discrepancies": "Post-cleaning discrepancies", "discrepanciesDescription": "Review items where the actual stock differs from the calculated amount.", "remaining": "Remaining", "threshold": "Threshold", "target": "Target", "auto": "Auto", "lowStock": "Low stock", "emptyStock": "Stock is not configured", "emptyStockDescription": "Replenish the first consumable for the selected apartment.", "emptyCatalog": "Catalog is empty", "emptyCatalogDescription": "Add consumable types used in apartments.", "consumable": "Consumable", "quantity": "Quantity", "unitPrice": "Unit price", "note": "Note", "save": "Save", "cancel": "Cancel" }
+  ,"calendar": { "title": "Bookings", "newBooking": "New booking", "today": "Today", "previous": "Previous period", "next": "Next period", "byDates": "By dates", "byApartments": "By apartments", "calendar": "Calendar", "month": "Month", "week": "Week", "day": "Day", "bookingsAndDepartures": "Bookings and departures", "stays": "Stays", "settings": "Settings", "show": "Show", "cleaning": "Cleaning", "allBookings": "All bookings", "assigned": "Assigned", "unassigned": "Unassigned", "eventTypes": "Event types", "chooseScope": "Choose calendar scope", "apartment": "Apartment", "arrival": "Arrival", "departure": "Departure", "adults": "Adults", "children": "Children", "guestComment": "Comment", "extraServices": "Extra services", "cash": "Cash at arrival", "cancel": "Cancel", "saveChanges": "Save changes", "create": "Create booking", "editBooking": "Edit booking", "newStay": "New stay", "stayPeriod": "Stay period", "departureFree": "Departure day is available for a new booking.", "unavailable": "unavailable for new bookings", "deleteBooking": "Delete booking", "deleteWarning": "The booking, cleaning, services, financial records and consumed stock will be deleted. Stock will be returned.", "deleteForever": "Delete permanently", "noBookings": "No bookings", "bookingActions": "Booking actions", "cleaningMissing": "Cleaning not assigned", "cleaningAssigned": "Cleaning assigned", "cleaningInProgress": "Cleaning in progress", "cleaningCompleted": "Cleaning completed", "cleaningCanceled": "Cleaning canceled", "cleaningUnassigned": "Cleaning created, no cleaner assigned" }
+  ,"scope": { "all": "All properties", "hotel": "One property", "apartments": "Selected apartments", "chooseHotel": "Choose property", "hotelLabel": "Property", "apartmentsLabel": "Apartments", "loadError": "Could not load apartments", "loadErrorDescription": "Refresh the page or check access to the apartments section.", "search": "Search apartment", "chooseApartments": "Choose apartments", "selectedOne": "1 apartment selected", "selectedMany": "{count} apartments selected", "remove": "Remove apartment", "archived": "Archived" }
+  ,"progress": { "stock": "Consumable stock", "stockDescription": "Fill this in now or update it later.", "current": "Current", "used": "Used", "added": "Added", "remaining": "Actual remaining", "discrepancy": "Discrepancy", "notConfigured": "Consumables are not configured for this apartment yet.", "manualStock": "Write off consumable manually", "saveStock": "Save stock", "checklist": "Checklist", "remainingItems": "Items remaining: {count}", "allDone": "All items completed", "notConfiguredChecklist": "Checklist is not configured.", "commentProblem": "Comment and problem", "detailsHint": "Add important details for the manager.", "comment": "Comment", "problem": "There is a problem", "problemDescription": "Problem description", "commentPlaceholder": "What should be known about this work?", "problemPlaceholder": "Describe what happened", "photo": "Photo", "photoHint": "Optional, you can attach evidence.", "selected": "Selected", "save": "Save", "complete": "Complete" }
+  ,"dashboard": { "monthPicker": "Month selector", "previousMonth": "Previous month", "nextMonth": "Next month", "currentMonth": "Current month", "newBooking": "New booking", "bookings": "Bookings", "cleanings": "Cleanings", "tasks": "Tasks", "problems": "Problems", "pool": "Total pool", "workForMonth": "Work for the month", "bookingsForMonth": "Bookings for the month", "all": "All", "guests": "guests", "adults": "adults", "children": "children", "noWork": "No work this month", "noBookings": "No bookings", "newAssignments": "New assignments will appear here.", "chooseMonth": "Choose another month or create a booking.", "attention": "Needs attention", "toWork": "To work", "workProblem": "There is a problem in the work", "assignDate": "A date needs to be assigned", "calm": "All clear", "calmDescription": "There are no open problems or undated work." }
+}

@@ -70,3 +70,12 @@ export function createStayAgenda<Stay extends StayAgendaSource>(stays: Stay[], t
   }
   return days
 }
+
+export function filterStayAgenda<Stay extends StayAgendaSource>(days: StayAgendaDay<Stay>[], statuses: readonly StayAgendaStatus[]): Array<StayAgendaDay<Stay>> {
+  const selected = new Set(statuses)
+  return days.map(day => {
+    const categories = day.categories.filter(category => selected.has(category.status))
+    const totalCount = categories.reduce((total, category) => total + category.items.length, 0)
+    return { ...day, categories, totalCount }
+  }).filter(day => day.totalCount > 0)
+}

@@ -16,6 +16,7 @@ export interface Stay {
     id: string
     specialServiceId: string
     nameSnapshot: string
+    iconNameSnapshot: string
     priceEurSnapshot: number
     managerSharePercentSnapshot: number
   }>

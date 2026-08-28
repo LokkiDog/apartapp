@@ -1,8 +1,9 @@
-import { and, asc, eq, gte, inArray, lt } from 'drizzle-orm'
+import { and, asc, desc, eq, gte, inArray, lt, lte } from 'drizzle-orm'
 import Decimal from 'decimal.js'
 import { db } from '../../infrastructure/database/client'
-import { apartmentManagers, apartments, financialEntries, managerExpenseReportLines, managerExpenseReports } from '../../infrastructure/database/schema'
+import { apartmentManagers, apartments, financialEntries, hotels, managerExpenseReportLines, managerExpenseReports } from '../../infrastructure/database/schema'
 import { notifyUsers } from '../../infrastructure/notification/publish'
+import { expenseInputSchema, expenseListQuerySchema, type ExpenseListQuery } from '@contracts/expense'
 import { managerExpenseReportSaveSchema, type managerExpenseCategorySchema } from '@contracts/report'
 import type { Actor } from '../../infrastructure/auth/actor'
 import { canManageApartment, managedApartmentIds, requireRole } from '../../infrastructure/auth/actor'
@@ -11,18 +12,22 @@ import { categoryVisibilityFromReport, defaultManagerExpenseCategoryVisibility, 
 type Category = typeof managerExpenseCategorySchema._output
 type Line = { id: string, category: Category, description: string, occurredOn: string | null, amountEur: number, position: number }
 type SavedLine = Omit<Line, 'id'>
-const order: Category[] = ['cleaning', 'inventory', 'task']
+const order: Category[] = ['cleaning', 'inventory', 'task', 'other']
+
+async function getManagerTeamSnapshot(organizationId: string, apartmentId: string, database: typeof db = db) {
+  const assignments = await database.query.apartmentManagers.findMany({
+    where: and(eq(apartmentManagers.apartmentId, apartmentId), eq(apartmentManagers.organizationId, organizationId)),
+    with: { manager: { columns: { id: true, name: true } } }
+  })
+  return assignments.map(assignment => assignment.manager).sort((left, right) => left.id.localeCompare(right.id))
+}
 
 export async function createFinancialEntry(input: {
-  organizationId: string; apartmentId: string; type: 'cleaning_charge' | 'inventory_charge' | 'task_charge' | 'guest_service_charge' | 'compensation'; visibility: 'administrator' | 'manager'; amountEur: number; occurredOn: string; description: string; sourceType: string; sourceId: string; createdById: string
+  organizationId: string; apartmentId: string; type: 'cleaning_charge' | 'inventory_charge' | 'task_charge' | 'guest_service_charge' | 'compensation' | 'manual_expense'; visibility: 'administrator' | 'manager'; amountEur: number; occurredOn: string; description: string; sourceType: string; sourceId: string; createdById: string
 }, database: typeof db = db) {
   const apartment = await database.query.apartments.findFirst({ where: and(eq(apartments.id, input.apartmentId), eq(apartments.organizationId, input.organizationId)) })
   if (!apartment) throw createError({ statusCode: 404, statusMessage: 'Апартамент не найден' })
-  const assignments = await database.query.apartmentManagers.findMany({
-    where: and(eq(apartmentManagers.apartmentId, input.apartmentId), eq(apartmentManagers.organizationId, input.organizationId)),
-    with: { manager: { columns: { id: true, name: true } } }
-  })
-  const managerTeamSnapshot = assignments.map(assignment => assignment.manager).sort((left, right) => left.id.localeCompare(right.id))
+  const managerTeamSnapshot = await getManagerTeamSnapshot(input.organizationId, input.apartmentId, database)
   const [entry] = await database.insert(financialEntries).values({ ...input, managerTeamSnapshot }).onConflictDoNothing().returning()
   return entry
 }
@@ -38,12 +43,12 @@ function sort(lines: Line[]) { return [...lines].sort((left, right) => order.ind
 async function automaticLines(organizationId: string, apartmentId: string, month: string): Promise<Line[]> {
   const { start, end } = range(month)
   const entries = await db.select({ id: financialEntries.id, type: financialEntries.type, description: financialEntries.description, occurredOn: financialEntries.occurredOn, amountEur: financialEntries.amountEur })
-    .from(financialEntries).where(and(eq(financialEntries.organizationId, organizationId), eq(financialEntries.apartmentId, apartmentId), inArray(financialEntries.type, ['cleaning_charge', 'inventory_charge', 'task_charge']), gte(financialEntries.occurredOn, start), lt(financialEntries.occurredOn, end)))
+    .from(financialEntries).where(and(eq(financialEntries.organizationId, organizationId), eq(financialEntries.apartmentId, apartmentId), inArray(financialEntries.type, ['cleaning_charge', 'inventory_charge', 'task_charge', 'manual_expense']), gte(financialEntries.occurredOn, start), lt(financialEntries.occurredOn, end)))
     .orderBy(asc(financialEntries.occurredOn), asc(financialEntries.createdAt))
   const lines: Line[] = []
   let position = 0
   for (const entry of entries) {
-    const category: Category = entry.type === 'cleaning_charge' ? 'cleaning' : entry.type === 'inventory_charge' ? 'inventory' : 'task'
+    const category: Category = entry.type === 'cleaning_charge' ? 'cleaning' : entry.type === 'inventory_charge' ? 'inventory' : entry.type === 'task_charge' ? 'task' : 'other'
     const description = category === 'inventory' ? entry.description.replace(/^Расход:\s*/u, '') : entry.description
     lines.push({ id: `source-${entry.id}`, category, description, occurredOn: entry.occurredOn, amountEur: entry.amountEur, position: position++ })
   }
@@ -114,7 +119,7 @@ export async function getManagerExpenseReport(actor: Actor, apartmentId: string,
 async function replaceLines(actor: Actor, apartmentId: string, month: string, lines: SavedLine[], categoryVisibility: ManagerExpenseCategoryVisibility, publish = false) {
   const existing = await storedReport(actor.organizationId, apartmentId, month)
   const now = new Date()
-  const visibilityColumns = { cleaningEnabled: categoryVisibility.cleaning, inventoryEnabled: categoryVisibility.inventory, taskEnabled: categoryVisibility.task }
+  const visibilityColumns = { cleaningEnabled: categoryVisibility.cleaning, inventoryEnabled: categoryVisibility.inventory, taskEnabled: categoryVisibility.task, otherEnabled: categoryVisibility.other }
   await db.transaction(async tx => {
     let reportId = existing?.id
     if (reportId) {
@@ -159,4 +164,80 @@ export async function unpublishManagerExpenseReport(actor: Actor, apartmentId: s
   if (!existing) throw createError({ statusCode: 404, statusMessage: 'Отчёт ещё не создан' })
   await db.update(managerExpenseReports).set({ publishedAt: null, publishedById: null, updatedAt: new Date() }).where(eq(managerExpenseReports.id, existing.id))
   return getManagerExpenseReport(actor, apartmentId, month)
+}
+
+function expenseConditions(actor: Actor, query: ExpenseListQuery) {
+  const conditions = [
+    eq(financialEntries.organizationId, actor.organizationId),
+    eq(financialEntries.type, 'manual_expense'),
+    gte(financialEntries.occurredOn, query.from),
+    lte(financialEntries.occurredOn, query.to)
+  ]
+  if (query.apartmentId) conditions.push(eq(financialEntries.apartmentId, query.apartmentId))
+  return conditions
+}
+
+export async function listExpenses(actor: Actor, input: unknown) {
+  requireRole(actor, 'administrator')
+  const query = expenseListQuerySchema.parse(input)
+  return db.select({
+    id: financialEntries.id,
+    apartmentId: financialEntries.apartmentId,
+    apartmentName: apartments.name,
+    hotelName: hotels.name,
+    occurredOn: financialEntries.occurredOn,
+    amountEur: financialEntries.amountEur,
+    description: financialEntries.description,
+    createdAt: financialEntries.createdAt
+  })
+    .from(financialEntries)
+    .innerJoin(apartments, eq(financialEntries.apartmentId, apartments.id))
+    .innerJoin(hotels, eq(apartments.hotelId, hotels.id))
+    .where(and(...expenseConditions(actor, query)))
+    .orderBy(desc(financialEntries.occurredOn), desc(financialEntries.createdAt))
+}
+
+export async function createExpense(actor: Actor, input: unknown) {
+  requireRole(actor, 'administrator')
+  const data = expenseInputSchema.parse(input)
+  const entry = await createFinancialEntry({
+    organizationId: actor.organizationId,
+    apartmentId: data.apartmentId,
+    type: 'manual_expense',
+    visibility: 'manager',
+    amountEur: data.amountEur,
+    occurredOn: data.occurredOn,
+    description: data.description,
+    sourceType: 'manual_expense',
+    sourceId: crypto.randomUUID(),
+    createdById: actor.id
+  })
+  if (!entry) throw createError({ statusCode: 409, statusMessage: 'Не удалось добавить расход' })
+  return entry
+}
+
+export async function updateExpense(actor: Actor, expenseId: string, input: unknown) {
+  requireRole(actor, 'administrator')
+  const data = expenseInputSchema.parse(input)
+  const existing = await db.query.financialEntries.findFirst({
+    where: and(eq(financialEntries.id, expenseId), eq(financialEntries.organizationId, actor.organizationId), eq(financialEntries.type, 'manual_expense'))
+  })
+  if (!existing) throw createError({ statusCode: 404, statusMessage: 'Расход не найден' })
+  const apartment = await db.query.apartments.findFirst({ where: and(eq(apartments.id, data.apartmentId), eq(apartments.organizationId, actor.organizationId)) })
+  if (!apartment) throw createError({ statusCode: 404, statusMessage: 'Апартамент не найден' })
+  const managerTeamSnapshot = await getManagerTeamSnapshot(actor.organizationId, data.apartmentId)
+  const [updated] = await db.update(financialEntries)
+    .set({ apartmentId: data.apartmentId, occurredOn: data.occurredOn, amountEur: data.amountEur, description: data.description, managerTeamSnapshot })
+    .where(and(eq(financialEntries.id, expenseId), eq(financialEntries.organizationId, actor.organizationId), eq(financialEntries.type, 'manual_expense')))
+    .returning()
+  return updated!
+}
+
+export async function deleteExpense(actor: Actor, expenseId: string) {
+  requireRole(actor, 'administrator')
+  const [deleted] = await db.delete(financialEntries)
+    .where(and(eq(financialEntries.id, expenseId), eq(financialEntries.organizationId, actor.organizationId), eq(financialEntries.type, 'manual_expense')))
+    .returning({ id: financialEntries.id })
+  if (!deleted) throw createError({ statusCode: 404, statusMessage: 'Расход не найден' })
+  return { ok: true }
 }

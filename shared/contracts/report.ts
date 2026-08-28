@@ -40,11 +40,12 @@ export const inventoryThresholdSchema = z.object({
   }
 })
 
-export const managerExpenseCategorySchema = z.enum(['cleaning', 'inventory', 'task'])
+export const managerExpenseCategorySchema = z.enum(['cleaning', 'inventory', 'task', 'other'])
 export const managerExpenseCategoryVisibilitySchema = z.object({
   cleaning: z.boolean(),
   inventory: z.boolean(),
-  task: z.boolean()
+  task: z.boolean(),
+  other: z.boolean()
 }).strict()
 export const managerExpenseMonthSchema = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Укажите месяц в формате ГГГГ-ММ')
 const managerExpenseAmountSchema = z.coerce.number().finite().min(-9_999_999_999.99).max(9_999_999_999.99)

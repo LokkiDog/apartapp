@@ -3,7 +3,7 @@ import { canAccessAssignedWork, canAccessWorkSection as canAccessServerWork, typ
 import { canAccessWorkSection as canAccessClientWork, usesManagerOnlyNavigation } from '../src/shared/auth/session'
 
 function actor(id: string, roles: Actor['roles']): Actor {
-  return { id, organizationId: 'organization-1', email: `${id}@example.com`, name: id, roles }
+  return { id, organizationId: 'organization-1', email: `${id}@example.com`, name: id, roles, locale: 'ru' }
 }
 
 describe('work access', () => {

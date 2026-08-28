@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { createStayAgenda, stayAgendaQueryFrom, type StayAgendaSource } from '../src/pages/calendar/model/stay-agenda'
+import { createStayAgenda, filterStayAgenda, stayAgendaQueryFrom, type StayAgendaSource } from '../src/pages/calendar/model/stay-agenda'
+import { bookingsForApartment, calendarRange, migrateCalendarView } from '../src/pages/calendar/model/calendar-view'
 
 function stay(id: string, checkInOn: string, checkOutOn: string): StayAgendaSource {
   return { id, checkInOn, checkOutOn }
@@ -54,5 +55,28 @@ describe('stay agenda', () => {
       stay('future', '2026-08-23', '2026-08-24')
     ], today)
     expect(agenda.map(day => day.date)).toEqual(['2026-08-23', '2026-08-24'])
+  })
+
+  it('filters agenda categories and recalculates visible day totals', () => {
+    const agenda = createStayAgenda([
+      stay('arrival', today, '2026-08-23'),
+      stay('departure', '2026-08-17', today),
+      stay('continuing', '2026-08-18', '2026-08-22')
+    ], today)
+    const filtered = filterStayAgenda(agenda, ['arrival'])
+    expect(filtered[0]?.categories.map(category => category.status)).toEqual(['arrival'])
+    expect(filtered[0]?.totalCount).toBe(1)
+    expect(filterStayAgenda(agenda, []).map(day => day.date)).toEqual([])
+  })
+
+  it('supports calendar migration, day ranges and apartment sorting', () => {
+    expect(migrateCalendarView('agenda')).toEqual({ bookingView: 'dates', calendarPeriod: 'month' })
+    expect(migrateCalendarView('week')).toEqual({ bookingView: 'calendar', calendarPeriod: 'week' })
+    expect(calendarRange('day', today)).toEqual({ from: today, to: '2026-08-21' })
+    expect(bookingsForApartment([
+      { apartmentId: 'a', checkInOn: '2026-08-23', checkOutOn: '2026-08-25' },
+      { apartmentId: 'b', checkInOn: '2026-08-20', checkOutOn: '2026-08-22' },
+      { apartmentId: 'a', checkInOn: '2026-08-21', checkOutOn: '2026-08-22' }
+    ], 'a').map(stay => stay.checkInOn)).toEqual(['2026-08-21', '2026-08-23'])
   })
 })

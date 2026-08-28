@@ -38,8 +38,11 @@
 - Keep route composition in `src/pages`; extract a feature only when the interaction is genuinely reused in multiple places.
 - Export feature/entity APIs through their `index.ts`; do not bypass slice public APIs.
 - Reuse Nuxt UI controls and keep interactive hit areas at least 44px on mobile.
+- Use `UTextarea` at full form width; when a form has multiple columns, make its `UFormField` span all columns and give the control `w-full`.
+- For a date range, use one `DateRangeInput` rather than separate «с» and «по» controls; keep the start and end values separate in the submitted API contract when needed.
 - Use the existing slideover forms and ellipsis action menus for work operations. Dangerous deletion requires the shared confirmation modal.
 - Do not reintroduce hover-triggered popovers for calendar work details; opening is click-based.
+- Use the hotel card composition as the shared visual rule for CRM catalog cards: `surface` card with `overflow: hidden`, a padded header containing a 44px icon and title/status content, and a separated footer for primary data and actions. Use a responsive `grid gap-4 md:grid-cols-2`, preserve 44px action hit areas, and keep card-specific classes for domain details.
 
 ## Protected data loading
 

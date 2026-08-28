@@ -1,4 +1,6 @@
-export type SessionUser = { id: string, organizationId: string, name: string, email: string, roles: Array<'administrator' | 'manager' | 'cleaner'> }
+import type { AppLocale } from '@contracts/crm'
+
+export type SessionUser = { id: string, organizationId: string, name: string, email: string, roles: Array<'administrator' | 'manager' | 'cleaner'>, locale: AppLocale }
 export function useCurrentUser() { return useUserSession().user as Ref<SessionUser | null> }
 export function canAccessWorkSection(user: Pick<SessionUser, 'roles'> | null | undefined) {
   return Boolean(user?.roles.some(role => role === 'administrator' || role === 'cleaner'))

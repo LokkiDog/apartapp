@@ -8,6 +8,7 @@ import { cleaningAssignments, cleanings, financialEntries, inventoryLots, invent
 import { administratorsForOrganization, notifyUsers } from '../../infrastructure/notification/publish'
 import { createFinancialEntry } from '../finance/finance.service'
 import { serializeApartment } from '../apartment/apartment-view'
+import { buildStayServiceSnapshot } from './stay-service-snapshot'
 
 async function assertNoOverlap(organizationId: string, apartmentId: string, checkInOn: string, checkOutOn: string, exceptId?: string) {
   const criteria = [eq(stays.organizationId, organizationId), eq(stays.apartmentId, apartmentId), lt(stays.checkInOn, checkOutOn), gt(stays.checkOutOn, checkInOn)]
@@ -51,7 +52,7 @@ export async function createStay(actor: Actor, input: unknown) {
   const [stay] = await db.insert(stays).values({ ...stayData, organizationId: actor.organizationId, cashAmountEur, createdById: actor.id }).returning()
   if (!stay) throw createError({ statusCode: 500, statusMessage: 'Не удалось создать заезд' })
   const snapshots = services.length
-    ? await db.insert(stayServices).values(services.map(service => ({ stayId: stay.id, specialServiceId: service.id, nameSnapshot: service.name, priceEurSnapshot: service.priceEur, managerSharePercentSnapshot: service.managerSharePercent }))).returning()
+    ? await db.insert(stayServices).values(services.map(service => buildStayServiceSnapshot(stay.id, service))).returning()
     : []
   await Promise.all(snapshots.map(service => createFinancialEntry({ organizationId: actor.organizationId, apartmentId: stay.apartmentId, type: 'guest_service_charge', visibility: 'administrator', amountEur: service.priceEurSnapshot, occurredOn: stay.checkInOn, description: `Допуслуга: ${service.nameSnapshot}`, sourceType: 'stay_service', sourceId: service.id, createdById: actor.id })))
   await writeAuditLog({ organizationId: actor.organizationId, actorId: actor.id, action: 'stay.created', entityType: 'stay', entityId: stay.id })
@@ -92,7 +93,7 @@ export async function updateStay(actor: Actor, stayId: string, input: unknown) {
     }
 
     const addedSnapshots = addedServices.length
-      ? await tx.insert(stayServices).values(addedServices.map(service => ({ stayId, specialServiceId: service.id, nameSnapshot: service.name, priceEurSnapshot: service.priceEur, managerSharePercentSnapshot: service.managerSharePercent }))).returning()
+      ? await tx.insert(stayServices).values(addedServices.map(service => buildStayServiceSnapshot(stayId, service))).returning()
       : []
     for (const service of addedSnapshots) {
       await createFinancialEntry({ organizationId: actor.organizationId, apartmentId: existing.apartmentId, type: 'guest_service_charge', visibility: 'administrator', amountEur: service.priceEurSnapshot, occurredOn: data.checkInOn, description: `Допуслуга: ${service.nameSnapshot}`, sourceType: 'stay_service', sourceId: service.id, createdById: actor.id }, tx as unknown as typeof db)

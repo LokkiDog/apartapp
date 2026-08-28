@@ -29,7 +29,8 @@ const financeTypeLabels: Record<string, string> = {
   inventory_charge: 'Расходники',
   task_charge: 'Работы',
   guest_service_charge: 'Дополнительные услуги',
-  compensation: 'Корректировки'
+  compensation: 'Корректировки',
+  manual_expense: 'Прочее'
 }
 
 function dateInRange(date: string | null, query: ReportQuery) {

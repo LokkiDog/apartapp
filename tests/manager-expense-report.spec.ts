@@ -6,30 +6,31 @@ import { createManagerExpenseCategoryVisibility, managerExpenseReportLines, mana
 const lines: ManagerExpenseLine[] = [
   { id: 'cleaning', category: 'cleaning', description: 'Уборка', occurredOn: '2026-08-10', amountEur: 80, position: 0 },
   { id: 'inventory', category: 'inventory', description: 'Бумага', occurredOn: '2026-08-11', amountEur: 5, position: 1 },
-  { id: 'task', category: 'task', description: 'Ремонт', occurredOn: '2026-08-12', amountEur: -10, position: 2 }
+  { id: 'task', category: 'task', description: 'Ремонт', occurredOn: '2026-08-12', amountEur: -10, position: 2 },
+  { id: 'other', category: 'other', description: 'Замена лампы', occurredOn: '2026-08-13', amountEur: 12, position: 3 }
 ]
 
 describe('manager expense report categories', () => {
   it('enables every category for reports created before visibility settings', () => {
-    expect(categoryVisibilityFromReport(null)).toEqual({ cleaning: true, inventory: true, task: true })
-    expect(categoryVisibilityFromReport({ cleaningEnabled: false, inventoryEnabled: true, taskEnabled: false })).toEqual({ cleaning: false, inventory: true, task: false })
+    expect(categoryVisibilityFromReport(null)).toEqual({ cleaning: true, inventory: true, task: true, other: true })
+    expect(categoryVisibilityFromReport({ cleaningEnabled: false, inventoryEnabled: true, taskEnabled: false, otherEnabled: true })).toEqual({ cleaning: false, inventory: true, task: false, other: true })
   })
 
   it('excludes disabled categories from manager lines and totals', () => {
-    const visibility = { cleaning: true, inventory: false, task: true }
-    expect(enabledManagerExpenseLines(lines, visibility).map(line => line.category)).toEqual(['cleaning', 'task'])
-    expect(managerExpenseTotal(lines, visibility)).toBe(70)
+    const visibility = { cleaning: true, inventory: false, task: true, other: true }
+    expect(enabledManagerExpenseLines(lines, visibility).map(line => line.category)).toEqual(['cleaning', 'task', 'other'])
+    expect(managerExpenseTotal(lines, visibility)).toBe(82)
   })
 
   it('keeps all categories editable for administrators and hides disabled ones from managers', () => {
     const visibility = updateManagerExpenseCategoryVisibility(createManagerExpenseCategoryVisibility(), 'inventory', false)
-    expect(visibleManagerExpenseCategories(visibility, true)).toEqual(['cleaning', 'inventory', 'task'])
-    expect(visibleManagerExpenseCategories(visibility, false)).toEqual(['cleaning', 'task'])
-    expect(managerExpenseReportTotal(lines, visibility)).toBe(70)
+    expect(visibleManagerExpenseCategories(visibility, true)).toEqual(['cleaning', 'inventory', 'task', 'other'])
+    expect(visibleManagerExpenseCategories(visibility, false)).toEqual(['cleaning', 'task', 'other'])
+    expect(managerExpenseReportTotal(lines, visibility)).toBe(82)
   })
 
   it('allows every category to be disabled', () => {
-    const visibility = { cleaning: false, inventory: false, task: false }
+    const visibility = { cleaning: false, inventory: false, task: false, other: false }
     expect(visibleManagerExpenseCategories(visibility, false)).toEqual([])
     expect(managerExpenseReportTotal(lines, visibility)).toBe(0)
   })
@@ -50,7 +51,7 @@ describe('manager expense report categories', () => {
       apartmentName: 'L102 · Belvedere',
       month: '2026-08',
       lines,
-      categoryVisibility: { cleaning: true, inventory: true, task: false }
+      categoryVisibility: { cleaning: true, inventory: true, task: false, other: false }
     })
     const serialized = JSON.stringify(definition)
 

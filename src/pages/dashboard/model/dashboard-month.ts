@@ -19,8 +19,8 @@ export function currentDashboardMonth(date = new Date()) {
   return year && month ? `${year}-${month}` : date.toISOString().slice(0, 7)
 }
 
-export function dashboardMonthLabel(month: string) {
-  return new Intl.DateTimeFormat('ru-RU', { month: 'long', year: 'numeric', timeZone: 'Europe/Sofia' }).format(new Date(`${month}-01T12:00:00Z`))
+export function dashboardMonthLabel(month: string, locale = 'ru-RU') {
+  return new Intl.DateTimeFormat(locale, { month: 'long', year: 'numeric', timeZone: 'Europe/Sofia' }).format(new Date(`${month}-01T12:00:00Z`))
 }
 
 export function shiftDashboardMonth(month: string, amount: number) {

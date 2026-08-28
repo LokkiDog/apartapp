@@ -36,28 +36,28 @@ async function install() {
 </script>
 
 <template>
-  <section v-if="visible" class="pwa-install-card" aria-label="Установка приложения Aparts">
+  <section v-if="visible" class="pwa-install-card" :aria-label="$t('pwa.ariaLabel')">
     <div class="pwa-install-card__icon" aria-hidden="true">a<span>.</span></div>
     <div class="min-w-0 flex-1">
-      <p class="font-semibold">{{ variant === 'ios' ? 'Открыть Aparts без панелей Safari' : 'Установить Aparts' }}</p>
-      <p class="pwa-install-card__description">{{ variant === 'ios' ? 'Установите CRM с crm.aparts-bansko.com как веб-приложение.' : 'Быстрый доступ к CRM с домашнего экрана.' }}</p>
+      <p class="font-semibold">{{ variant === 'ios' ? $t('pwa.iosTitle') : $t('pwa.installTitle') }}</p>
+      <p class="pwa-install-card__description">{{ variant === 'ios' ? $t('pwa.iosDescription') : $t('pwa.installDescription') }}</p>
     </div>
-    <UButton color="primary" size="sm" class="shrink-0" @click="install">{{ variant === 'ios' ? 'Инструкция' : 'Установить' }}</UButton>
-    <UButton color="neutral" variant="ghost" icon="i-lucide-x" aria-label="Закрыть предложение установить Aparts" @click="dismiss" />
+    <UButton color="primary" size="sm" class="shrink-0" @click="install">{{ variant === 'ios' ? $t('pwa.instructions') : $t('pwa.install') }}</UButton>
+    <UButton color="neutral" variant="ghost" icon="i-lucide-x" :aria-label="$t('pwa.dismiss')" @click="dismiss" />
     <div v-if="iosInstructionsOpen" class="pwa-install-card__instructions">
-      <p class="font-semibold">Установите CRM как веб-приложение</p>
+      <p class="font-semibold">{{ $t('pwa.iosStepsTitle') }}</p>
       <ol>
-        <li>Откройте <strong>crm.aparts-bansko.com</strong> напрямую в Safari.</li>
-        <li>Нажмите «Поделиться» <UIcon name="i-lucide-share" class="inline size-4 align-[-.15em]" />.</li>
-        <li>Выберите «На экран «Домой»».</li>
-        <li>Включите «Открывать как веб-приложение / Open as Web App», если переключатель отображается.</li>
-        <li>Нажмите «Добавить».</li>
+        <li>{{ $t('pwa.step1') }}</li>
+        <li>{{ $t('pwa.step2') }} <UIcon name="i-lucide-share" class="inline size-4 align-[-.15em]" />.</li>
+        <li>{{ $t('pwa.step3') }}</li>
+        <li>{{ $t('pwa.step4') }}</li>
+        <li>{{ $t('pwa.step5') }}</li>
       </ol>
       <div class="pwa-install-card__repair">
-        <p class="font-semibold">Если панели Safari уже появляются</p>
-        <p>Удалите старую иконку Aparts с экрана «Домой», затем повторите установку по шагам выше.</p>
+        <p class="font-semibold">{{ $t('pwa.repairTitle') }}</p>
+        <p>{{ $t('pwa.repairText') }}</p>
       </div>
-      <UButton color="neutral" variant="ghost" size="sm" @click="iosInstructionsOpen = false">Понятно</UButton>
+      <UButton color="neutral" variant="ghost" size="sm" @click="iosInstructionsOpen = false">{{ $t('common.close') }}</UButton>
     </div>
   </section>
 </template>

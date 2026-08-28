@@ -6,17 +6,26 @@ const props = withDefaults(defineProps<{
   start?: string | null
   end?: string | null
   placeholder?: string
+  startLabel?: string
+  endLabel?: string
   disabled?: boolean
   required?: boolean
   isDateDisabled?: (date: DateValue) => boolean
 }>(), {
   start: '',
   end: '',
-  placeholder: 'Выберите даты',
+  placeholder: '',
+  startLabel: '',
+  endLabel: '',
   disabled: false,
   required: false,
   isDateDisabled: undefined
 })
+const { locale, t } = useI18n()
+const calendarLocale = computed(() => locale.value === 'en' ? 'en-US' : locale.value === 'he' ? 'he-IL' : 'ru-RU')
+const placeholderText = computed(() => props.placeholder || t('common.chooseDates'))
+const startLabelText = computed(() => props.startLabel || t('calendar.arrival'))
+const endLabelText = computed(() => props.endLabel || t('calendar.departure'))
 
 const emit = defineEmits<{
   'update:start': [value: string]
@@ -36,15 +45,15 @@ const calendarValue = computed<DateRange | null>({
 })
 const calendarPlaceholder = computed<DateValue>(() => props.start ? parseDate(props.start) : today(getLocalTimeZone()))
 const hasCompleteRange = computed(() => Boolean(props.start && props.end))
-const formatter = new Intl.DateTimeFormat('ru-RU', { day: '2-digit', month: 'short', year: 'numeric' })
+const formatter = computed(() => new Intl.DateTimeFormat(calendarLocale.value, { day: '2-digit', month: 'short', year: 'numeric' }))
 
 function formatValue(value?: string | null) {
-  return value ? formatter.format(new Date(`${value}T12:00:00Z`)) : 'Не выбрано'
+  return value ? formatter.value.format(new Date(`${value}T12:00:00Z`)) : t('common.notSelected')
 }
 
 const displayValue = computed(() => {
-  if (!props.start) return props.placeholder
-  return `${formatValue(props.start)} — ${props.end ? formatValue(props.end) : 'выберите выезд'}`
+  if (!props.start) return placeholderText.value
+  return `${formatValue(props.start)} — ${props.end ? formatValue(props.end) : t('calendarExtra.chooseDeparture')}`
 })
 
 function clear() {
@@ -77,7 +86,7 @@ function clear() {
           v-model="calendarValue"
           :placeholder="calendarPlaceholder"
           range
-          locale="ru-RU"
+          :locale="calendarLocale"
           color="primary"
           variant="solid"
           size="md"
@@ -86,12 +95,12 @@ function clear() {
           :is-date-disabled="isDateDisabled"
         />
         <div class="date-range-input-popover__hint">
-          <span><strong>Заезд</strong>{{ formatValue(start) }}</span>
+          <span><strong>{{ startLabelText }}</strong>{{ formatValue(start) }}</span>
           <UIcon name="i-lucide-arrow-right" class="size-4 shrink-0" />
-          <span><strong>Выезд</strong>{{ formatValue(end) }}</span>
+          <span><strong>{{ endLabelText }}</strong>{{ formatValue(end) }}</span>
         </div>
         <div v-if="start" class="date-input-popover__actions">
-          <UButton type="button" color="neutral" variant="ghost" size="sm" @click="clear">Очистить</UButton>
+          <UButton type="button" color="neutral" variant="ghost" size="sm" @click="clear">{{ t('common.clear') }}</UButton>
         </div>
       </div>
     </template>

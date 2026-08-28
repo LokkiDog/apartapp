@@ -1,15 +1,21 @@
 import { describe, expect, it } from 'vitest'
-import { apartmentInputSchema, apartmentTypeInputSchema, apartmentUpdateSchema, cleaningAssignmentInputSchema, cleaningInputSchema, cleaningRouteUpdateSchema, cleaningTariffOverrideSchema, cleaningUpdateSchema, completionInputSchema, consumableInputSchema, hotelInputSchema, specialServiceInputSchema, stayInputSchema, stayListQuerySchema, taskInputSchema, workProgressInputSchema } from '../shared/contracts/crm'
+import { apartmentInputSchema, apartmentTypeInputSchema, apartmentUpdateSchema, cleaningAssignmentInputSchema, cleaningInputSchema, cleaningRouteUpdateSchema, cleaningTariffOverrideSchema, cleaningUpdateSchema, completionInputSchema, consumableInputSchema, hotelInputSchema, hotelReverseGeocodeQuerySchema, specialServiceInputSchema, stayInputSchema, stayListQuerySchema, taskInputSchema, workProgressInputSchema } from '../shared/contracts/crm'
 import { formatEuroInput, parseEuroInput } from '../src/shared/lib/money'
 import { apartmentCalendarColor } from '../src/shared/lib/calendar'
 import { calculateFifoUsage } from '../server/modules/inventory/fifo'
 import { resolveCompletionInventoryReports } from '../server/modules/inventory/cleaning-inventory'
 import { inventoryThresholdSchema, managerExpenseReportSaveSchema, reportQuerySchema } from '../shared/contracts/report'
+import { specialServiceIconOptions } from '../shared/config/special-service-icons'
+import { compactStayServices } from '../src/pages/calendar/model/stay-service-icons'
+import { buildStayServiceSnapshot } from '../server/modules/stay/stay-service-snapshot'
 
 describe('CRM contracts', () => {
   it('accepts valid hotel coordinates and rejects invalid ones', () => {
     expect(hotelInputSchema.safeParse({ name: 'Hotel', address: 'Bansko', latitude: 41.84, longitude: 23.49 }).success).toBe(true)
     expect(hotelInputSchema.safeParse({ name: 'Hotel', address: 'Bansko', latitude: 91, longitude: 23.49 }).success).toBe(false)
+    expect(hotelReverseGeocodeQuerySchema.safeParse({ latitude: '41.83', longitude: '23.49' }).success).toBe(true)
+    expect(hotelReverseGeocodeQuerySchema.safeParse({ latitude: -91, longitude: 23.49 }).success).toBe(false)
+    expect(hotelReverseGeocodeQuerySchema.safeParse({ latitude: 41.83, longitude: 181 }).success).toBe(false)
   })
   it('calculates a cleaning tariff total from its components', () => {
     const parsed = apartmentTypeInputSchema.parse({ name: 'Studio', cleanerPoolEur: 5, laundryEur: 3, serviceEur: 2 })
@@ -50,6 +56,8 @@ describe('CRM contracts', () => {
     expect(stayInputSchema.safeParse({ ...base, cashAmountEur: 25, serviceIds: [] }).success).toBe(true)
     expect(stayInputSchema.safeParse({ ...base, cashAmountEur: -1 }).success).toBe(false)
     expect(specialServiceInputSchema.safeParse({ name: 'Поздний выезд', priceEur: 20, managerSharePercent: 25, active: true }).success).toBe(true)
+    expect(specialServiceInputSchema.safeParse({ name: 'Трансфер', priceEur: 20, managerSharePercent: 25, iconName: specialServiceIconOptions[1].name }).success).toBe(true)
+    expect(specialServiceInputSchema.safeParse({ name: 'Трансфер', priceEur: 20, managerSharePercent: 25, iconName: 'i-lucide-not-a-real-icon' }).success).toBe(false)
     expect(specialServiceInputSchema.safeParse({ name: 'Поздний выезд', priceEur: 20, managerSharePercent: 101 }).success).toBe(false)
   })
 
@@ -166,6 +174,19 @@ describe('CRM contracts', () => {
     expect(apartmentCalendarColor('apartment-1').background).toMatch(/^#/)
   })
 
+  it('compacts stay service icons and reports overflow', () => {
+    const services = [{ id: 'one' }, { id: 'two' }, { id: 'three' }, { id: 'four' }]
+    expect(compactStayServices(services, 3)).toEqual({ visible: services.slice(0, 3), hiddenCount: 1 })
+    expect(compactStayServices(services.slice(0, 3), 3)).toEqual({ visible: services.slice(0, 3), hiddenCount: 0 })
+    expect(compactStayServices([], 3)).toEqual({ visible: [], hiddenCount: 0 })
+  })
+
+  it('keeps the selected service icon in the stay snapshot', () => {
+    const snapshot = buildStayServiceSnapshot('stay-1', { id: 'service-1', name: 'Трансфер', iconName: 'i-lucide-car', priceEur: 20, managerSharePercent: 10 })
+    expect(snapshot.iconNameSnapshot).toBe('i-lucide-car')
+    expect(snapshot.specialServiceId).toBe('service-1')
+  })
+
   it('validates report periods and stock targets', () => {
     expect(reportQuerySchema.safeParse({ from: '2026-08-01', to: '2026-08-31', scope: 'all' }).success).toBe(true)
     expect(reportQuerySchema.safeParse({ from: '2026-08-01', to: '2026-08-31', scope: 'hotel', hotelId: '00000000-0000-4000-8000-000000000001' }).success).toBe(true)
@@ -182,7 +203,7 @@ describe('CRM contracts', () => {
   })
 
   it('validates manager expense report lines with optional dates and signed amounts', () => {
-    const valid = { month: '2026-08', categoryVisibility: { cleaning: true, inventory: false, task: true }, lines: [
+    const valid = { month: '2026-08', categoryVisibility: { cleaning: true, inventory: false, task: true, other: true }, lines: [
       { category: 'cleaning', description: 'Уборка после выезда', occurredOn: '2026-08-12', amountEur: 18.555 },
       { category: 'inventory', description: 'Расходники', occurredOn: null, amountEur: -3.5 },
       { category: 'task', description: 'Замена замка', amountEur: 0 }
@@ -191,7 +212,7 @@ describe('CRM contracts', () => {
     expect(managerExpenseReportSaveSchema.safeParse({ ...valid, month: '2026-13' }).success).toBe(false)
     expect(managerExpenseReportSaveSchema.safeParse({ ...valid, lines: [{ ...valid.lines[0], occurredOn: '2026-09-01' }] }).success).toBe(false)
     expect(managerExpenseReportSaveSchema.safeParse({ ...valid, lines: [{ ...valid.lines[0], category: 'guest_service' }] }).success).toBe(false)
-    expect(managerExpenseReportSaveSchema.safeParse({ ...valid, categoryVisibility: { cleaning: true, inventory: false } }).success).toBe(false)
+    expect(managerExpenseReportSaveSchema.safeParse({ ...valid, categoryVisibility: { cleaning: true, inventory: false, task: true } }).success).toBe(false)
     expect(managerExpenseReportSaveSchema.safeParse({ ...valid, categoryVisibility: { ...valid.categoryVisibility, task: 'yes' } }).success).toBe(false)
   })
 })

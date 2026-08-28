@@ -9,6 +9,7 @@ export interface Actor {
   email: string
   name: string
   roles: UserRole[]
+  locale: 'ru' | 'en' | 'he'
 }
 
 export async function requireActor(event: Parameters<typeof requireUserSession>[0]): Promise<Actor> {
@@ -26,7 +27,8 @@ export async function requireActor(event: Parameters<typeof requireUserSession>[
     organizationId: user.organizationId,
     email: user.email,
     name: user.name,
-    roles: user.roles
+    roles: user.roles,
+    locale: user.locale
   }
 }
 

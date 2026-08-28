@@ -2,6 +2,7 @@
 import type { Apartment } from '#fsd/entities/apartment'
 import type { Hotel } from '#fsd/entities/hotel'
 import type { PropertyScope } from '../model/property-scope'
+import { useI18n } from 'vue-i18n'
 
 const props = withDefaults(defineProps<{
   hotels: Hotel[]
@@ -10,20 +11,22 @@ const props = withDefaults(defineProps<{
   scopeLabel?: string
 }>(), {
   apartmentsError: false,
-  scopeLabel: 'Область'
+  scopeLabel: undefined
 })
 
 const scope = defineModel<PropertyScope>('scope', { required: true })
+const { t } = useI18n()
+const scopeLabelText = computed(() => props.scopeLabel || t('reports.scope'))
 const hotelId = defineModel<string>('hotelId', { required: true })
 const apartmentIds = defineModel<string[]>('apartmentIds', { required: true })
 
-const scopeOptions = [
-  { label: 'Все объекты', value: 'all' },
-  { label: 'Один отель', value: 'hotel' },
-  { label: 'Выбранные апартаменты', value: 'apartments' }
-]
+const scopeOptions = computed(() => [
+  { label: t('scope.all'), value: 'all' },
+  { label: t('scope.hotel'), value: 'hotel' },
+  { label: t('scope.apartments'), value: 'apartments' }
+])
 const hotelOptions = computed(() => [
-  { label: 'Выберите отель', value: 'all' },
+  { label: t('scope.chooseHotel'), value: 'all' },
   ...props.hotels.filter(hotel => hotel.status === 'active').map(hotel => ({ label: hotel.name, value: hotel.id }))
 ])
 const apartmentItems = computed(() => {
@@ -39,7 +42,7 @@ const apartmentItems = computed(() => {
     ...group.map(apartment => ({
       label: apartment.name,
       value: apartment.id,
-      description: `${apartment.hotel.name} · ${apartment.internalCode}${apartment.status === 'archived' ? ' · Архив' : ''}`,
+      description: `${apartment.hotel.name} · ${apartment.internalCode}${apartment.status === 'archived' ? ` · ${t('scope.archived')}` : ''}`,
       status: apartment.status
     }))
   ])
@@ -64,7 +67,7 @@ function plural(value: number, one: string, few: string, many: string) {
   return mod100 >= 11 && mod100 <= 19 ? many : mod10 === 1 ? one : mod10 >= 2 && mod10 <= 4 ? few : many
 }
 function selectedCountLabel(value: number) {
-  return value === 1 ? 'Выбран 1 апартамент' : `Выбрано ${value} ${plural(value, 'апартамент', 'апартамента', 'апартаментов')}`
+  return value === 1 ? t('scope.selectedOne') : t('scope.selectedMany', { count: value })
 }
 function removeApartment(id: string) {
   apartmentIds.value = apartmentIds.value.filter(apartmentId => apartmentId !== id)
@@ -73,16 +76,16 @@ function removeApartment(id: string) {
 
 <template>
   <div class="property-scope-filter">
-    <UFormField :label="scopeLabel">
+    <UFormField :label="scopeLabelText">
       <USelect v-model="scope" :items="scopeOptions" class="w-full" />
     </UFormField>
 
-    <UFormField v-if="scope === 'hotel'" label="Апарт-отель">
+    <UFormField v-if="scope === 'hotel'" :label="t('scope.hotelLabel')">
       <USelect v-model="hotelId" :items="hotelOptions" class="w-full" />
     </UFormField>
 
-    <UFormField v-else-if="scope === 'apartments'" label="Апартаменты">
-      <UAlert v-if="apartmentsError" color="error" variant="soft" title="Не удалось загрузить апартаменты" description="Обновите страницу или проверьте доступ к разделу апартаментов." />
+    <UFormField v-else-if="scope === 'apartments'" :label="t('scope.apartmentsLabel')">
+      <UAlert v-if="apartmentsError" color="error" variant="soft" :title="t('scope.loadError')" :description="t('scope.loadErrorDescription')" />
       <USelectMenu
         v-model="apartmentIds"
         :items="apartmentItems"
@@ -93,19 +96,19 @@ function removeApartment(id: string) {
         color="neutral"
         variant="outline"
         :content="{ align: 'start', sideOffset: 8, collisionPadding: 8 }"
-        :search-input="{ placeholder: 'Поиск апартамента', variant: 'none', ui: { root: 'h-10 min-h-0 self-stretch', base: 'h-10 min-h-0 border-0 px-3 py-0 text-sm font-medium text-[var(--color-ink)] ring-0 focus:ring-0 focus-visible:ring-0' } }"
+        :search-input="{ placeholder: t('scope.search'), variant: 'none', ui: { root: 'h-10 min-h-0 self-stretch', base: 'h-10 min-h-0 border-0 px-3 py-0 text-sm font-medium text-[var(--color-ink)] ring-0 focus:ring-0 focus-visible:ring-0' } }"
         :ui="{ base: 'w-full h-11 min-h-11 rounded-[10px] bg-white text-[var(--color-ink)] ring-[var(--color-line)] hover:bg-white focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]', input: 'h-11 min-h-0 border-0 bg-white text-[var(--color-ink)]', content: 'rounded-[12px] bg-white p-2 shadow-[var(--shadow-overlay)] ring-1 ring-[var(--color-line)]' }"
         class="property-scope-filter__apartment-select w-full"
       >
         <template #default="{ modelValue }">
           <span v-if="modelValue?.length">{{ selectedCountLabel(modelValue.length) }}</span>
-          <span v-else class="text-[var(--color-muted)]">Выберите апартаменты</span>
+          <span v-else class="text-[var(--color-muted)]">{{ t('scope.chooseApartments') }}</span>
         </template>
       </USelectMenu>
       <div v-if="selectedApartments.length" class="property-scope-filter__selected">
         <span v-for="apartment in selectedApartments" :key="apartment.id" class="property-scope-filter__selected-item">
-          <span class="min-w-0"><span class="block truncate font-medium">{{ apartment.name }}</span><span class="block truncate text-xs text-[var(--color-muted)]">{{ apartment.hotel.name }}<span v-if="apartment.status === 'archived'"> · Архив</span></span></span>
-          <button type="button" :aria-label="`Убрать апартамент ${apartment.name}`" @click="removeApartment(apartment.id)"><UIcon name="i-lucide-x" class="size-4" /></button>
+          <span class="min-w-0"><span class="block truncate font-medium">{{ apartment.name }}</span><span class="block truncate text-xs text-[var(--color-muted)]">{{ apartment.hotel.name }}<span v-if="apartment.status === 'archived'"> · {{ t('scope.archived') }}</span></span></span>
+          <button type="button" :aria-label="`${t('scope.remove')} ${apartment.name}`" @click="removeApartment(apartment.id)"><UIcon name="i-lucide-x" class="size-4" /></button>
         </span>
       </div>
     </UFormField>

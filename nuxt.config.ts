@@ -1,9 +1,26 @@
 import { resolve } from 'node:path'
+import { specialServiceIconClientNames } from './shared/config/special-service-icons'
 
 export default defineNuxtConfig({
   compatibilityDate: '2026-08-09',
   devtools: { enabled: true },
-  modules: ['@nuxt/ui', 'nuxt-auth-utils', '@vite-pwa/nuxt'],
+  modules: ['@nuxt/ui', 'nuxt-auth-utils', '@vite-pwa/nuxt', '@nuxtjs/i18n'],
+  i18n: {
+    defaultLocale: 'ru',
+    strategy: 'no_prefix',
+    langDir: 'locales',
+    locales: [
+      { code: 'ru', language: 'ru-RU', name: 'Русский', file: 'ru.json', dir: 'ltr' },
+      { code: 'en', language: 'en-US', name: 'English', file: 'en.json', dir: 'ltr' },
+      { code: 'he', language: 'he-IL', name: 'עברית', file: 'he.json', dir: 'rtl' }
+    ],
+    detectBrowserLanguage: false,
+    vueI18n: './i18n.config.ts'
+  },
+  icon: {
+    serverBundle: { collections: ['lucide'] },
+    clientBundle: { scan: true, icons: specialServiceIconClientNames }
+  },
   app: {
     head: {
       title: 'Aparts CRM',
@@ -25,6 +42,7 @@ export default defineNuxtConfig({
   css: [resolve(process.cwd(), 'src/app/styles/main.css')],
   alias: {
     '#fsd': resolve(process.cwd(), 'src'),
+    '#shared': resolve(process.cwd(), 'shared'),
     '@contracts': resolve(process.cwd(), 'shared/contracts')
   },
   typescript: {

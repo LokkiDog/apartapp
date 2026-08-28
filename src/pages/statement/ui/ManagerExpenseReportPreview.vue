@@ -2,6 +2,7 @@
 import Decimal from 'decimal.js'
 import { formatDate, formatEuro } from '#fsd/shared/lib'
 import { createManagerExpenseCategoryVisibility, visibleManagerExpenseCategories, type ManagerExpenseCategory as Category, type ManagerExpenseCategoryVisibility, type ManagerExpenseLine as Line } from '../model/manager-expense-report'
+import { useI18n } from 'vue-i18n'
 
 const props = withDefaults(defineProps<{ lines: Line[], totalEur: number, categoryVisibility?: ManagerExpenseCategoryVisibility, editable?: boolean, editingLineId?: string | null, embedded?: boolean, inventoryExpanded?: boolean }>(), { categoryVisibility: createManagerExpenseCategoryVisibility, editable: false, editingLineId: null, embedded: false, inventoryExpanded: false })
 const emit = defineEmits<{
@@ -12,7 +13,8 @@ const emit = defineEmits<{
   update: [id: string, patch: Partial<Pick<Line, 'description' | 'occurredOn' | 'amountEur'>>]
   remove: [id: string]
 }>()
-const labels: Record<Category, string> = { cleaning: 'Уборки', inventory: 'Расходники', task: 'Дополнительные работы' }
+const { t } = useI18n()
+const labels = computed<Record<Category, string>>(() => ({ cleaning: t('work.cleanings'), inventory: t('reports.procurement'), task: t('work.tasks'), other: t('reports.finance') }))
 const categories = computed(() => visibleManagerExpenseCategories(props.categoryVisibility, props.editable))
 const managerPresentation = computed(() => !props.editable && !props.embedded)
 function categoryLines(category: Category) { return props.lines.filter(line => line.category === category) }
@@ -31,7 +33,7 @@ function showCategoryLines(category: Category) { return category !== 'inventory'
           <UCheckbox
             v-if="editable"
             :model-value="categoryVisibility[category]"
-            :aria-label="`${categoryVisibility[category] ? 'Исключить' : 'Включить'} категорию «${labels[category]}»`"
+            :aria-label="`${categoryVisibility[category] ? t('common.hide') : t('common.show')} ${labels[category]}`"
             class="min-h-11 min-w-11 shrink-0 items-center justify-center"
             @click.stop
             @update:model-value="value => emit('updateCategoryVisibility', category, value === true)"
@@ -55,18 +57,18 @@ function showCategoryLines(category: Category) { return category !== 'inventory'
         <div v-if="showCategoryLines(category) && categoryLines(category).length" class="manager-expense-lines">
           <template v-for="line in categoryLines(category)" :key="line.id">
             <form v-if="editable && editingLineId === line.id" class="manager-expense-editor grid gap-2 py-3" @submit.prevent="emit('close')">
-              <UInput :model-value="line.description" placeholder="Название" autofocus @update:model-value="value => emit('update', line.id, { description: value })" />
+              <UInput :model-value="line.description" :placeholder="t('hotels.name')" autofocus @update:model-value="value => emit('update', line.id, { description: value })" />
               <UInput :model-value="line.occurredOn ?? ''" type="date" @update:model-value="value => emit('update', line.id, { occurredOn: value || null })" />
               <UInput :model-value="line.amountEur" type="number" step="0.01" @update:model-value="value => emit('update', line.id, { amountEur: Number(value) || 0 })" />
-              <div class="flex gap-1"><UButton type="submit" color="neutral" variant="ghost" icon="i-lucide-check" aria-label="Готово" class="min-h-11 min-w-11" /><UButton type="button" color="error" variant="ghost" icon="i-lucide-trash-2" aria-label="Удалить строку" class="min-h-11 min-w-11" @click="emit('remove', line.id)" /></div>
+              <div class="flex gap-1"><UButton type="submit" color="neutral" variant="ghost" icon="i-lucide-check" :aria-label="t('common.save')" class="min-h-11 min-w-11" /><UButton type="button" color="error" variant="ghost" icon="i-lucide-trash-2" :aria-label="t('common.delete')" class="min-h-11 min-w-11" @click="emit('remove', line.id)" /></div>
             </form>
             <button v-else type="button" class="manager-expense-row grid min-h-14 w-full items-center gap-3 py-3 text-left transition-[background-color,scale] duration-150 hover:bg-[var(--color-surface-muted)] active:scale-[0.96] sm:gap-4" :class="{ 'cursor-default': !editable }" :disabled="!editable" @click="emit('select', line.id)"><span class="min-w-0 justify-self-start truncate text-left font-medium">{{ line.description }}</span><span class="whitespace-nowrap text-xs text-[var(--color-muted)] sm:text-sm">{{ line.occurredOn ? formatDate(line.occurredOn) : '' }}</span><strong class="shrink-0 whitespace-nowrap text-right tabular-nums">{{ formatEuro(line.amountEur) }}</strong></button>
           </template>
         </div>
       </section>
-      <section v-if="managerPresentation" class="manager-expense-total flex items-center justify-between gap-4 px-5 sm:px-6"><span class="text-sm text-[var(--color-muted)]">Итого за месяц</span><strong class="text-2xl tracking-[-0.03em] tabular-nums">{{ formatEuro(totalEur) }}</strong></section>
+      <section v-if="managerPresentation" class="manager-expense-total flex items-center justify-between gap-4 px-5 sm:px-6"><span class="text-sm text-[var(--color-muted)]">{{ t('reports.currentTotal') }}</span><strong class="text-2xl tracking-[-0.03em] tabular-nums">{{ formatEuro(totalEur) }}</strong></section>
     </div>
-    <section v-if="!managerPresentation" :class="embedded ? 'flex items-center justify-between gap-4 px-5 py-5 sm:px-6' : 'manager-expense-total surface flex items-center justify-between gap-4 p-5 sm:p-6'"><span class="text-sm text-[var(--color-muted)]">Итого за месяц</span><strong class="text-2xl tracking-[-0.03em] tabular-nums">{{ formatEuro(totalEur) }}</strong></section>
+    <section v-if="!managerPresentation" :class="embedded ? 'flex items-center justify-between gap-4 px-5 py-5 sm:px-6' : 'manager-expense-total surface flex items-center justify-between gap-4 p-5 sm:p-6'"><span class="text-sm text-[var(--color-muted)]">{{ t('reports.currentTotal') }}</span><strong class="text-2xl tracking-[-0.03em] tabular-nums">{{ formatEuro(totalEur) }}</strong></section>
   </div>
 </template>
 

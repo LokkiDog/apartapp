@@ -2,6 +2,7 @@ import { eq, inArray } from 'drizzle-orm'
 import webpush from 'web-push'
 import { db } from '../database/client'
 import { notifications, pushSubscriptions, users } from '../database/schema'
+import { localizedNotificationBody, localizedNotificationTitle } from './localize'
 
 export async function notifyUsers(input: {
   organizationId: string
@@ -18,11 +19,11 @@ export async function notifyUsers(input: {
   if (!config.vapidPublicKey || !config.vapidPrivateKey || !config.vapidSubject) return
 
   webpush.setVapidDetails(config.vapidSubject, config.vapidPublicKey, config.vapidPrivateKey)
-  const subscriptions = await db.select().from(pushSubscriptions).where(inArray(pushSubscriptions.userId, input.userIds))
-  await Promise.allSettled(subscriptions.map(subscription => webpush.sendNotification({
+  const subscriptions = await db.select({ subscription: pushSubscriptions, locale: users.locale }).from(pushSubscriptions).innerJoin(users, eq(users.id, pushSubscriptions.userId)).where(inArray(pushSubscriptions.userId, input.userIds))
+  await Promise.allSettled(subscriptions.map(({ subscription, locale }) => webpush.sendNotification({
     endpoint: subscription.endpoint,
     keys: { p256dh: subscription.p256dh, auth: subscription.auth }
-  }, JSON.stringify({ title: input.title, body: input.body, href: input.href }))))
+  }, JSON.stringify({ title: localizedNotificationTitle(input.type, locale, input.title), body: localizedNotificationBody(input.type, locale, input.body), href: input.href }))))
 }
 
 export async function administratorsForOrganization(organizationId: string) {

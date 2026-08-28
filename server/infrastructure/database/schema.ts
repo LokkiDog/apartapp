@@ -22,6 +22,7 @@ const timestamps = {
 }
 
 export const userRoleEnum = pgEnum('user_role', ['administrator', 'manager', 'cleaner'])
+export const appLocaleEnum = pgEnum('app_locale', ['ru', 'en', 'he'])
 export const userStatusEnum = pgEnum('user_status', ['invited', 'active', 'blocked', 'archived'])
 export const hotelStatusEnum = pgEnum('hotel_status', ['active', 'archived'])
 export const apartmentStatusEnum = pgEnum('apartment_status', ['active', 'inactive', 'archived'])
@@ -29,10 +30,10 @@ export const cleaningStatusEnum = pgEnum('cleaning_status', ['unassigned', 'assi
 export const taskStatusEnum = pgEnum('task_status', ['open', 'in_progress', 'completed', 'canceled'])
 export const taskPriorityEnum = pgEnum('task_priority', ['low', 'normal', 'high', 'urgent'])
 export const inventoryMovementEnum = pgEnum('inventory_movement', ['replenishment', 'usage', 'adjustment_in', 'adjustment_out'])
-export const financialEntryTypeEnum = pgEnum('financial_entry_type', ['cleaning_charge', 'inventory_charge', 'task_charge', 'guest_service_charge', 'compensation'])
+export const financialEntryTypeEnum = pgEnum('financial_entry_type', ['cleaning_charge', 'inventory_charge', 'task_charge', 'guest_service_charge', 'compensation', 'manual_expense'])
 export const visibilityEnum = pgEnum('entry_visibility', ['administrator', 'manager'])
 export const notificationTypeEnum = pgEnum('notification_type', ['stay_changed', 'work_assigned', 'work_rescheduled', 'work_canceled', 'problem', 'manager_expense_report_published'])
-export const managerExpenseCategoryEnum = pgEnum('manager_expense_category', ['cleaning', 'inventory', 'task'])
+export const managerExpenseCategoryEnum = pgEnum('manager_expense_category', ['cleaning', 'inventory', 'task', 'other'])
 export const authTokenTypeEnum = pgEnum('auth_token_type', ['invitation', 'password_reset'])
 
 export const organizations = pgTable('organizations', {
@@ -49,6 +50,7 @@ export const users = pgTable('users', {
   passwordHash: text('password_hash').notNull(),
   name: text('name').notNull(),
   phone: text('phone').notNull().default(''),
+  locale: appLocaleEnum('locale').notNull().default('ru'),
   roles: userRoleEnum('roles').array().notNull().default(sql`ARRAY['manager']::user_role[]`),
   status: userStatusEnum('status').notNull().default('invited'),
   ...timestamps
@@ -117,6 +119,7 @@ export const specialServices = pgTable('special_services', {
   id: uuid('id').primaryKey().defaultRandom(),
   organizationId: uuid('organization_id').notNull().references(() => organizations.id),
   name: text('name').notNull(),
+  iconName: text('icon_name').notNull().default('i-lucide-concierge-bell'),
   priceEur: numeric('price_eur', { precision: 12, scale: 2, mode: 'number' }).notNull(),
   managerSharePercent: integer('manager_share_percent').notNull(),
   active: boolean('active').notNull().default(true),
@@ -149,6 +152,7 @@ export const stayServices = pgTable('stay_services', {
   stayId: uuid('stay_id').notNull().references(() => stays.id, { onDelete: 'cascade' }),
   specialServiceId: uuid('special_service_id').notNull().references(() => specialServices.id),
   nameSnapshot: text('name_snapshot').notNull(),
+  iconNameSnapshot: text('icon_name_snapshot').notNull().default('i-lucide-concierge-bell'),
   priceEurSnapshot: numeric('price_eur_snapshot', { precision: 12, scale: 2, mode: 'number' }).notNull(),
   managerSharePercentSnapshot: integer('manager_share_percent_snapshot').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
@@ -313,6 +317,7 @@ export const managerExpenseReports = pgTable('manager_expense_reports', {
   cleaningEnabled: boolean('cleaning_enabled').notNull().default(true),
   inventoryEnabled: boolean('inventory_enabled').notNull().default(true),
   taskEnabled: boolean('task_enabled').notNull().default(true),
+  otherEnabled: boolean('other_enabled').notNull().default(true),
   publishedAt: timestamp('published_at', { withTimezone: true }),
   publishedById: uuid('published_by_id').references(() => users.id, { onDelete: 'set null' }),
   ...timestamps

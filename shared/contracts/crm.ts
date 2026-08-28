@@ -1,9 +1,12 @@
 import { z } from 'zod'
 import Decimal from 'decimal.js'
+import { specialServiceIconNames } from '../config/special-service-icons'
 
 export const moneyEurSchema = z.number().finite().nonnegative().max(9_999_999_999.99).transform(value => Number(new Decimal(value).toDecimalPlaces(2, Decimal.ROUND_HALF_UP)))
 
 export const userRoleSchema = z.enum(['administrator', 'manager', 'cleaner'])
+export const appLocaleSchema = z.enum(['ru', 'en', 'he'])
+export type AppLocale = z.infer<typeof appLocaleSchema>
 export const hotelStatusSchema = z.enum(['active', 'archived'])
 export const apartmentStatusSchema = z.enum(['active', 'inactive', 'archived'])
 export const cleaningStatusSchema = z.enum(['unassigned', 'assigned', 'in_progress', 'completed', 'canceled'])
@@ -17,6 +20,11 @@ export const hotelInputSchema = z.object({
   latitude: z.coerce.number().min(-90).max(90),
   longitude: z.coerce.number().min(-180).max(180)
 })
+
+export const hotelReverseGeocodeQuerySchema = z.object({
+  latitude: z.coerce.number().finite().min(-90).max(90),
+  longitude: z.coerce.number().finite().min(-180).max(180)
+}).strict()
 
 const tariffFields = {
   cleanerPoolEur: moneyEurSchema,
@@ -63,7 +71,8 @@ export const specialServiceInputSchema = z.object({
   name: z.string().trim().min(1).max(120),
   priceEur: moneyEurSchema,
   managerSharePercent: z.coerce.number().int().min(0).max(100),
-  active: z.boolean().default(true)
+  active: z.boolean().default(true),
+  iconName: z.enum(specialServiceIconNames).optional()
 })
 
 export const stayInputSchema = z.object({
