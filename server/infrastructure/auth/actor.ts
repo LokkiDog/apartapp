@@ -2,6 +2,7 @@ import { and, eq } from 'drizzle-orm'
 import { db } from '../database/client'
 import { apartmentManagers, users } from '../database/schema'
 import type { UserRole } from '@contracts/crm'
+import { refreshUserSession } from './session'
 
 export interface Actor {
   id: string
@@ -12,7 +13,7 @@ export interface Actor {
   locale: 'ru' | 'en' | 'he'
 }
 
-export async function requireActor(event: Parameters<typeof requireUserSession>[0]): Promise<Actor> {
+export async function requireActor(event: Parameters<typeof setUserSession>[0]): Promise<Actor> {
   const session = await requireUserSession(event)
   const userId = (session.user as { id?: string } | undefined)?.id
   if (!userId) throw createError({ statusCode: 401, statusMessage: 'Требуется вход' })
@@ -22,7 +23,7 @@ export async function requireActor(event: Parameters<typeof requireUserSession>[
     throw createError({ statusCode: 401, statusMessage: 'Сессия недействительна' })
   }
 
-  return {
+  const actor = {
     id: user.id,
     organizationId: user.organizationId,
     email: user.email,
@@ -30,6 +31,12 @@ export async function requireActor(event: Parameters<typeof requireUserSession>[
     roles: user.roles,
     locale: user.locale
   }
+
+  // h3's maxAge is measured from the session's original createdAt. Replacing
+  // the session after every valid request makes the expiry an inactivity limit.
+  await refreshUserSession(event, actor)
+
+  return actor
 }
 
 export function requireRole(actor: Actor, ...roles: UserRole[]) {

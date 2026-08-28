@@ -57,7 +57,7 @@ chmod 600 .env.production
 - `POSTGRES_PASSWORD` и тот же URL-encoded пароль в `DATABASE_URL`;
 - `NUXT_SESSION_PASSWORD` длиной не менее 32 символов;
 - email и надежный пароль первого администратора;
-- учетные данные внешнего SMTP;
+- API-ключ Brevo или учетные данные внешнего SMTP;
 - публичный и приватный VAPID-ключи;
 - `NUXT_PUBLIC_APP_URL=https://crm.aparts-bansko.com`.
 
@@ -71,9 +71,13 @@ docker run --rm node:22-alpine sh -c "npx --yes web-push generate-vapid-keys"
 ```
 
 Первое значение используйте одновременно в `POSTGRES_PASSWORD` и
-`DATABASE_URL`, второе — как `NUXT_SESSION_PASSWORD`. Для STARTTLS задайте
-`SMTP_PORT=587`, `SMTP_SECURE=false`; для SMTPS — `SMTP_PORT=465`,
-`SMTP_SECURE=true`. `SMTP_USER` и `SMTP_PASSWORD` задаются вместе.
+`DATABASE_URL`, второе — как `NUXT_SESSION_PASSWORD`. Для Brevo задайте
+`NUXT_BREVO_API_KEY` и подтвержденного отправителя в `NUXT_SMTP_FROM`.
+При наличии API-ключа письма отправляются через HTTPS; SMTP остается резервным
+режимом. Для STARTTLS задайте `NUXT_SMTP_PORT=587`,
+`NUXT_SMTP_SECURE=false`; для SMTPS — `NUXT_SMTP_PORT=465`,
+`NUXT_SMTP_SECURE=true`. `NUXT_SMTP_USER` и `NUXT_SMTP_PASSWORD` задаются
+вместе.
 
 Первый администратор создается идемпотентно при первом успешном старте.
 Последующее изменение bootstrap-пароля не меняет существующую учетную запись.

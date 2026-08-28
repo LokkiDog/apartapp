@@ -1,5 +1,6 @@
 import { resolve } from 'node:path'
 import { specialServiceIconClientNames } from './shared/config/special-service-icons'
+import { AUTH_SESSION_IDLE_MAX_AGE_SECONDS } from './shared/config/auth-session'
 
 export default defineNuxtConfig({
   compatibilityDate: '2026-08-09',
@@ -50,10 +51,15 @@ export default defineNuxtConfig({
     typeCheck: true
   },
   runtimeConfig: {
+    session: {
+      password: process.env.NUXT_SESSION_PASSWORD || '',
+      maxAge: AUTH_SESSION_IDLE_MAX_AGE_SECONDS
+    },
     databaseUrl: process.env.DATABASE_URL,
     organizationName: process.env.ORGANIZATION_NAME || 'Aparts Bansko',
     bootstrapAdminEmail: process.env.BOOTSTRAP_ADMIN_EMAIL,
     bootstrapAdminPassword: process.env.BOOTSTRAP_ADMIN_PASSWORD,
+    brevoApiKey: process.env.BREVO_API_KEY,
     smtpHost: process.env.SMTP_HOST || 'localhost',
     smtpPort: process.env.SMTP_PORT || '1025',
     smtpFrom: process.env.SMTP_FROM || 'noreply@aparts.local',
