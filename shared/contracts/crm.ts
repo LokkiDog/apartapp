@@ -61,7 +61,6 @@ export const apartmentInputSchema = z.object({
   managerIds: apartmentManagerIdsSchema.default([]),
   apartmentTypeId: z.uuid({ error: 'Выберите тип апартамента' }),
   name: z.string().trim().min(1, 'Введите название').max(160, 'Название не должно превышать 160 символов'),
-  internalCode: z.string().trim().min(1, 'Введите внутренний код').max(50, 'Код не должен превышать 50 символов'),
   building: z.string().trim().max(100, 'Корпус не должен превышать 100 символов').optional().default(''),
   locationDetails: z.string().trim().max(250, 'Расположение не должно превышать 250 символов').optional().default(''),
   capacity: z.coerce.number().int('Укажите целое число').positive('Укажите хотя бы одного гостя').max(50, 'Максимум 50 гостей'),
@@ -127,11 +126,15 @@ export const cleaningInputSchema = withCalculatedTariff({
   stayId: z.uuid().nullable().optional(),
   cleanerIds: z.array(z.uuid()).default([]),
   scheduledOn: z.iso.date(),
+  isUrgent: z.boolean().optional(),
+  urgencyOverride: z.boolean().nullable().optional(),
   checklist: cleaningChecklistSchema.optional()
 })
 export const cleaningUpdateSchema = withCalculatedTariff({
   cleanerIds: z.array(z.uuid()).default([]),
   scheduledOn: z.iso.date(),
+  isUrgent: z.boolean().optional(),
+  urgencyOverride: z.boolean().nullable().optional(),
   apartmentId: z.uuid().optional(),
   stayId: z.uuid().nullable().optional(),
   checklist: cleaningChecklistSchema.optional(),

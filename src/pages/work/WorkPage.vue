@@ -319,6 +319,10 @@ function guestCountLabel(cleaning: Cleaning) {
 function cleaningSubtitle(cleaning: Cleaning) {
   return `${cleaning.apartment.hotel.name} · ${guestCountLabel(cleaning)}`;
 }
+function cleaningStatusLabel(cleaning: Cleaning) {
+  const status = statusLabels.value[cleaning.status] ?? cleaning.status;
+  return cleaning.isUrgent ? `${t('work.urgentCleaning')} · ${status}` : status;
+}
 function workHref(kind: WorkKind, id: string) {
   return `/${kind === "cleaning" ? "cleanings" : "tasks"}/${encodeURIComponent(id)}`;
 }
@@ -931,7 +935,7 @@ function taskMenuItems(task: Task): DropdownMenuItem[] {
                 </p>
               </div>
               <StatusBadge
-                :label="t('work.statusUnassigned')"
+                :label="cleaningStatusLabel(cleaning)"
                 tone="warning"
               /><UButton
                 v-if="isAdministrator"
@@ -1062,7 +1066,7 @@ function taskMenuItems(task: Task): DropdownMenuItem[] {
                     @click="askQuickComplete('cleaning', cleaning)"
                     >{{ t("work.complete") }}</UButton
                   ><StatusBadge
-                    :label="statusLabels[cleaning.status] ?? cleaning.status"
+                    :label="cleaningStatusLabel(cleaning)"
                     :tone="statusTones[cleaning.status] ?? 'neutral'"
                   />
                   <div
@@ -1210,7 +1214,7 @@ function taskMenuItems(task: Task): DropdownMenuItem[] {
                     @click="askQuickComplete('cleaning', cleaning)"
                     >{{ t("work.complete") }}</UButton
                   ><StatusBadge
-                    :label="statusLabels[cleaning.status] ?? cleaning.status"
+                    :label="cleaningStatusLabel(cleaning)"
                     :tone="statusTones[cleaning.status] ?? 'neutral'"
                   />
                   <div
@@ -1368,7 +1372,7 @@ function taskMenuItems(task: Task): DropdownMenuItem[] {
                     </p>
                   </div>
                   <StatusBadge
-                    :label="statusLabels[cleaning.status] ?? cleaning.status"
+                    :label="cleaningStatusLabel(cleaning)"
                     :tone="statusTones[cleaning.status] ?? 'neutral'"
                   />
                   <UDropdownMenu
@@ -1447,7 +1451,7 @@ function taskMenuItems(task: Task): DropdownMenuItem[] {
                 @click="askQuickComplete('cleaning', cleaning)"
                 >{{ t("work.complete") }}</UButton
               ><StatusBadge
-                :label="statusLabels[cleaning.status] ?? cleaning.status"
+                :label="cleaningStatusLabel(cleaning)"
                 :tone="statusTones[cleaning.status] ?? 'neutral'"
               />
             </article>
@@ -1493,7 +1497,7 @@ function taskMenuItems(task: Task): DropdownMenuItem[] {
                 @click="askQuickComplete('cleaning', cleaning)"
                 >{{ t("work.complete") }}</UButton
               ><StatusBadge
-                :label="statusLabels[cleaning.status] ?? cleaning.status"
+                :label="cleaningStatusLabel(cleaning)"
                 :tone="statusTones[cleaning.status] ?? 'neutral'"
               />
             </article>

@@ -91,7 +91,6 @@ export const apartments = pgTable('apartments', {
   hotelId: uuid('hotel_id').notNull().references(() => hotels.id),
   apartmentTypeId: uuid('apartment_type_id').notNull().references(() => apartmentTypes.id),
   name: text('name').notNull(),
-  internalCode: text('internal_code').notNull(),
   building: text('building').notNull().default(''),
   locationDetails: text('location_details').notNull().default(''),
   capacity: integer('capacity').notNull(),
@@ -102,7 +101,7 @@ export const apartments = pgTable('apartments', {
   status: apartmentStatusEnum('status').notNull().default('active'),
   tariffOverride: jsonb('tariff_override').$type<CleaningTariff | null>(),
   ...timestamps
-}, table => [uniqueIndex('apartment_organization_code_unique').on(table.organizationId, table.internalCode)])
+})
 
 export const apartmentManagers = pgTable('apartment_managers', {
   organizationId: uuid('organization_id').notNull().references(() => organizations.id),
@@ -164,6 +163,8 @@ export const cleanings = pgTable('cleanings', {
   apartmentId: uuid('apartment_id').notNull().references(() => apartments.id),
   stayId: uuid('stay_id').unique().references(() => stays.id),
   scheduledOn: date('scheduled_on').notNull(),
+  isUrgent: boolean('is_urgent').notNull().default(false),
+  urgencyOverride: boolean('urgency_override'),
   status: cleaningStatusEnum('status').notNull().default('unassigned'),
   tariffSnapshot: jsonb('tariff_snapshot').$type<CleaningTariff>().notNull(),
   checklist: jsonb('checklist').$type<ChecklistItem[]>().notNull().default([]),

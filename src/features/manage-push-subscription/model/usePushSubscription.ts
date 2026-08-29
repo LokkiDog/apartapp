@@ -86,6 +86,8 @@ export function usePushSubscription() {
 
 export async function unregisterPushSubscription() {
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) return
-  const current = await (await navigator.serviceWorker.ready).pushManager.getSubscription()
-  if (current) await $fetch('/api/push-subscriptions', { method: 'DELETE', body: { endpoint: current.endpoint } }).catch(() => undefined)
+  const registration = await navigator.serviceWorker.getRegistration()
+  if (!registration) return
+  const current = await registration.pushManager.getSubscription()
+  if (current) await $fetch('/api/push-subscriptions', { method: 'DELETE', body: { endpoint: current.endpoint }, timeout: 1500 }).catch(() => undefined)
 }

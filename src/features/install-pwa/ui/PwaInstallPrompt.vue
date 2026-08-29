@@ -1,19 +1,24 @@
 <script setup lang="ts">
-import { getPwaInstallDismissedKey, getPwaInstallVariant } from '../model/install-pwa'
+import { getPwaInstallDismissedKey, getPwaInstallVariant, isStandalonePwa } from '../model/install-pwa'
 
 const pwa = usePWA()
 const browser = ref({ userAgent: '', platform: '', maxTouchPoints: 0 })
+const standalone = ref(false)
 const dismissed = ref(false)
 const iosInstructionsOpen = ref(false)
 
 onMounted(() => {
   browser.value = { userAgent: navigator.userAgent, platform: navigator.platform, maxTouchPoints: navigator.maxTouchPoints }
+  standalone.value = isStandalonePwa({
+    displayModeStandalone: window.matchMedia('(display-mode: standalone)').matches,
+    navigatorStandalone: Boolean((navigator as Navigator & { standalone?: boolean }).standalone)
+  })
   dismissed.value = localStorage.getItem(getPwaInstallDismissedKey(browser.value)) === 'true'
 })
 
 const variant = computed(() => getPwaInstallVariant({
   ...browser.value,
-  isInstalled: Boolean(pwa?.isPWAInstalled),
+  isInstalled: standalone.value || Boolean(pwa?.isPWAInstalled),
   hasNativePrompt: Boolean(pwa?.showInstallPrompt),
   dismissed: dismissed.value
 }))
@@ -37,13 +42,24 @@ async function install() {
 
 <template>
   <section v-if="visible" class="pwa-install-card" :aria-label="$t('pwa.ariaLabel')">
-    <div class="pwa-install-card__icon" aria-hidden="true">a<span>.</span></div>
-    <div class="min-w-0 flex-1">
-      <p class="font-semibold">{{ variant === 'ios' ? $t('pwa.iosTitle') : $t('pwa.installTitle') }}</p>
-      <p class="pwa-install-card__description">{{ variant === 'ios' ? $t('pwa.iosDescription') : $t('pwa.installDescription') }}</p>
+    <header class="pwa-install-card__header">
+      <p class="pwa-install-card__title">Aparts</p>
+      <div class="pwa-install-card__header-actions">
+        <UButton class="pwa-install-card__dismiss" color="neutral" variant="ghost" icon="i-lucide-x" :aria-label="$t('pwa.dismiss')" @click="dismiss" />
+        <div class="pwa-install-card__icon" aria-hidden="true">a<span>.</span></div>
+      </div>
+    </header>
+
+    <div class="pwa-install-card__actions">
+      <UButton v-if="variant === 'android'" color="primary" class="pwa-install-card__install" @click="install">
+        {{ $t('pwa.installAsApp') }}
+      </UButton>
+      <p v-else class="pwa-install-card__install-label">{{ $t('pwa.installAsApp') }}</p>
+      <UButton v-if="variant === 'ios'" color="neutral" variant="link" class="pwa-install-card__instruction" @click="install">
+        {{ $t('pwa.instructions') }}
+      </UButton>
     </div>
-    <UButton color="primary" size="sm" class="shrink-0" @click="install">{{ variant === 'ios' ? $t('pwa.instructions') : $t('pwa.install') }}</UButton>
-    <UButton color="neutral" variant="ghost" icon="i-lucide-x" :aria-label="$t('pwa.dismiss')" @click="dismiss" />
+
     <div v-if="iosInstructionsOpen" class="pwa-install-card__instructions">
       <p class="font-semibold">{{ $t('pwa.iosStepsTitle') }}</p>
       <ol>

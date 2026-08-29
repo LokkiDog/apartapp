@@ -10,6 +10,7 @@ import { serializeApartment } from '../apartment/apartment-view'
 import { deleteWorkRecord } from '../work/work-record.service'
 import { cleaningTariffHasChanged } from '../work/work-policy'
 import { applyCleaningInventoryReports, saveCleaningInventoryDrafts } from '../inventory/inventory.service'
+import { calculateCleaningUrgency } from './cleaning-urgency'
 
 export async function createCleaning(actor: Actor, input: unknown) {
   requireRole(actor, 'administrator')
@@ -25,9 +26,10 @@ export async function createCleaning(actor: Actor, input: unknown) {
   const assignees = data.cleanerIds.length ? await db.select().from(users).where(and(inArray(users.id, data.cleanerIds), eq(users.organizationId, actor.organizationId), eq(users.status, 'active'))) : []
   if (assignees.length !== data.cleanerIds.length || assignees.some(user => !user.roles.includes('cleaner'))) throw createError({ statusCode: 400, statusMessage: 'Исполнитель должен быть активной уборщицей' })
   const status = data.cleanerIds.length ? 'assigned' : 'unassigned'
+  const isUrgent = data.urgencyOverride ?? await calculateCleaningUrgency(actor.organizationId, data.apartmentId, data.scheduledOn)
   const checklist = data.checklist?.map(item => ({ ...item })) ?? apartment.type.defaultChecklist.map(label => ({ label, checked: false }))
   const cleaning = await db.transaction(async tx => {
-    const [created] = await tx.insert(cleanings).values({ organizationId: actor.organizationId, apartmentId: data.apartmentId, stayId: data.stayId ?? null, scheduledOn: data.scheduledOn, status, tariffSnapshot: { ownerTotalEur: data.ownerTotalEur, cleanerPoolEur: data.cleanerPoolEur, laundryEur: data.laundryEur, serviceEur: data.serviceEur }, checklist }).returning()
+    const [created] = await tx.insert(cleanings).values({ organizationId: actor.organizationId, apartmentId: data.apartmentId, stayId: data.stayId ?? null, scheduledOn: data.scheduledOn, isUrgent, urgencyOverride: data.urgencyOverride ?? null, status, tariffSnapshot: { ownerTotalEur: data.ownerTotalEur, cleanerPoolEur: data.cleanerPoolEur, laundryEur: data.laundryEur, serviceEur: data.serviceEur }, checklist }).returning()
     if (!created) throw createError({ statusCode: 500, statusMessage: 'Не удалось создать уборку' })
     for (const cleanerId of data.cleanerIds) {
       const occupied = await tx.select({ routePosition: cleaningAssignments.routePosition }).from(cleaningAssignments).innerJoin(cleanings, eq(cleaningAssignments.cleaningId, cleanings.id)).where(and(eq(cleaningAssignments.cleanerId, cleanerId), eq(cleanings.scheduledOn, data.scheduledOn)))
@@ -172,7 +174,7 @@ export async function updateCleaning(actor: Actor, cleaningId: string, input: un
     throw createError({ statusCode: 400, statusMessage: 'Исполнитель должен быть активной уборщицей' })
   }
 
-  const { cleanerIds, scheduledOn, reason, apartmentId, stayId, checklist, ...tariffSnapshot } = data
+  const { cleanerIds, scheduledOn, reason, apartmentId, stayId, checklist, urgencyOverride, ...tariffSnapshot } = data
   const nextApartmentId = apartmentId ?? cleaning.apartmentId
   const nextStayId = stayId === undefined ? cleaning.stayId : stayId
   const contextChanged = nextApartmentId !== cleaning.apartmentId || nextStayId !== cleaning.stayId
@@ -196,6 +198,8 @@ export async function updateCleaning(actor: Actor, cleaningId: string, input: un
   const previousCleanerIds = cleaning.assignments.map(assignment => assignment.cleanerId)
   const newCleanerIds = cleanerIds.filter(cleanerId => !previousCleanerIds.includes(cleanerId))
   const status = cleaning.status === 'in_progress' ? 'in_progress' : cleanerIds.length ? 'assigned' : 'unassigned'
+  const nextUrgencyOverride = urgencyOverride === undefined ? cleaning.urgencyOverride : urgencyOverride
+  const isUrgent = nextUrgencyOverride ?? await calculateCleaningUrgency(actor.organizationId, nextApartmentId, scheduledOn)
   const updated = await db.transaction(async tx => {
     const positions = new Map<string, number>()
     for (const cleanerId of cleanerIds) {
@@ -214,7 +218,7 @@ export async function updateCleaning(actor: Actor, cleaningId: string, input: un
     }
     await tx.delete(cleaningAssignments).where(eq(cleaningAssignments.cleaningId, cleaningId))
     if (cleanerIds.length) await tx.insert(cleaningAssignments).values(cleanerIds.map(cleanerId => ({ cleaningId, cleanerId, routePosition: positions.get(cleanerId) ?? 0 })))
-    return (await tx.update(cleanings).set({ apartmentId: nextApartmentId, stayId: nextStayId ?? null, scheduledOn, tariffSnapshot, checklist: checklist ?? cleaning.checklist, status, updatedAt: new Date() }).where(eq(cleanings.id, cleaningId)).returning())[0]
+    return (await tx.update(cleanings).set({ apartmentId: nextApartmentId, stayId: nextStayId ?? null, scheduledOn, isUrgent, urgencyOverride: nextUrgencyOverride, tariffSnapshot, checklist: checklist ?? cleaning.checklist, status, updatedAt: new Date() }).where(eq(cleanings.id, cleaningId)).returning())[0]
   })
   if (!updated) throw createError({ statusCode: 500, statusMessage: 'Не удалось обновить уборку' })
 

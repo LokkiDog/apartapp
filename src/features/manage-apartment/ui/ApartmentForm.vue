@@ -96,9 +96,6 @@ async function save(event: FormSubmitEvent<ApartmentInput>) {
         <UFormField name="name" :label="t('apartments.name')" required>
           <UInput v-model="form.name" class="w-full" size="xl" placeholder="Например, Mountain View 12" autocomplete="off" />
         </UFormField>
-        <UFormField name="internalCode" :label="t('apartments.internalCode')" :help="t('apartments.internalCodeHelp')" required>
-          <UInput v-model="form.internalCode" class="w-full" size="xl" placeholder="Например, MV-12" autocomplete="off" />
-        </UFormField>
         <UFormField name="hotelId" :label="t('apartments.hotel')" required>
           <USelect
             v-model="form.hotelId"
@@ -115,7 +112,6 @@ async function save(event: FormSubmitEvent<ApartmentInput>) {
           name="locationDetails"
           :label="t('apartments.location')"
           :help="t('apartments.locationHelp')"
-          class="apartment-form-field--wide"
         >
           <UInput v-model="form.locationDetails" class="w-full" size="xl" placeholder="Например, 3 этаж, дверь 12, рядом с лифтом" autocomplete="off" />
         </UFormField>
@@ -194,7 +190,7 @@ async function save(event: FormSubmitEvent<ApartmentInput>) {
 
     <div class="apartment-form-actions surface">
       <p class="hidden text-sm text-[var(--color-muted)] sm:block">{{ t('apartments.saveRequiredHint') }}</p>
-      <div class="ml-auto flex items-center gap-2">
+      <div class="apartment-form-actions__buttons">
         <UButton
           to="/apartments"
           color="neutral"

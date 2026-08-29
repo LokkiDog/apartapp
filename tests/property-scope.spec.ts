@@ -3,8 +3,8 @@ import type { Apartment } from '../src/entities/apartment'
 import { filterApartmentsByScope, isPropertyScopeReady, propertyScopeQuery } from '../src/features/select-property-scope/model/property-scope'
 
 const apartments: Apartment[] = [
-  { id: 'apartment-1', name: 'A1', internalCode: 'A1', building: '', locationDetails: '', status: 'active', hotel: { id: 'hotel-1', name: 'Hotel 1' }, managers: [] },
-  { id: 'apartment-2', name: 'A2', internalCode: 'A2', building: '', locationDetails: '', status: 'active', hotel: { id: 'hotel-2', name: 'Hotel 2' }, managers: [] }
+  { id: 'apartment-1', name: 'A1', building: '', locationDetails: '', status: 'active', hotel: { id: 'hotel-1', name: 'Hotel 1' }, managers: [] },
+  { id: 'apartment-2', name: 'A2', building: '', locationDetails: '', status: 'active', hotel: { id: 'hotel-2', name: 'Hotel 2' }, managers: [] }
 ]
 
 describe('property scope', () => {

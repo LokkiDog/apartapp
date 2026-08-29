@@ -1,4 +1,4 @@
-import { and, eq, inArray, or } from 'drizzle-orm'
+import { and, asc, eq, inArray, or } from 'drizzle-orm'
 import Decimal from 'decimal.js'
 import { apartmentInputSchema, apartmentTypeInputSchema, apartmentUpdateSchema } from '@contracts/crm'
 import { canManageApartment, managedApartmentIds, requireRole, type Actor } from '../../infrastructure/auth/actor'
@@ -92,7 +92,24 @@ export async function listApartments(actor: Actor, hotelId?: string) {
     with: { hotel: true, managerAssignments: { with: { manager: { columns: { id: true, name: true } } } }, type: true },
     orderBy: (apartments, { asc }) => [asc(apartments.name)]
   })
-  return rows.map(serializeApartment)
+  if (!rows.length) return []
+
+  const photoRows = await db.select({ id: attachments.id, entityId: attachments.entityId, fileName: attachments.fileName })
+    .from(attachments)
+    .where(and(
+      eq(attachments.organizationId, actor.organizationId),
+      eq(attachments.entityType, 'apartment'),
+      inArray(attachments.entityId, rows.map(row => row.id))
+    ))
+    .orderBy(asc(attachments.createdAt))
+  const firstPhotoByApartment = new Map<string, { id: string, fileName: string }>()
+  for (const photo of photoRows) {
+    if (!firstPhotoByApartment.has(photo.entityId)) {
+      firstPhotoByApartment.set(photo.entityId, { id: photo.id, fileName: photo.fileName })
+    }
+  }
+
+  return rows.map(row => ({ ...serializeApartment(row), photo: firstPhotoByApartment.get(row.id) ?? null }))
 }
 
 async function validateManagers(actor: Actor, managerIds: string[]) {

@@ -1,6 +1,8 @@
 import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 
+export const CARD_PREVIEW_SUFFIX = '.card-v1.webp'
+
 export interface FileStorage {
   put(key: string, content: Uint8Array): Promise<void>
   get(key: string): Promise<Buffer>
@@ -17,9 +19,11 @@ export class LocalFileStorage implements FileStorage {
   }
   async get(key: string) { return readFile(join(this.root, key)) }
   async remove(key: string) {
-    try { await unlink(join(this.root, key)) }
-    catch (error: any) {
-      if (error?.code !== 'ENOENT') throw error
+    for (const storageKey of [key, `${key}${CARD_PREVIEW_SUFFIX}`]) {
+      try { await unlink(join(this.root, storageKey)) }
+      catch (error: any) {
+        if (error?.code !== 'ENOENT') throw error
+      }
     }
   }
 }

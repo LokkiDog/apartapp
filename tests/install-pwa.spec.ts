@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getPwaInstallDismissedKey, getPwaInstallVariant, installIosZoomLock, isIosDevice, isMobileDevice } from '../src/features/install-pwa/model/install-pwa'
+import { getPwaInstallDismissedKey, getPwaInstallVariant, installIosZoomLock, isIosDevice, isMobileDevice, isStandalonePwa } from '../src/features/install-pwa/model/install-pwa'
 
 const android = { userAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Chrome/126 Mobile Safari/537.36', platform: 'Linux armv8l', maxTouchPoints: 5 }
 const iphone = { userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 Version/17.5 Mobile/15E148 Safari/604.1', platform: 'iPhone', maxTouchPoints: 5 }
@@ -59,6 +59,12 @@ describe('PWA installation prompt', () => {
     expect(getPwaInstallVariant({ ...iphone, isInstalled: true, hasNativePrompt: false, dismissed: false })).toBeNull()
     expect(getPwaInstallVariant({ ...iphone, isInstalled: false, hasNativePrompt: false, dismissed: true })).toBeNull()
     expect(isMobileDevice({ userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5)', platform: 'MacIntel', maxTouchPoints: 0 })).toBe(false)
+  })
+
+  it('distinguishes a browser tab from an installed standalone PWA', () => {
+    expect(isStandalonePwa({ displayModeStandalone: false, navigatorStandalone: false })).toBe(false)
+    expect(isStandalonePwa({ displayModeStandalone: true })).toBe(true)
+    expect(isStandalonePwa({ displayModeStandalone: false, navigatorStandalone: true })).toBe(true)
   })
 
   it('prevents iOS pinch gestures and rapid double taps', () => {

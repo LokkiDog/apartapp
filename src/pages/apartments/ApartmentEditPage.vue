@@ -14,6 +14,7 @@ type ApartmentRecord = ApartmentInput & {
   id: string
   managers: Array<{ id: string, name: string }>
 }
+type Attachment = { id: string, fileName: string }
 
 const route = useRoute()
 const apartmentId = String(route.params.id)
@@ -27,12 +28,14 @@ const [
   { data: apartment, status: apartmentStatus, error: apartmentError, refresh: refreshApartment },
   { data: hotels, status: hotelsStatus, error: hotelsError },
   { data: users, status: usersStatus, error: usersError },
-  { data: types, status: typesStatus, error: typesError }
+  { data: types, status: typesStatus, error: typesError },
+  { data: photos, status: photosStatus, refresh: refreshPhotos }
 ] = await Promise.all([
   useAsyncData(`apartment-edit-${apartmentId}`, () => currentUser.value ? $fetch<ApartmentRecord>(`/api/apartments/${apartmentId}`) : Promise.resolve(null), { server: false, default: () => null, watch: [currentUser] }),
   useAsyncData('apartment-form-hotels', () => currentUser.value ? $fetch<ApartmentFormHotel[]>('/api/hotels') : Promise.resolve([]), { server: false, default: () => [], watch: [currentUser] }),
   useAsyncData('apartment-form-users', () => currentUser.value ? $fetch<ApartmentFormManager[]>('/api/users') : Promise.resolve([]), { server: false, default: () => [], watch: [currentUser] }),
-  useAsyncData('apartment-form-types', () => currentUser.value ? $fetch<ApartmentFormType[]>('/api/apartment-types') : Promise.resolve([]), { server: false, default: () => [], watch: [currentUser] })
+  useAsyncData('apartment-form-types', () => currentUser.value ? $fetch<ApartmentFormType[]>('/api/apartment-types') : Promise.resolve([]), { server: false, default: () => [], watch: [currentUser] }),
+  useAsyncData(`apartment-photos-${apartmentId}`, () => currentUser.value ? $fetch<Attachment[]>('/api/attachments', { query: { entityType: 'apartment', entityId: apartmentId } }) : Promise.resolve([]), { server: false, default: () => [], watch: [currentUser] })
 ])
 
 const loading = computed(() => [apartmentStatus.value, hotelsStatus.value, usersStatus.value, typesStatus.value].some(status => status === 'idle' || status === 'pending'))
@@ -43,7 +46,6 @@ const initialValue = computed<Partial<ApartmentInput>>(() => apartment.value ? {
   managerIds: apartment.value.managers.map(manager => manager.id),
   apartmentTypeId: apartment.value.apartmentTypeId,
   name: apartment.value.name,
-  internalCode: apartment.value.internalCode,
   building: apartment.value.building,
   locationDetails: apartment.value.locationDetails,
   capacity: apartment.value.capacity,
@@ -78,6 +80,7 @@ async function uploadPhoto() {
     body.set('entityId', apartmentId)
     body.set('file', photo.value)
     await $fetch('/api/attachments', { method: 'POST', body })
+    await refreshPhotos()
     uploadOpen.value = false
     photo.value = null
     actionSuccess.value = t('apartments.photo')
@@ -153,73 +156,100 @@ async function removeApartment() {
       :title="t('apartments.emptyTitle')"
       :description="t('apartments.emptyDescription')"
     />
-    <ApartmentForm
-      v-else
-      mode="edit"
-      :apartment-id="apartmentId"
-      :initial-value="initialValue"
-      :hotels="hotels ?? []"
-      :managers="users ?? []"
-      :apartment-types="types ?? []"
-    />
+    <template v-else>
+      <UAlert v-if="actionSuccess" color="success" variant="soft" icon="i-lucide-circle-check" :description="actionSuccess" />
+      <UAlert v-if="actionError && !deleteOpen" color="error" variant="soft" icon="i-lucide-circle-alert" :description="actionError" />
 
-    <section v-if="!loading && apartment" class="apartment-management surface">
-      <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <div class="flex flex-wrap items-center gap-2">
-            <h2 class="text-lg font-semibold">{{ t('apartments.edit') }}</h2>
-            <StatusBadge
-              :label="apartment.status === 'active' ? t('apartments.active') : apartment.status === 'inactive' ? t('apartments.inactive') : t('apartments.archived')"
-              :tone="apartment.status === 'active' ? 'success' : 'neutral'"
-            />
+      <section class="apartment-photo-panel surface">
+        <div class="apartment-photo-panel__header">
+          <div>
+            <div class="flex flex-wrap items-center gap-2">
+              <h2 class="text-lg font-semibold">{{ t('apartments.photo') }}</h2>
+              <StatusBadge
+                :label="apartment.status === 'active' ? t('apartments.active') : apartment.status === 'inactive' ? t('apartments.inactive') : t('apartments.archived')"
+                :tone="apartment.status === 'active' ? 'success' : 'neutral'"
+              />
+            </div>
           </div>
-          <p class="mt-1 text-sm text-[var(--color-muted)]">{{ t('apartments.photo') }}</p>
-        </div>
-        <UButton
-          color="neutral"
-          variant="soft"
-          icon="i-lucide-camera"
-          class="min-h-11 transition-transform duration-150 ease-out active:scale-[0.96]"
-          @click="uploadOpen = true"
-        >
-          {{ t('apartments.photo') }}
-        </UButton>
-      </div>
-
-      <UAlert v-if="actionSuccess" class="mt-5" color="success" variant="soft" icon="i-lucide-circle-check" :description="actionSuccess" />
-      <UAlert v-if="actionError && !deleteOpen" class="mt-5" color="error" variant="soft" icon="i-lucide-circle-alert" :description="actionError" />
-
-      <div class="apartment-danger-zone">
-        <div class="min-w-0">
-          <h3 class="font-semibold">{{ t('common.irreversible') }}</h3>
-          <p class="mt-1 text-sm text-[var(--color-muted)]">{{ t('common.irreversible') }}</p>
-        </div>
-        <div class="flex flex-wrap items-center gap-2">
           <UButton
-            v-if="apartment.status !== 'archived'"
             color="neutral"
-            variant="outline"
-            icon="i-lucide-archive"
-            :loading="archivePending"
-            class="min-h-11 transition-transform duration-150 ease-out active:scale-[0.96]"
-            @click="archiveApartment"
-          >
-            {{ t('hotels.archive') }}
-          </UButton>
-          <UButton
-            color="error"
             variant="soft"
-            icon="i-lucide-trash-2"
+            icon="i-lucide-camera"
             class="min-h-11 transition-transform duration-150 ease-out active:scale-[0.96]"
-            @click="askToDelete"
+            @click="uploadOpen = true"
           >
-            {{ t('common.deleteForever') }}
+            {{ t('common.addPhoto') }}
           </UButton>
         </div>
-      </div>
-    </section>
 
-    <UModal v-model:open="uploadOpen" :title="t('apartments.photo')">
+        <USkeleton v-if="photosStatus === 'pending'" class="apartment-photo-panel__skeleton" />
+        <div v-else-if="photos?.length" class="apartment-photo-panel__gallery">
+          <a
+            v-for="(attachment, index) in photos"
+            :key="attachment.id"
+            :href="`/api/attachments/${attachment.id}/file`"
+            target="_blank"
+            rel="noreferrer"
+            class="apartment-photo-panel__item"
+          >
+            <img
+              :src="`/api/attachments/${attachment.id}/file?variant=card`"
+              :alt="attachment.fileName"
+              class="apartment-photo-panel__image"
+              :loading="index === 0 ? 'eager' : 'lazy'"
+              :fetchpriority="index === 0 ? 'high' : 'auto'"
+              decoding="async"
+            >
+          </a>
+        </div>
+        <div v-else class="apartment-photo-panel__empty">
+          <UIcon name="i-lucide-image" class="size-8" />
+          <span>{{ t('apartments.photo') }}</span>
+        </div>
+      </section>
+
+      <ApartmentForm
+        mode="edit"
+        :apartment-id="apartmentId"
+        :initial-value="initialValue"
+        :hotels="hotels ?? []"
+        :managers="users ?? []"
+        :apartment-types="types ?? []"
+      />
+
+      <section class="apartment-management surface">
+        <div class="apartment-danger-zone">
+          <div class="min-w-0">
+            <h3 class="font-semibold">{{ t('common.deleteForever') }}</h3>
+            <p class="mt-1 text-sm text-[var(--color-muted)]">{{ t('common.irreversible') }}</p>
+          </div>
+          <div class="flex flex-wrap items-center gap-2">
+            <UButton
+              v-if="apartment.status !== 'archived'"
+              color="neutral"
+              variant="outline"
+              icon="i-lucide-archive"
+              :loading="archivePending"
+              class="min-h-11 transition-transform duration-150 ease-out active:scale-[0.96]"
+              @click="archiveApartment"
+            >
+              {{ t('hotels.archive') }}
+            </UButton>
+            <UButton
+              color="error"
+              variant="soft"
+              icon="i-lucide-trash-2"
+              class="min-h-11 transition-transform duration-150 ease-out active:scale-[0.96]"
+              @click="askToDelete"
+            >
+              {{ t('common.deleteForever') }}
+            </UButton>
+          </div>
+        </div>
+      </section>
+    </template>
+
+    <UModal v-model:open="uploadOpen" :title="t('common.addPhoto')">
       <template #body>
         <form id="apartment-photo-form" class="form-grid" @submit.prevent="uploadPhoto">
           <UFormField :label="t('apartments.photo')" help="JPG, PNG или WebP">

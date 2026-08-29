@@ -162,6 +162,20 @@
       "when": 1787989191000,
       "tag": "0022_apartment_type_auto_write_offs",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1788075600000,
+      "tag": "0023_cleaning_urgency",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1788075660000,
+      "tag": "0024_remove_apartment_internal_code",
+      "breakpoints": true
     }
   ]
 }

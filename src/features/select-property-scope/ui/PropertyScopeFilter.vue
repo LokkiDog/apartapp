@@ -42,7 +42,7 @@ const apartmentItems = computed(() => {
     ...group.map(apartment => ({
       label: apartment.name,
       value: apartment.id,
-      description: `${apartment.hotel.name} · ${apartment.internalCode}${apartment.status === 'archived' ? ` · ${t('scope.archived')}` : ''}`,
+      description: `${apartment.hotel.name}${apartment.status === 'archived' ? ` · ${t('scope.archived')}` : ''}`,
       status: apartment.status
     }))
   ])

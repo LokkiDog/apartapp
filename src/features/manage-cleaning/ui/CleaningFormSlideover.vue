@@ -12,6 +12,8 @@ export type CleaningDraft = {
   stayId: string | null;
   cleanerIds: string[];
   scheduledOn: string;
+  isUrgent: boolean;
+  urgencyOverride: boolean | null;
   cleanerPoolEur: number;
   laundryEur: number;
   serviceEur: number;
@@ -45,6 +47,8 @@ const form = reactive<CleaningDraft>({
   stayId: null,
   cleanerIds: [],
   scheduledOn: "",
+  isUrgent: false,
+  urgencyOverride: null,
   cleanerPoolEur: 0,
   laundryEur: 0,
   serviceEur: 0,
@@ -72,6 +76,12 @@ const tariffChanged = computed(() => {
 const selectedStay = computed(() =>
   props.stays.find((stay) => stay.id === form.stayId),
 );
+const automaticUrgent = computed(() => {
+  if (!form.apartmentId || !form.scheduledOn) return false;
+  return props.stays.some(stay => stay.apartmentId === form.apartmentId && stay.checkOutOn === form.scheduledOn)
+    && props.stays.some(stay => stay.apartmentId === form.apartmentId && stay.checkInOn === form.scheduledOn);
+});
+const effectiveUrgent = computed(() => form.urgencyOverride ?? automaticUrgent.value);
 const availableStays = computed(() =>
   props.stays.filter(
     (stay) => !stay.cleaning || stay.cleaning.id === props.editingCleaning?.id,
@@ -113,6 +123,8 @@ function reset() {
     stayId,
     cleanerIds: cleaning?.assignments.map((item) => item.cleanerId) ?? [],
     scheduledOn: cleaning?.scheduledOn ?? stay?.checkOutOn ?? "",
+    isUrgent: cleaning?.isUrgent ?? false,
+    urgencyOverride: cleaning?.urgencyOverride ?? null,
     cleanerPoolEur: cleaning?.tariffSnapshot.cleanerPoolEur ?? 0,
     laundryEur: cleaning?.tariffSnapshot.laundryEur ?? 0,
     serviceEur: cleaning?.tariffSnapshot.serviceEur ?? 0,
@@ -122,6 +134,17 @@ function reset() {
     reason: "",
   });
   tariffOpen.value = false;
+}
+watch([() => form.apartmentId, () => form.scheduledOn, automaticUrgent], () => {
+  if (form.urgencyOverride === null) form.isUrgent = automaticUrgent.value;
+});
+function setUrgency(value: boolean) {
+  form.urgencyOverride = value;
+  form.isUrgent = value;
+}
+function useAutomaticUrgency() {
+  form.urgencyOverride = null;
+  form.isUrgent = automaticUrgent.value;
 }
 watch(
   () => props.open,
@@ -284,6 +307,13 @@ function submit() {
                 class="flex-1"
                 aria-hidden="true" /></template></USelectMenu
         ></UFormField>
+        <section class="rounded-2xl border border-[var(--color-line)] px-4 py-3">
+          <div class="flex items-center justify-between gap-3">
+            <UCheckbox :model-value="effectiveUrgent" :label="t('work.urgentCleaning')" class="min-h-11 items-center font-medium" @update:model-value="setUrgency(Boolean($event))" />
+            <UButton v-if="form.urgencyOverride !== null" type="button" color="neutral" variant="ghost" size="sm" @click="useAutomaticUrgency">{{ t('work.useAutomatic') }}</UButton>
+          </div>
+          <p class="text-sm text-[var(--color-muted)]">{{ form.urgencyOverride === null ? t('work.urgencyAutomatic') : t('work.urgencyManual') }}</p>
+        </section>
         <section
           class="w-full rounded-2xl bg-[var(--color-primary-soft)]py-3 sm:px-4"
         >

@@ -9,6 +9,11 @@ export type PwaInstallContext = {
   dismissed: boolean
 }
 
+export type PwaDisplayContext = {
+  displayModeStandalone: boolean
+  navigatorStandalone?: boolean
+}
+
 export type IosZoomLockTarget = {
   addEventListener: (type: string, listener: EventListener, options?: AddEventListenerOptions | boolean) => void
   removeEventListener: (type: string, listener: EventListener, options?: EventListenerOptions | boolean) => void
@@ -32,6 +37,10 @@ export function isMobileDevice({ userAgent, platform, maxTouchPoints }: Pick<Pwa
 
 export function getPwaInstallDismissedKey(context: Pick<PwaInstallContext, 'userAgent' | 'platform' | 'maxTouchPoints'>) {
   return isIosDevice(context) ? IOS_INSTALL_DISMISSED_KEY : INSTALL_DISMISSED_KEY
+}
+
+export function isStandalonePwa({ displayModeStandalone, navigatorStandalone = false }: PwaDisplayContext) {
+  return displayModeStandalone || navigatorStandalone
 }
 
 export function getPwaInstallVariant(context: PwaInstallContext): PwaInstallVariant {

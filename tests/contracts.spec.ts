@@ -8,6 +8,7 @@ import { inventoryThresholdSchema, managerExpenseReportSaveSchema, reportQuerySc
 import { specialServiceIconOptions } from '../shared/config/special-service-icons'
 import { compactStayServices } from '../src/pages/calendar/model/stay-service-icons'
 import { buildStayServiceSnapshot } from '../server/modules/stay/stay-service-snapshot'
+import { hasCleaningUrgency } from '../server/modules/cleaning/cleaning-urgency'
 
 describe('CRM contracts', () => {
   it('accepts valid hotel coordinates and rejects invalid ones', () => {
@@ -30,7 +31,6 @@ describe('CRM contracts', () => {
       managerIds: ['00000000-0000-4000-8000-000000000002'],
       apartmentTypeId: '00000000-0000-4000-8000-000000000003',
       name: 'Mountain View 12',
-      internalCode: 'MV-12',
       capacity: 4,
       rooms: 2,
       checkInTime: '15:00',
@@ -128,6 +128,15 @@ describe('CRM contracts', () => {
     expect(cleaningInputSchema.safeParse({ ...tariff, apartmentId, cleanerIds: [], scheduledOn: '2026-01-10T12:00:00Z' }).success).toBe(false)
     expect(cleaningInputSchema.parse({ ...tariff, apartmentId, cleanerIds: [], scheduledOn: '2026-01-10' }).checklist).toBeUndefined()
     expect(cleaningInputSchema.safeParse({ ...tariff, apartmentId, cleanerIds: [], scheduledOn: '2026-01-10', checklist: [{ label: 'Проверить окна', checked: false }] }).success).toBe(true)
+    expect(cleaningInputSchema.parse({ ...tariff, apartmentId, cleanerIds: [], scheduledOn: '2026-01-10' }).urgencyOverride).toBeUndefined()
+    expect(cleaningUpdateSchema.safeParse({ ...tariff, cleanerIds: [], scheduledOn: '2026-01-10', urgencyOverride: null }).success).toBe(true)
+    expect(cleaningUpdateSchema.safeParse({ ...tariff, cleanerIds: [], scheduledOn: '2026-01-10', urgencyOverride: 'yes' }).success).toBe(false)
+  })
+
+  it('marks a cleaning urgent only when both departure and arrival exist', () => {
+    expect(hasCleaningUrgency(true, true)).toBe(true)
+    expect(hasCleaningUrgency(true, false)).toBe(false)
+    expect(hasCleaningUrgency(false, true)).toBe(false)
   })
 
   it('validates a unique cleaning route order', () => {

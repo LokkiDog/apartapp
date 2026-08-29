@@ -9,6 +9,7 @@ import { administratorsForOrganization, notifyUsers } from '../../infrastructure
 import { createFinancialEntry } from '../finance/finance.service'
 import { serializeApartment } from '../apartment/apartment-view'
 import { buildStayServiceSnapshot } from './stay-service-snapshot'
+import { refreshAutomaticCleaningUrgency } from '../cleaning/cleaning-urgency'
 
 async function assertNoOverlap(organizationId: string, apartmentId: string, checkInOn: string, checkOutOn: string, exceptId?: string) {
   const criteria = [eq(stays.organizationId, organizationId), eq(stays.apartmentId, apartmentId), lt(stays.checkInOn, checkOutOn), gt(stays.checkOutOn, checkInOn)]
@@ -56,6 +57,7 @@ export async function createStay(actor: Actor, input: unknown) {
     : []
   await Promise.all(snapshots.map(service => createFinancialEntry({ organizationId: actor.organizationId, apartmentId: stay.apartmentId, type: 'guest_service_charge', visibility: 'administrator', amountEur: service.priceEurSnapshot, occurredOn: stay.checkInOn, description: `Допуслуга: ${service.nameSnapshot}`, sourceType: 'stay_service', sourceId: service.id, createdById: actor.id })))
   await writeAuditLog({ organizationId: actor.organizationId, actorId: actor.id, action: 'stay.created', entityType: 'stay', entityId: stay.id })
+  await refreshAutomaticCleaningUrgency(actor.organizationId, stay.apartmentId, [stay.checkInOn, stay.checkOutOn])
   if (actor.roles.includes('manager')) await notifyUsers({ organizationId: actor.organizationId, userIds: await administratorsForOrganization(actor.organizationId), type: 'stay_changed', title: 'Новый заезд', body: 'Собственник создал новый заезд', href: `/calendar` })
   return stay
 }
@@ -101,6 +103,7 @@ export async function updateStay(actor: Actor, stayId: string, input: unknown) {
     return updatedStay
   })
   await writeAuditLog({ organizationId: actor.organizationId, actorId: actor.id, action: 'stay.updated', entityType: 'stay', entityId: stayId })
+  await refreshAutomaticCleaningUrgency(actor.organizationId, existing.apartmentId, [existing.checkInOn, existing.checkOutOn, data.checkInOn, data.checkOutOn])
   if (actor.roles.includes('manager')) await notifyUsers({ organizationId: actor.organizationId, userIds: await administratorsForOrganization(actor.organizationId), type: 'stay_changed', title: 'Заезд изменен', body: 'Собственник изменил заезд', href: '/calendar' })
   return updated
 }
@@ -127,5 +130,6 @@ export async function deleteStay(actor: Actor, stayId: string) {
     await tx.delete(stays).where(eq(stays.id, stayId))
   })
   await writeAuditLog({ organizationId: actor.organizationId, actorId: actor.id, action: 'stay.deleted', entityType: 'stay', entityId: stayId })
+  await refreshAutomaticCleaningUrgency(actor.organizationId, stay.apartmentId, [stay.checkInOn, stay.checkOutOn])
   return { ok: true }
 }

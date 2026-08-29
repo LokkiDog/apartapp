@@ -3,6 +3,7 @@ import type { AppLocale } from '@contracts/crm'
 import { useCurrentUser } from '#fsd/shared/auth'
 import { setFormatLocale } from '#fsd/shared/lib'
 
+const props = withDefaults(defineProps<{ persist?: boolean }>(), { persist: true })
 const { locale, setLocale, t } = useI18n()
 const toast = useToast()
 const user = useCurrentUser()
@@ -27,7 +28,7 @@ async function selectLocale(next: AppLocale) {
   pending.value = true
   await setLocale(next)
   if (import.meta.client) setFormatLocale(next)
-  if (user.value) {
+  if (props.persist && user.value) {
     try {
       await $fetch('/api/users/me/locale', { method: 'PATCH', body: { locale: next } })
       await useUserSession().fetch()
@@ -41,6 +42,7 @@ async function selectLocale(next: AppLocale) {
 }
 
 watch(() => user.value?.locale, value => {
+  if (!props.persist) return
   if (value && value !== locale.value) { void setLocale(value); if (import.meta.client) setFormatLocale(value) }
 }, { immediate: true })
 </script>

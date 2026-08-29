@@ -15,7 +15,9 @@ const route = useRoute();
 const user = useCurrentUser();
 const online = useNetworkStatus();
 const notifications = useNotificationState();
+const userSession = useUserSession();
 const moreOpen = ref(false);
+const logoutPending = ref(false);
 const mobileNavigationReady = ref(false);
 const { isLoading: isPageLoading } = useLoadingIndicator({
   throttle: 120,
@@ -153,10 +155,17 @@ const unreadBadge = computed(() =>
     : String(notifications.unreadCount.value),
 );
 async function logout() {
+  if (logoutPending.value) return;
+  logoutPending.value = true;
   moreOpen.value = false;
-  await unregisterPushSubscription();
-  await $fetch("/api/auth/logout", { method: "POST" });
-  await navigateTo("/login");
+  try {
+    await unregisterPushSubscription().catch(() => undefined);
+    await $fetch("/api/auth/logout", { method: "POST" });
+    userSession.session.value = null;
+    await navigateTo("/login");
+  } finally {
+    logoutPending.value = false;
+  }
 }
 </script>
 
@@ -168,7 +177,7 @@ async function logout() {
       <NuxtLink :to="homeHref" class="brand-mark"
         >aparts<span>.</span></NuxtLink
       >
-      <nav class="mt-8 flex-1 space-y-6" :aria-label="$t('nav.work')">
+      <nav class="desktop-sidebar__nav mt-8 space-y-6" :aria-label="$t('nav.work')">
         <section v-for="group in groups" :key="group.label">
           <p v-if="group.label" class="nav-group-label">{{ group.label }}</p>
           <div :class="group.label ? 'mt-2 space-y-1' : 'space-y-1'">
@@ -196,6 +205,8 @@ async function logout() {
           variant="ghost"
           icon="i-lucide-log-out"
           :aria-label="$t('common.logout')"
+          :loading="logoutPending"
+          :disabled="logoutPending"
           @click="logout"
         />
       </div>
@@ -305,6 +316,7 @@ async function logout() {
           <button
             type="button"
             class="drawer-nav-item drawer-nav-item--logout"
+            :disabled="logoutPending"
             @click="logout"
           >
             <UIcon name="i-lucide-log-out" class="size-5" />{{
