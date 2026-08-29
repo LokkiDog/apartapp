@@ -282,10 +282,13 @@ export const cleaningInventoryReports = pgTable('cleaning_inventory_reports', {
   reportedById: uuid('reported_by_id').notNull().references(() => users.id),
   reportedAt: timestamp('reported_at', { withTimezone: true }).notNull().defaultNow(),
   appliedAt: timestamp('applied_at', { withTimezone: true }),
+  approvedById: uuid('approved_by_id').references(() => users.id, { onDelete: 'set null' }),
+  approvedAt: timestamp('approved_at', { withTimezone: true }),
   ...timestamps
 }, table => [
   uniqueIndex('cleaning_inventory_report_unique').on(table.cleaningId, table.consumableId),
   index('cleaning_inventory_report_org_idx').on(table.organizationId, table.reportedAt),
+  index('cleaning_inventory_report_approval_idx').on(table.organizationId, table.approvedAt),
   check('cleaning_inventory_report_quantities_nonnegative', sql`${table.usedQuantity} >= 0 AND ${table.remainingQuantity} >= 0`)
 ])
 
@@ -458,7 +461,8 @@ export const cleaningAssignmentsRelations = relations(cleaningAssignments, ({ on
 export const cleaningInventoryReportsRelations = relations(cleaningInventoryReports, ({ one }) => ({
   cleaning: one(cleanings, { fields: [cleaningInventoryReports.cleaningId], references: [cleanings.id] }),
   consumable: one(consumables, { fields: [cleaningInventoryReports.consumableId], references: [consumables.id] }),
-  reportedBy: one(users, { fields: [cleaningInventoryReports.reportedById], references: [users.id] })
+  reportedBy: one(users, { fields: [cleaningInventoryReports.reportedById], references: [users.id], relationName: 'inventoryReportReporter' }),
+  approvedBy: one(users, { fields: [cleaningInventoryReports.approvedById], references: [users.id], relationName: 'inventoryReportApprover' })
 }))
 export const tasksRelations = relations(tasks, ({ one }) => ({
   apartment: one(apartments, { fields: [tasks.apartmentId], references: [apartments.id] }),

@@ -193,7 +193,7 @@ watch(notificationState.revision, () => {
 
 <style scoped>
 .notification-list > * + * {
-  border-top: 1px solid rgba(23, 51, 38, 0.055);
+  border-top: 1px solid var(--color-line);
 }
 
 .notification-row--unread {

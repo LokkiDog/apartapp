@@ -1,4 +1,24 @@
+import Decimal from 'decimal.js'
+
 export type CleaningInventoryReport = { consumableId: string; usedQuantity: number; remainingQuantity: number }
+
+export function cleaningInventoryReportContext(report: { usedQuantity: string | number; remainingQuantity: string | number; discrepancyQuantity: string | number }) {
+  const expectedRemainingQuantity = new Decimal(report.remainingQuantity).minus(report.discrepancyQuantity).toDecimalPlaces(3)
+  return {
+    startingQuantity: Number(expectedRemainingQuantity.plus(report.usedQuantity).toDecimalPlaces(3)),
+    expectedRemainingQuantity: Number(expectedRemainingQuantity)
+  }
+}
+
+export function shouldPreserveInventoryReportApproval(
+  saved: { approvedAt: Date | string | null; usedQuantity: string | number; remainingQuantity: string | number; discrepancyQuantity: string | number },
+  next: { usedQuantity: string | number; remainingQuantity: string | number; discrepancyQuantity: string | number }
+) {
+  return Boolean(saved.approvedAt)
+    && new Decimal(saved.usedQuantity).eq(next.usedQuantity)
+    && new Decimal(saved.remainingQuantity).eq(next.remainingQuantity)
+    && new Decimal(saved.discrepancyQuantity).eq(next.discrepancyQuantity)
+}
 
 type ConfiguredConsumable = {
   consumableId: string

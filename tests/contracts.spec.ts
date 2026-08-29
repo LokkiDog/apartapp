@@ -3,7 +3,7 @@ import { apartmentInputSchema, apartmentTypeInputSchema, apartmentUpdateSchema, 
 import { formatEuroInput, parseEuroInput } from '../src/shared/lib/money'
 import { apartmentCalendarColor } from '../src/shared/lib/calendar'
 import { calculateFifoUsage } from '../server/modules/inventory/fifo'
-import { resolveCompletionInventoryReports } from '../server/modules/inventory/cleaning-inventory'
+import { cleaningInventoryReportContext, resolveCompletionInventoryReports, shouldPreserveInventoryReportApproval } from '../server/modules/inventory/cleaning-inventory'
 import { inventoryThresholdSchema, managerExpenseReportSaveSchema, reportQuerySchema } from '../shared/contracts/report'
 import { specialServiceIconOptions } from '../shared/config/special-service-icons'
 import { compactStayServices } from '../src/pages/calendar/model/stay-service-icons'
@@ -110,6 +110,18 @@ describe('CRM contracts', () => {
     expect(resolveCompletionInventoryReports({ configured: [{ consumableId: 'guest', autoWriteOffQuantity: 5 }], balances: [{ consumableId: 'guest', quantity: 7 }], savedReports: [] })).toEqual([{ consumableId: 'guest', usedQuantity: 5, remainingQuantity: 2 }])
     expect(resolveCompletionInventoryReports({ configured, balances: [{ consumableId: 'guest', quantity: 7 }], savedReports: [{ consumableId: 'guest', usedQuantity: 1, remainingQuantity: 6 }] })).toEqual([{ consumableId: 'guest', usedQuantity: 1, remainingQuantity: 6 }])
     expect(resolveCompletionInventoryReports({ configured, balances: [{ consumableId: 'guest', quantity: 7 }], savedReports: [{ consumableId: 'guest', usedQuantity: 1, remainingQuantity: 6 }], submittedReports: [{ consumableId: 'guest', usedQuantity: 0, remainingQuantity: 7 }] })).toEqual([{ consumableId: 'guest', usedQuantity: 0, remainingQuantity: 7 }])
+  })
+
+  it('reconstructs stock before a cleaning report and its expected remainder', () => {
+    expect(cleaningInventoryReportContext({ usedQuantity: '2', remainingQuantity: '7', discrepancyQuantity: '-1' })).toEqual({ startingQuantity: 10, expectedRemainingQuantity: 8 })
+    expect(cleaningInventoryReportContext({ usedQuantity: '1.125', remainingQuantity: '4.375', discrepancyQuantity: '0.250' })).toEqual({ startingQuantity: 5.25, expectedRemainingQuantity: 4.125 })
+  })
+
+  it('preserves discrepancy approval only while all report values stay unchanged', () => {
+    const saved = { approvedAt: '2026-08-30T00:00:00.000Z', usedQuantity: '2.000', remainingQuantity: '7.000', discrepancyQuantity: '-1.000' }
+    expect(shouldPreserveInventoryReportApproval(saved, { usedQuantity: 2, remainingQuantity: 7, discrepancyQuantity: -1 })).toBe(true)
+    expect(shouldPreserveInventoryReportApproval(saved, { usedQuantity: 1, remainingQuantity: 7, discrepancyQuantity: 0 })).toBe(false)
+    expect(shouldPreserveInventoryReportApproval({ ...saved, approvedAt: null }, { usedQuantity: 2, remainingQuantity: 7, discrepancyQuantity: -1 })).toBe(false)
   })
 
   it('validates a saved work draft without requiring completion', () => {

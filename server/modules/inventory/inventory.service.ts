@@ -1,12 +1,12 @@
-import { and, asc, desc, eq, inArray, isNotNull, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm'
 import Decimal from 'decimal.js'
-import { cleaningInventoryReportInputSchema, consumableInputSchema, inventoryReplenishmentInputSchema, inventoryUsageInputSchema } from '@contracts/crm'
+import { cleaningInventoryReportInputSchema, consumableInputSchema, inventoryReplenishmentInputSchema, inventoryStockUpdateInputSchema, inventoryUsageInputSchema } from '@contracts/crm'
 import { canAccessAssignedWork, requireRole, type Actor } from '../../infrastructure/auth/actor'
 import { writeAuditLog } from '../../infrastructure/audit/log'
 import { db } from '../../infrastructure/database/client'
 import { apartmentConsumables, apartments, cleaningAssignments, cleaningInventoryReports, cleanings, consumables, financialEntries, inventoryLots, inventoryMovements, tasks } from '../../infrastructure/database/schema'
 import { createFinancialEntry } from '../finance/finance.service'
-import { resolveCompletionInventoryReports, type CleaningInventoryReport } from './cleaning-inventory'
+import { cleaningInventoryReportContext, resolveCompletionInventoryReports, shouldPreserveInventoryReportApproval, type CleaningInventoryReport } from './cleaning-inventory'
 import { calculateFifoUsage } from './fifo'
 
 type InventoryReport = CleaningInventoryReport
@@ -92,7 +92,20 @@ export async function applyCleaningInventoryReports(tx: any, actor: Actor, clean
       await removeQuantity(tx, cleaning.apartmentId, report.consumableId, Math.abs(delta.toNumber()))
       await tx.insert(inventoryMovements).values({ apartmentId: cleaning.apartmentId, consumableId: report.consumableId, type: 'adjustment_out', quantity: Math.abs(delta.toNumber()).toFixed(3), totalCostEur: 0, sourceType: 'cleaning', sourceId: cleaning.id, origin: 'cleaning_report', note: 'Корректировка по фактическому остатку', createdById: actor.id })
     }
-    const [savedReport] = await tx.insert(cleaningInventoryReports).values({ organizationId: actor.organizationId, cleaningId: cleaning.id, consumableId: report.consumableId, usedQuantity: String(report.usedQuantity), remainingQuantity: String(report.remainingQuantity), discrepancyQuantity: delta.toFixed(3), reportedById: actor.id, appliedAt: new Date() }).returning()
+    const previousReport = savedReports.find((savedReport: any) => savedReport.consumableId === report.consumableId)
+    const approvalIsCurrent = previousReport && shouldPreserveInventoryReportApproval(previousReport, { usedQuantity: report.usedQuantity, remainingQuantity: report.remainingQuantity, discrepancyQuantity: delta.toFixed(3) })
+    const [savedReport] = await tx.insert(cleaningInventoryReports).values({
+      organizationId: actor.organizationId,
+      cleaningId: cleaning.id,
+      consumableId: report.consumableId,
+      usedQuantity: String(report.usedQuantity),
+      remainingQuantity: String(report.remainingQuantity),
+      discrepancyQuantity: delta.toFixed(3),
+      reportedById: actor.id,
+      appliedAt: new Date(),
+      approvedAt: approvalIsCurrent ? previousReport.approvedAt : null,
+      approvedById: approvalIsCurrent ? previousReport.approvedById : null
+    }).returning()
     if (savedReport) saved.push(savedReport)
   }
   return saved
@@ -118,7 +131,7 @@ export async function inventoryForCleaning(actor: Actor, cleaningId: string) {
   const cleaning = await cleaningAccess(actor, cleaningId)
   const [items, reports, balances] = await Promise.all([
     configuredConsumables(db, cleaning),
-    db.query.cleaningInventoryReports.findMany({ where: eq(cleaningInventoryReports.cleaningId, cleaningId) }),
+    db.query.cleaningInventoryReports.findMany({ where: eq(cleaningInventoryReports.cleaningId, cleaningId), with: { reportedBy: { columns: { id: true, name: true } }, approvedBy: { columns: { id: true, name: true } } } }),
     db.select({ consumableId: inventoryLots.consumableId, quantity: sql<string>`coalesce(sum(${inventoryLots.remainingQuantity}), 0)` }).from(inventoryLots).where(eq(inventoryLots.apartmentId, cleaning.apartmentId)).groupBy(inventoryLots.consumableId)
   ])
   return items.map((item: any) => {
@@ -126,7 +139,31 @@ export async function inventoryForCleaning(actor: Actor, cleaningId: string) {
     const report = reports.find(value => value.consumableId === item.consumableId)
     const autoWriteOffQuantity = !['completed', 'canceled'].includes(cleaning.status) ? item.autoWriteOffQuantity : null
     const usedQuantity = report ? Number(report.usedQuantity) : autoWriteOffQuantity ?? 0
-    return { consumable: item.consumable, autoWriteOffQuantity, quantity, usedQuantity, remainingQuantity: report ? Number(report.remainingQuantity) : Math.max(0, quantity - usedQuantity), discrepancyQuantity: report ? Number(report.discrepancyQuantity) : 0 }
+    const remainingQuantity = report ? Number(report.remainingQuantity) : Math.max(0, quantity - usedQuantity)
+    const reportContext = report ? cleaningInventoryReportContext(report) : { startingQuantity: quantity, expectedRemainingQuantity: remainingQuantity }
+    return {
+      consumable: item.consumable,
+      autoWriteOffQuantity,
+      quantity,
+      usedQuantity,
+      remainingQuantity,
+      discrepancyQuantity: report ? Number(report.discrepancyQuantity) : 0,
+      startingQuantity: reportContext.startingQuantity,
+      expectedRemainingQuantity: reportContext.expectedRemainingQuantity,
+      report: report ? {
+        id: report.id,
+        reportedBy: report.reportedBy,
+        reportedAt: report.reportedAt,
+        appliedAt: report.appliedAt,
+        approvedAt: report.approvedAt,
+        approvedBy: report.approvedBy,
+        usedQuantity: Number(report.usedQuantity),
+        remainingQuantity: Number(report.remainingQuantity),
+        discrepancyQuantity: Number(report.discrepancyQuantity),
+        startingQuantity: reportContext.startingQuantity,
+        expectedRemainingQuantity: reportContext.expectedRemainingQuantity
+      } : null
+    }
   })
 }
 
@@ -144,11 +181,32 @@ export async function updateCleaningInventory(actor: Actor, cleaningId: string, 
 export async function listCleaningInventoryDiscrepancies(actor: Actor) {
   requireRole(actor, 'administrator')
   const rows = await db.query.cleaningInventoryReports.findMany({
-    where: and(eq(cleaningInventoryReports.organizationId, actor.organizationId), isNotNull(cleaningInventoryReports.appliedAt), sql`${cleaningInventoryReports.discrepancyQuantity} <> 0`),
+    where: and(eq(cleaningInventoryReports.organizationId, actor.organizationId), isNotNull(cleaningInventoryReports.appliedAt), isNull(cleaningInventoryReports.approvedAt), sql`${cleaningInventoryReports.discrepancyQuantity} <> 0`),
     with: { cleaning: { with: { apartment: { with: { hotel: true } } } }, consumable: true, reportedBy: true },
     orderBy: (reports, { desc }) => [desc(reports.reportedAt)]
   })
   return rows.map(row => ({ ...row, usedQuantity: Number(row.usedQuantity), remainingQuantity: Number(row.remainingQuantity), discrepancyQuantity: Number(row.discrepancyQuantity) }))
+}
+
+export async function approveCleaningInventoryDiscrepancy(actor: Actor, reportId: string) {
+  requireRole(actor, 'administrator')
+  const report = await db.query.cleaningInventoryReports.findFirst({ where: and(eq(cleaningInventoryReports.id, reportId), eq(cleaningInventoryReports.organizationId, actor.organizationId)) })
+  if (!report) throw createError({ statusCode: 404, statusMessage: 'Расхождение не найдено' })
+  if (!report.appliedAt || new Decimal(report.discrepancyQuantity).eq(0)) throw createError({ statusCode: 409, statusMessage: 'Это расхождение нельзя утвердить' })
+  if (report.approvedAt) return { ok: true, approvedAt: report.approvedAt, approvedById: report.approvedById }
+
+  const approvedAt = new Date()
+  const [approved] = await db.update(cleaningInventoryReports)
+    .set({ approvedAt, approvedById: actor.id, updatedAt: approvedAt })
+    .where(and(eq(cleaningInventoryReports.id, reportId), eq(cleaningInventoryReports.organizationId, actor.organizationId), isNull(cleaningInventoryReports.approvedAt)))
+    .returning()
+  if (!approved) {
+    const current = await db.query.cleaningInventoryReports.findFirst({ where: and(eq(cleaningInventoryReports.id, reportId), eq(cleaningInventoryReports.organizationId, actor.organizationId)) })
+    if (current?.approvedAt) return { ok: true, approvedAt: current.approvedAt, approvedById: current.approvedById }
+    throw createError({ statusCode: 409, statusMessage: 'Не удалось утвердить расхождение' })
+  }
+  await writeAuditLog({ organizationId: actor.organizationId, actorId: actor.id, action: 'inventory.discrepancy_approved', entityType: 'cleaning_inventory_report', entityId: reportId, payload: { cleaningId: report.cleaningId, consumableId: report.consumableId, discrepancyQuantity: Number(report.discrepancyQuantity), remainingQuantity: Number(report.remainingQuantity) } })
+  return { ok: true, approvedAt: approved.approvedAt, approvedById: approved.approvedById }
 }
 
 export async function inventoryForApartment(actor: Actor, apartmentId: string) {
@@ -167,8 +225,16 @@ export async function inventoryForApartment(actor: Actor, apartmentId: string) {
     db.query.apartments.findFirst({ where: and(eq(apartments.id, apartmentId), eq(apartments.organizationId, actor.organizationId)), with: { type: { with: { autoWriteOffs: true } } } })
   ])
   const writeOffs = new Map((apartment?.type?.autoWriteOffs ?? []).map(rule => [rule.consumableId, Number(rule.quantity)]))
-  const balances = await db.select({ consumableId: inventoryLots.consumableId, quantity: sql<string>`coalesce(sum(${inventoryLots.remainingQuantity}), 0)` }).from(inventoryLots).where(eq(inventoryLots.apartmentId, apartmentId)).groupBy(inventoryLots.consumableId)
-  return items.map(item => ({ ...item, autoWriteOffQuantity: writeOffs.get(item.consumableId) ?? null, quantity: Number(balances.find(balance => balance.consumableId === item.consumableId)?.quantity ?? 0), isLow: Number(balances.find(balance => balance.consumableId === item.consumableId)?.quantity ?? 0) <= Number(item.minimumQuantity) }))
+  const balances = await db.select({
+    consumableId: inventoryLots.consumableId,
+    quantity: sql<string>`coalesce(sum(${inventoryLots.remainingQuantity}), 0)`,
+    unitCostEur: sql<string>`coalesce(sum(${inventoryLots.remainingQuantity} * ${inventoryLots.unitCostEur}) / nullif(sum(${inventoryLots.remainingQuantity}), 0), 0)`
+  }).from(inventoryLots).where(eq(inventoryLots.apartmentId, apartmentId)).groupBy(inventoryLots.consumableId)
+  return items.map(item => {
+    const balance = balances.find(value => value.consumableId === item.consumableId)
+    const quantity = Number(balance?.quantity ?? 0)
+    return { ...item, autoWriteOffQuantity: writeOffs.get(item.consumableId) ?? null, quantity, unitCostEur: Number(balance?.unitCostEur ?? 0), isLow: quantity <= Number(item.minimumQuantity) }
+  })
 }
 
 export async function createConsumable(actor: Actor, input: unknown) {
@@ -220,10 +286,84 @@ export async function replenishStock(actor: Actor, apartmentId: string, input: u
   const apartment = await db.query.apartments.findFirst({ where: and(eq(apartments.id, apartmentId), eq(apartments.organizationId, actor.organizationId)) })
   if (!apartment) throw createError({ statusCode: 404, statusMessage: 'Апартамент не найден' })
   await db.transaction(async tx => {
-    await tx.insert(apartmentConsumables).values({ apartmentId, consumableId: data.consumableId, minimumQuantity: 0, targetQuantity: 0 }).onConflictDoNothing()
+    await tx.insert(apartmentConsumables).values({ apartmentId, consumableId: data.consumableId, minimumQuantity: data.minimumQuantity, targetQuantity: data.targetQuantity }).onConflictDoUpdate({ target: [apartmentConsumables.apartmentId, apartmentConsumables.consumableId], set: { minimumQuantity: data.minimumQuantity, targetQuantity: data.targetQuantity, active: true, updatedAt: new Date() } })
     const totalCostEur = Number(new Decimal(data.quantity).times(data.unitCostEur).toDecimalPlaces(2, Decimal.ROUND_HALF_UP))
     await tx.insert(inventoryLots).values({ apartmentId, consumableId: data.consumableId, remainingQuantity: String(data.quantity), unitCostEur: data.unitCostEur })
     await tx.insert(inventoryMovements).values({ apartmentId, consumableId: data.consumableId, type: 'replenishment', quantity: String(data.quantity), totalCostEur, note: data.note, createdById: actor.id })
+  })
+  return { ok: true }
+}
+
+export async function updateStock(actor: Actor, apartmentId: string, consumableId: string, input: unknown) {
+  requireRole(actor, 'administrator')
+  const data = inventoryStockUpdateInputSchema.parse(input)
+  const [apartment, consumable] = await Promise.all([
+    db.query.apartments.findFirst({ where: and(eq(apartments.id, apartmentId), eq(apartments.organizationId, actor.organizationId)) }),
+    db.query.consumables.findFirst({ where: and(eq(consumables.id, consumableId), eq(consumables.organizationId, actor.organizationId)) })
+  ])
+  if (!apartment || !consumable) throw createError({ statusCode: 404, statusMessage: 'Апартамент или расходник не найден' })
+
+  await db.transaction(async tx => {
+    const lots = await tx.query.inventoryLots.findMany({
+      where: and(eq(inventoryLots.apartmentId, apartmentId), eq(inventoryLots.consumableId, consumableId)),
+      orderBy: [asc(inventoryLots.receivedAt)]
+    })
+    const currentQuantity = lots.reduce((sum: Decimal, lot: any) => sum.plus(lot.remainingQuantity), new Decimal(0))
+    const delta = new Decimal(data.quantity).minus(currentQuantity)
+
+    await tx.insert(apartmentConsumables).values({ apartmentId, consumableId, minimumQuantity: data.minimumQuantity, targetQuantity: data.targetQuantity })
+      .onConflictDoUpdate({ target: [apartmentConsumables.apartmentId, apartmentConsumables.consumableId], set: { minimumQuantity: data.minimumQuantity, targetQuantity: data.targetQuantity, active: true, updatedAt: new Date() } })
+
+    if (delta.gt(0)) {
+      const quantity = delta.toFixed(3)
+      const totalCostEur = Number(delta.times(data.unitCostEur).toDecimalPlaces(2, Decimal.ROUND_HALF_UP))
+      await tx.insert(inventoryLots).values({ apartmentId, consumableId, remainingQuantity: quantity, unitCostEur: data.unitCostEur })
+      await tx.insert(inventoryMovements).values({ apartmentId, consumableId, type: 'adjustment_in', quantity, totalCostEur, note: data.note, createdById: actor.id })
+    } else if (delta.lt(0)) {
+      const quantity = delta.abs().toNumber()
+      await removeQuantity(tx, apartmentId, consumableId, quantity)
+      await tx.insert(inventoryMovements).values({ apartmentId, consumableId, type: 'adjustment_out', quantity: delta.abs().toFixed(3), totalCostEur: 0, note: data.note, createdById: actor.id })
+    }
+    if (data.quantity > 0 && lots.length) await tx.update(inventoryLots).set({ unitCostEur: data.unitCostEur }).where(and(eq(inventoryLots.apartmentId, apartmentId), eq(inventoryLots.consumableId, consumableId)))
+  })
+  return { ok: true }
+}
+
+export async function deleteApartmentStock(actor: Actor, apartmentId: string, consumableId: string) {
+  requireRole(actor, 'administrator')
+  const [apartment, configuredStock] = await Promise.all([
+    db.query.apartments.findFirst({ where: and(eq(apartments.id, apartmentId), eq(apartments.organizationId, actor.organizationId)) }),
+    db.query.apartmentConsumables.findFirst({ where: and(eq(apartmentConsumables.apartmentId, apartmentId), eq(apartmentConsumables.consumableId, consumableId)) })
+  ])
+  if (!apartment || !configuredStock) throw createError({ statusCode: 404, statusMessage: 'Остаток в апартаменте не найден' })
+
+  const deletedQuantity = await db.transaction(async tx => {
+    const lots = await tx.query.inventoryLots.findMany({ where: and(eq(inventoryLots.apartmentId, apartmentId), eq(inventoryLots.consumableId, consumableId)) })
+    const quantity = lots.reduce((sum: Decimal, lot: any) => sum.plus(lot.remainingQuantity), new Decimal(0))
+    if (quantity.gt(0)) {
+      await tx.insert(inventoryMovements).values({
+        apartmentId,
+        consumableId,
+        type: 'adjustment_out',
+        quantity: quantity.toFixed(3),
+        totalCostEur: 0,
+        origin: 'manual',
+        note: 'Удаление остатка из апартамента',
+        createdById: actor.id
+      })
+    }
+    await tx.delete(inventoryLots).where(and(eq(inventoryLots.apartmentId, apartmentId), eq(inventoryLots.consumableId, consumableId)))
+    await tx.delete(apartmentConsumables).where(and(eq(apartmentConsumables.apartmentId, apartmentId), eq(apartmentConsumables.consumableId, consumableId)))
+    return quantity.toNumber()
+  })
+
+  await writeAuditLog({
+    organizationId: actor.organizationId,
+    actorId: actor.id,
+    action: 'inventory.apartment_stock_deleted',
+    entityType: 'apartment',
+    entityId: apartmentId,
+    payload: { consumableId, quantity: deletedQuantity }
   })
   return { ok: true }
 }

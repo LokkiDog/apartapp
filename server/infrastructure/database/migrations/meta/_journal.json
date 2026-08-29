@@ -176,6 +176,13 @@
       "when": 1788075660000,
       "tag": "0024_remove_apartment_internal_code",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1788075720000,
+      "tag": "0025_inventory_discrepancy_approval",
+      "breakpoints": true
     }
   ]
 }

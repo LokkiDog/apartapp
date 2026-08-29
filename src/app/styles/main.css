@@ -13,6 +13,9 @@
   --color-primary-strong: #195844;
   --color-primary-soft: #e7f2ed;
   --color-line: #e7eee9;
+  --ui-border: var(--color-line);
+  --ui-border-muted: var(--color-line);
+  --ui-border-accented: var(--color-line);
   --shadow-surface:
     0 0 0 1px rgba(16, 46, 34, 0.055), 0 1px 2px -1px rgba(16, 46, 34, 0.06),
     0 8px 24px -16px rgba(16, 46, 34, 0.16);
@@ -322,7 +325,7 @@ img {
   gap: 0.875rem;
   overflow-y: auto;
   border: 1px solid
-    color-mix(in srgb, var(--color-primary) 18%, var(--color-line));
+    var(--color-line);
   border-radius: 16px;
   background: rgba(255, 255, 255, 0.96);
   padding: 0.875rem;
@@ -2011,6 +2014,72 @@ img {
     transparent
   ) !important;
 }
+.inventory-page .inventory-list > :not([hidden]) ~ :not([hidden]),
+.inventory-page .inventory-list > :not(:last-child),
+.inventory-page .inventory-form > .border-b,
+.inventory-page .inventory-form > .border-t {
+  border-color: var(--color-line) !important;
+}
+.inventory-stock-card {
+  transition-property: background-color;
+  transition-duration: 160ms;
+  transition-timing-function: ease;
+}
+.inventory-stock-card:hover,
+.inventory-stock-card:focus-visible {
+  background-color: color-mix(in srgb, var(--color-primary-soft) 42%, transparent);
+}
+.inventory-catalog-card {
+  transition-property: background-color;
+  transition-duration: 160ms;
+  transition-timing-function: ease;
+}
+.inventory-catalog-card:hover,
+.inventory-catalog-card:focus-visible {
+  background-color: color-mix(in srgb, var(--color-primary-soft) 42%, transparent);
+}
+.inventory-discrepancies {
+  border: 1px solid var(--color-line);
+  box-shadow:
+    0 1px 2px -1px rgba(16, 46, 34, 0.04),
+    0 8px 24px -16px rgba(16, 46, 34, 0.12);
+}
+.inventory-discrepancies__header {
+  border-bottom: 1px solid var(--color-line);
+}
+.inventory-discrepancies__list {
+  padding-inline: 0 !important;
+  text-align: left;
+}
+.inventory-discrepancy-row {
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+.inventory-discrepancy-row__link {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding-inline: 1rem !important;
+  text-align: left;
+  transition-property: background-color;
+  transition-duration: 160ms;
+  transition-timing-function: ease;
+}
+.inventory-discrepancies__list > .inventory-discrepancy-row:not(:last-child) {
+  border-bottom: 1px solid var(--color-line);
+}
+.inventory-discrepancy-row__link:hover,
+.inventory-discrepancy-row__link:focus-visible {
+  background-color: color-mix(in srgb, rgb(251 191 36) 14%, transparent);
+}
+.inventory-discrepancy-row__link:focus-visible {
+  outline: 2px solid color-mix(in srgb, rgb(180 83 9) 55%, transparent);
+  outline-offset: -2px;
+}
+.inventory-page .inventory-form [data-slot='control'] {
+  border-color: var(--color-line);
+}
 .user-list-row {
   display: grid;
   min-height: 5rem;
@@ -3186,6 +3255,27 @@ html[dir="rtl"] .dashboard-page-header__actions {
   padding: 0.875rem;
   border-radius: 0.875rem;
   background: var(--color-surface-muted);
+}
+.progress-stock-row.progress-stock-row--focused {
+  scroll-margin-top: 6rem;
+  background: rgb(255 251 235 / 0.8);
+  box-shadow: inset 0 0 0 1px rgb(245 158 11 / 0.4);
+  outline: none;
+}
+.progress-stock-source {
+  border-radius: 0.75rem;
+  background: rgb(254 243 199 / 0.62);
+  padding: 0.75rem;
+}
+.progress-stock-source dt {
+  color: rgb(120 53 15 / 0.72);
+  font-size: 0.75rem;
+}
+.progress-stock-source dd {
+  margin-top: 0.125rem;
+  color: rgb(69 26 3);
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
 }
 .progress-stock-label--mobile {
   display: none;

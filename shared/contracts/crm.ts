@@ -214,7 +214,25 @@ export const inventoryReplenishmentInputSchema = z.object({
   consumableId: z.uuid(),
   quantity: z.coerce.number().positive(),
   unitCostEur: moneyEurSchema,
-  note: z.string().max(500).default('')
+  note: z.string().max(500).default(''),
+  minimumQuantity: z.coerce.number().int('Порог должен быть целым числом').nonnegative('Порог не может быть отрицательным').default(0),
+  targetQuantity: z.coerce.number().int('Целевой остаток должен быть целым числом').nonnegative('Целевой остаток не может быть отрицательным').default(0)
+}).superRefine((value, context) => {
+  if (value.minimumQuantity > 0 && value.targetQuantity <= value.minimumQuantity) {
+    context.addIssue({ code: 'custom', path: ['targetQuantity'], message: 'Целевой остаток должен быть больше порога пополнения' })
+  }
+})
+
+export const inventoryStockUpdateInputSchema = z.object({
+  quantity: z.coerce.number().finite().nonnegative(),
+  unitCostEur: moneyEurSchema,
+  note: z.string().max(500).default(''),
+  minimumQuantity: z.coerce.number().int('Порог должен быть целым числом').nonnegative('Порог не может быть отрицательным').default(0),
+  targetQuantity: z.coerce.number().int('Целевой остаток должен быть целым числом').nonnegative('Целевой остаток не может быть отрицательным').default(0)
+}).superRefine((value, context) => {
+  if (value.minimumQuantity > 0 && value.targetQuantity <= value.minimumQuantity) {
+    context.addIssue({ code: 'custom', path: ['targetQuantity'], message: 'Целевой остаток должен быть больше порога пополнения' })
+  }
 })
 
 export const inventoryUsageInputSchema = z.object({

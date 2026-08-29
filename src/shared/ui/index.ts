@@ -1,4 +1,5 @@
 export { default as EmptyState } from './EmptyState.vue'
+export { default as ConfirmActionModal } from './ConfirmActionModal.vue'
 export { default as DeleteConfirmModal } from './DeleteConfirmModal.vue'
 export { default as DateInput } from './DateInput.vue'
 export { default as DateRangeInput } from './DateRangeInput.vue'

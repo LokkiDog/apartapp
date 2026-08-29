@@ -4,11 +4,12 @@ import type { Task } from '#fsd/entities/task'
 import { useCurrentUser } from '#fsd/shared/auth'
 import { formatDate, formatEuro } from '#fsd/shared/lib'
 import { useI18n } from 'vue-i18n'
-import { DeleteConfirmModal, PageHeader, StatusBadge } from '#fsd/shared/ui'
+import { ConfirmActionModal, DeleteConfirmModal, PageHeader, StatusBadge } from '#fsd/shared/ui'
 import { WorkProgressForm } from '#fsd/features/work-progress'
 
 type WorkKind = 'cleaning' | 'task'
-type InventoryItem = { consumable: { id: string; name: string; unit: string }; autoWriteOffQuantity: number | null; quantity: number; usedQuantity: number; remainingQuantity: number; discrepancyQuantity: number }
+type InventoryReportSource = { id: string; reportedBy: { id: string; name: string }; reportedAt: string; appliedAt: string | null; approvedAt: string | null; approvedBy: { id: string; name: string } | null; usedQuantity: number; remainingQuantity: number; discrepancyQuantity: number; startingQuantity: number; expectedRemainingQuantity: number }
+type InventoryItem = { consumable: { id: string; name: string; unit: string }; autoWriteOffQuantity: number | null; quantity: number; usedQuantity: number; remainingQuantity: number; discrepancyQuantity: number; startingQuantity: number; expectedRemainingQuantity: number; report: InventoryReportSource | null }
 type ProgressPayload = { checklist: Array<{ label: string; checked: boolean }>; comment: string; hasProblem: boolean; problemDescription: string; inventoryReports?: Array<{ consumableId: string; usedQuantity: number; remainingQuantity: number }>; photo: File | null }
 
 const props = defineProps<{ kind: WorkKind }>()
@@ -27,10 +28,16 @@ const attachments = ref<Array<{ id: string; fileName: string; mimeType: string }
 const error = ref('')
 const finishHint = ref('')
 const pending = ref(false)
+const approvalPending = ref(false), approvalError = ref(''), approvalOpen = ref(false)
+const inventoryItemToApprove = ref<InventoryItem | null>(null)
 const deleteOpen = ref(false)
 const stockOpen = ref(false)
 const stockItems = ref<Array<{ consumable: { id: string; name: string; unit: string }; quantity: number }>>([])
 const usageForm = reactive({ consumableId: '', quantity: 1, note: '' })
+const cameFromInventory = computed(() => props.kind === 'cleaning' && route.query.from === 'inventory')
+const focusConsumableId = computed(() => typeof route.query.focusConsumableId === 'string' ? route.query.focusConsumableId : '')
+const backHref = computed(() => cameFromInventory.value ? '/inventory' : '/work')
+const backLabel = computed(() => cameFromInventory.value ? t('inventoryDiscrepancy.back') : t('work.back'))
 
 const cleaning = computed(() => props.kind === 'cleaning' ? work.value as Cleaning | null : null)
 const task = computed(() => props.kind === 'task' ? work.value as Task | null : null)
@@ -81,6 +88,23 @@ async function saveInventoryOnly(reports: Array<{ consumableId: string; usedQuan
   catch (cause: any) { error.value = cause?.data?.statusMessage ?? t('work.saveStockError') }
   finally { pending.value = false }
 }
+function requestInventoryDiscrepancyApproval(item: InventoryItem) {
+  inventoryItemToApprove.value = item
+  approvalError.value = ''
+  approvalOpen.value = true
+}
+async function approveInventoryDiscrepancy() {
+  const reportId = inventoryItemToApprove.value?.report?.id
+  if (!reportId) return
+  approvalPending.value = true; approvalError.value = ''
+  try {
+    await $fetch(`/api/inventory/discrepancies/${reportId}/approve`, { method: 'POST' })
+    inventoryReports.value = await $fetch<InventoryItem[]>(`/api/cleanings/${id}/inventory`)
+    approvalOpen.value = false; inventoryItemToApprove.value = null
+  }
+  catch (cause: any) { approvalError.value = cause?.data?.statusMessage ?? t('common.error') }
+  finally { approvalPending.value = false }
+}
 
 async function saveProgress(payload: ProgressPayload, complete = false) {
   pending.value = true; error.value = ''; finishHint.value = ''
@@ -129,7 +153,7 @@ function requestComplete() {
 
 <template>
   <section class="work-detail-page page-wrap max-w-4xl space-y-5">
-    <UButton to="/work" color="neutral" variant="ghost" icon="i-lucide-arrow-left">{{ t('work.back') }}</UButton>
+    <UButton :to="backHref" color="neutral" variant="ghost" icon="i-lucide-arrow-left">{{ backLabel }}</UButton>
     <div v-if="status === 'pending'" class="grid gap-4"><USkeleton class="h-36 rounded-2xl" /><USkeleton class="h-64 rounded-2xl" /></div>
     <template v-else-if="work">
       <PageHeader class="work-detail-header" :title="title()">
@@ -143,7 +167,7 @@ function requestComplete() {
         <div v-if="props.kind === 'cleaning' && cleaning?.tariffSnapshot.cleanerPoolEur !== undefined"><p class="detail-label">{{ t('work.payout') }}</p><p class="font-semibold tabular-nums">{{ formatEuro(cleaning.tariffSnapshot.cleanerPoolEur) }}</p></div>
       </section>
       <section v-if="attachments.length" class="surface p-5 sm:p-6"><div class="mb-3 flex items-center gap-2"><UIcon name="i-lucide-paperclip" class="size-5 text-[var(--color-primary)]" /><h2 class="font-semibold">{{ t('work.photos') }}</h2></div><div class="flex flex-wrap gap-2"><a v-for="attachment in attachments" :key="attachment.id" :href="`/api/attachments/${attachment.id}/file`" target="_blank" rel="noreferrer" class="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[var(--color-surface-muted)] px-3 text-sm font-medium hover:bg-[var(--color-primary-soft)]"><UIcon name="i-lucide-image" class="size-4" />{{ attachment.fileName }}</a></div></section>
-      <WorkProgressForm :key="work.id" :kind="props.kind" :checklist="work.checklist" :comment="work.comment" :has-problem="work.hasProblem" :problem-description="work.problemDescription" :inventory-reports="inventoryReports" :editable="canProgress" :inventory-editable="inventoryEditable" :can-complete="canComplete" :can-stock="canStock" :busy="pending" :error="error" :finish-hint="finishHint" @save="payload => saveProgress(payload)" @complete="payload => saveProgress(payload, true)" @save-inventory="saveInventoryOnly" @stock="quickStock">
+      <WorkProgressForm :key="work.id" :kind="props.kind" :checklist="work.checklist" :comment="work.comment" :has-problem="work.hasProblem" :problem-description="work.problemDescription" :inventory-reports="inventoryReports" :focus-consumable-id="focusConsumableId" :editable="canProgress" :inventory-editable="inventoryEditable" :can-approve-inventory-discrepancy="inventoryEditable" :can-complete="canComplete" :can-stock="canStock" :busy="pending" :error="error" :finish-hint="finishHint" @save="payload => saveProgress(payload)" @complete="payload => saveProgress(payload, true)" @save-inventory="saveInventoryOnly" @approve-inventory-discrepancy="requestInventoryDiscrepancyApproval" @stock="quickStock">
         <template v-if="props.kind === 'cleaning' && canManage" #actions-left>
           <UButton color="error" variant="soft" icon="i-lucide-trash-2" :aria-label="t('work.deleteCleaning')" @click="deleteOpen = true" />
           <UButton :to="`/work?cleaningId=${encodeURIComponent(id)}`" color="neutral" variant="soft" icon="i-lucide-pencil" :aria-label="t('work.editCleaning')" />
@@ -153,6 +177,7 @@ function requestComplete() {
     </template>
     <EmptyState v-else icon="i-lucide-search-x" :title="t('work.notFound')" :description="t('work.notFoundDescription')" />
     <USlideover v-model:open="stockOpen" :title="t('work.stockTitle')"><template #body><form id="work-stock-form" class="form-grid" @submit.prevent="recordUsage"><UFormField :label="t('work.consumable')"><USelect v-model="usageForm.consumableId" :items="stockItems.map(item => ({ label: `${item.consumable.name} · ${t('work.stockRemaining', { quantity: item.quantity, unit: item.consumable.unit })}`, value: item.consumable.id }))" required /></UFormField><UFormField :label="t('work.quantity')"><UInput v-model.number="usageForm.quantity" type="number" min=".001" step=".001" required /></UFormField><UFormField :label="t('work.comment')"><UInput v-model="usageForm.note" /></UFormField></form></template><template #footer><div class="form-actions form-actions--footer"><UButton type="button" color="neutral" variant="ghost" @click="stockOpen = false">{{ t('work.cancel') }}</UButton><UButton type="submit" form="work-stock-form" :loading="pending">{{ t('work.writeOff') }}</UButton></div></template></USlideover>
+    <ConfirmActionModal v-model:open="approvalOpen" :title="t('inventoryApproval.title')" :description="t('inventoryApproval.description', { name: inventoryItemToApprove?.consumable.name ?? '', quantity: inventoryItemToApprove?.report?.remainingQuantity ?? '', unit: inventoryItemToApprove?.consumable.unit ?? '' })" :confirm-label="t('inventoryApproval.confirm')" :loading="approvalPending" :error="approvalError" @confirm="approveInventoryDiscrepancy" />
     <DeleteConfirmModal v-model:open="deleteOpen" :title="t('work.deleteWorkTitle', { kind: props.kind === 'cleaning' ? t('work.deleteCleaning').toLocaleLowerCase() : t('work.deleteTask').toLocaleLowerCase() })" :description="t('work.deleteWorkDescription')" :loading="pending" :error="error" @confirm="removeWork" />
   </section>
 </template>
