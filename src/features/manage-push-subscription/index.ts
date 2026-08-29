@@ -1,1 +1,1 @@
-export { usePushSubscription } from './model/usePushSubscription'
+export { unregisterPushSubscription, usePushSubscription } from './model/usePushSubscription'

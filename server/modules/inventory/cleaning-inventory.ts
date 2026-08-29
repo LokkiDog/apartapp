@@ -2,7 +2,7 @@ export type CleaningInventoryReport = { consumableId: string; usedQuantity: numb
 
 type ConfiguredConsumable = {
   consumableId: string
-  consumable: { autoWriteOffEnabled: boolean; autoWriteOffQuantity: number }
+  autoWriteOffQuantity: number | null
 }
 
 export function resolveCompletionInventoryReports(input: {
@@ -16,9 +16,9 @@ export function resolveCompletionInventoryReports(input: {
   return input.configured.flatMap(item => {
     const explicit = submittedByConsumable.get(item.consumableId) ?? savedByConsumable.get(item.consumableId)
     if (explicit) return [explicit]
-    if (!item.consumable.autoWriteOffEnabled) return []
+    if (item.autoWriteOffQuantity === null) return []
     const quantity = input.balances.find(balance => balance.consumableId === item.consumableId)?.quantity ?? 0
-    const usedQuantity = Number(item.consumable.autoWriteOffQuantity)
+    const usedQuantity = Number(item.autoWriteOffQuantity)
     return [{ consumableId: item.consumableId, usedQuantity, remainingQuantity: Math.max(0, quantity - usedQuantity) }]
   })
 }

@@ -8,7 +8,7 @@ import { DeleteConfirmModal, PageHeader, StatusBadge } from '#fsd/shared/ui'
 import { WorkProgressForm } from '#fsd/features/work-progress'
 
 type WorkKind = 'cleaning' | 'task'
-type InventoryItem = { consumable: { id: string; name: string; unit: string }; quantity: number; usedQuantity: number; remainingQuantity: number; discrepancyQuantity: number }
+type InventoryItem = { consumable: { id: string; name: string; unit: string }; autoWriteOffQuantity: number | null; quantity: number; usedQuantity: number; remainingQuantity: number; discrepancyQuantity: number }
 type ProgressPayload = { checklist: Array<{ label: string; checked: boolean }>; comment: string; hasProblem: boolean; problemDescription: string; inventoryReports?: Array<{ consumableId: string; usedQuantity: number; remainingQuantity: number }>; photo: File | null }
 
 const props = defineProps<{ kind: WorkKind }>()
@@ -62,8 +62,7 @@ onMounted(() => {
   }
 })
 
-function title() { return props.kind === 'cleaning' ? `${t('work.cleanings')} · ${cleaning.value?.apartment.name ?? ''}` : task.value?.title ?? t('work.tasks') }
-function subtitle() { return props.kind === 'cleaning' ? cleaning.value?.apartment.hotel.name ?? '' : `${task.value?.apartment.name ?? ''} · ${task.value?.apartment.hotel.name ?? ''}` }
+function title() { return props.kind === 'cleaning' ? `${t('calendar.cleaning')} · ${cleaning.value?.apartment.name ?? ''}` : task.value?.title ?? t('work.tasks') }
 function checklist() { return work.value?.checklist ?? [] }
 function cleanerNames() { return cleaning.value?.assignments.map(item => item.cleaner.name).join(', ') || t('work.notAssigned') }
 function draftBody(payload: ProgressPayload) { return { checklist: payload.checklist, comment: payload.comment, hasProblem: payload.hasProblem, problemDescription: payload.problemDescription, inventoryReports: props.kind === 'cleaning' && inventoryLoaded.value ? payload.inventoryReports : undefined } }
@@ -133,7 +132,7 @@ function requestComplete() {
     <UButton to="/work" color="neutral" variant="ghost" icon="i-lucide-arrow-left">{{ t('work.back') }}</UButton>
     <div v-if="status === 'pending'" class="grid gap-4"><USkeleton class="h-36 rounded-2xl" /><USkeleton class="h-64 rounded-2xl" /></div>
     <template v-else-if="work">
-      <PageHeader class="work-detail-header" :title="title()" :description="subtitle()">
+      <PageHeader class="work-detail-header" :title="title()">
         <template #actions><StatusBadge :label="statusLabels[work.status] ?? work.status" :tone="statusTones[work.status] ?? 'neutral'" /></template>
       </PageHeader>
       <section class="work-detail-summary surface grid grid-cols-2 gap-x-4 gap-y-5 p-5 sm:grid-cols-3 sm:p-6">

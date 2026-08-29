@@ -4,7 +4,7 @@ import { apartmentInputSchema, apartmentTypeInputSchema, apartmentUpdateSchema }
 import { canManageApartment, managedApartmentIds, requireRole, type Actor } from '../../infrastructure/auth/actor'
 import { writeAuditLog } from '../../infrastructure/audit/log'
 import { db } from '../../infrastructure/database/client'
-import { apartmentConsumables, apartmentManagers, apartmentTypes, apartments, attachments, cleaningAssignments, cleanings, financialEntries, hotels, inventoryLots, inventoryMovements, stays, tasks, users, type CleaningTariff } from '../../infrastructure/database/schema'
+import { apartmentConsumables, apartmentManagers, apartmentTypeConsumableWriteOffs, apartmentTypes, apartments, attachments, cleaningAssignments, cleanings, consumables, financialEntries, hotels, inventoryLots, inventoryMovements, stays, tasks, users, type CleaningTariff } from '../../infrastructure/database/schema'
 import { fileStorage } from '../../infrastructure/storage/local'
 import { serializeApartment } from './apartment-view'
 
@@ -18,12 +18,18 @@ function validateTariff(data: { ownerTotalEur: number, cleanerPoolEur: number, l
 export async function createApartmentType(actor: Actor, input: unknown) {
   requireRole(actor, 'administrator')
   const data = apartmentTypeInputSchema.parse(input)
-  const [type] = await db.insert(apartmentTypes).values({ organizationId: actor.organizationId, ...data }).returning()
+  const { autoWriteOffs, ...typeData } = data
+  const [type] = await db.transaction(async tx => {
+    const [created] = await tx.insert(apartmentTypes).values({ organizationId: actor.organizationId, ...typeData }).returning()
+    if (created) await replaceApartmentTypeWriteOffs(tx, actor.organizationId, created.id, autoWriteOffs)
+    return [created]
+  })
   return type
 }
 
 export async function listApartmentTypes(actor: Actor) {
-  return db.query.apartmentTypes.findMany({ where: eq(apartmentTypes.organizationId, actor.organizationId), orderBy: (types, { asc }) => [asc(types.name)] })
+  const types = await db.query.apartmentTypes.findMany({ where: eq(apartmentTypes.organizationId, actor.organizationId), with: { autoWriteOffs: true }, orderBy: (types, { asc }) => [asc(types.name)] })
+  return types.map(type => ({ ...type, autoWriteOffs: type.autoWriteOffs.map(rule => ({ consumableId: rule.consumableId, quantity: Number(rule.quantity) })) }))
 }
 
 export async function deleteApartmentType(actor: Actor, apartmentTypeId: string) {
@@ -52,13 +58,27 @@ export async function deleteApartmentType(actor: Actor, apartmentTypeId: string)
 export async function updateApartmentType(actor: Actor, apartmentTypeId: string, input: unknown) {
   requireRole(actor, 'administrator')
   const data = apartmentTypeInputSchema.parse(input)
-  const [updated] = await db.update(apartmentTypes)
-    .set({ ...data, updatedAt: new Date() })
-    .where(and(eq(apartmentTypes.id, apartmentTypeId), eq(apartmentTypes.organizationId, actor.organizationId)))
-    .returning()
+  const { autoWriteOffs, ...typeData } = data
+  const [updated] = await db.transaction(async tx => {
+    const [saved] = await tx.update(apartmentTypes)
+      .set({ ...typeData, updatedAt: new Date() })
+      .where(and(eq(apartmentTypes.id, apartmentTypeId), eq(apartmentTypes.organizationId, actor.organizationId)))
+      .returning()
+    if (saved) await replaceApartmentTypeWriteOffs(tx, actor.organizationId, apartmentTypeId, autoWriteOffs)
+    return [saved]
+  })
   if (!updated) throw createError({ statusCode: 404, statusMessage: 'Тип апартамента не найден' })
   await writeAuditLog({ organizationId: actor.organizationId, actorId: actor.id, action: 'apartment_type.updated', entityType: 'apartment_type', entityId: apartmentTypeId })
   return updated
+}
+
+async function replaceApartmentTypeWriteOffs(tx: any, organizationId: string, apartmentTypeId: string, rules: Array<{ consumableId: string, quantity: number }>) {
+  if (rules.length) {
+    const existing = await tx.query.consumables.findMany({ where: and(eq(consumables.organizationId, organizationId), inArray(consumables.id, rules.map(rule => rule.consumableId))) })
+    if (existing.length !== rules.length) throw createError({ statusCode: 400, statusMessage: 'Выберите расходники своей организации' })
+  }
+  await tx.delete(apartmentTypeConsumableWriteOffs).where(and(eq(apartmentTypeConsumableWriteOffs.organizationId, organizationId), eq(apartmentTypeConsumableWriteOffs.apartmentTypeId, apartmentTypeId)))
+  if (rules.length) await tx.insert(apartmentTypeConsumableWriteOffs).values(rules.map(rule => ({ organizationId, apartmentTypeId, consumableId: rule.consumableId, quantity: String(rule.quantity) })))
 }
 
 export async function listApartments(actor: Actor, hotelId?: string) {
@@ -81,7 +101,7 @@ async function validateManagers(actor: Actor, managerIds: string[]) {
     where: and(inArray(users.id, managerIds), eq(users.organizationId, actor.organizationId), eq(users.status, 'active'))
   })
   if (managers.length !== managerIds.length || managers.some(manager => !manager.roles.includes('manager'))) {
-    throw createError({ statusCode: 400, statusMessage: 'Выберите активных управляющих' })
+    throw createError({ statusCode: 400, statusMessage: 'Выберите активных собственников' })
   }
 }
 

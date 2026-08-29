@@ -5,6 +5,9 @@ import { AUTH_SESSION_IDLE_MAX_AGE_SECONDS } from './shared/config/auth-session'
 export default defineNuxtConfig({
   compatibilityDate: '2026-08-09',
   devtools: { enabled: true },
+  nitro: {
+    experimental: { websocket: true }
+  },
   modules: ['@nuxt/ui', 'nuxt-auth-utils', '@vite-pwa/nuxt', '@nuxtjs/i18n'],
   i18n: {
     defaultLocale: 'ru',

@@ -206,7 +206,7 @@ img { outline: 1px solid rgba(0, 0, 0, .1); outline-offset: -1px; }
 .stay-agenda-category__count { display: inline-grid; min-width: 24px; min-height: 24px; place-items: center; border-radius: 7px; background: #f1f4f2; color: var(--color-muted); font-size: .72rem; font-weight: 750; font-variant-numeric: tabular-nums; }
 .stay-agenda-category__empty { margin-left: 2.25rem; padding: .1rem 0 .3rem; color: var(--color-muted); font-size: .72rem; }
 .stay-agenda-category__items { margin-left: 2.25rem; }
-.stay-agenda-item { display: grid; min-height: 52px; grid-template-columns: minmax(0, 1fr) auto; gap: .75rem; align-items: center; border-top: 1px solid var(--color-line); padding-block: .35rem; }
+.stay-agenda-item { position: relative; display: grid; min-height: 52px; grid-template-columns: minmax(0, 1fr) auto; gap: .75rem; align-items: center; border-top: 1px solid var(--color-line); padding-block: .35rem; }
 .stay-agenda-item__content { min-width: 0; }
 .stay-agenda-item__title-row { min-width: 0; }
 .stay-agenda-item__apartment { overflow: hidden; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
@@ -214,7 +214,7 @@ img { outline: 1px solid rgba(0, 0, 0, .1); outline-offset: -1px; }
 .stay-agenda-item__guest-count, .stay-agenda-item__guest-name { display: none; }
 .stay-agenda-item__title-meta { display: inline-flex; min-width: 0; align-items: center; gap: .4rem; }
 .stay-agenda-item__meta { display: flex; min-width: 0; flex-wrap: wrap; gap: .1rem .6rem; margin-top: .15rem; color: var(--color-muted); font-size: .72rem; font-variant-numeric: tabular-nums; }
-.stay-agenda-item__actions { display: flex; align-items: center; gap: .15rem; }
+.stay-agenda-item__actions { position: relative; z-index: 2; display: flex; align-items: center; gap: .15rem; }
 .stay-agenda-item__actions > * { min-width: 44px; min-height: 44px; transition-property: scale, background-color, color; transition-duration: 150ms; transition-timing-function: ease-out; }
 .stay-agenda-item__actions .stay-agenda-action { display: grid; width: 44px; min-width: 44px; height: 44px; min-height: 44px; place-items: center; padding: 0; line-height: 1; }
 .stay-agenda-item__actions > *:active { scale: .96; }
@@ -228,17 +228,39 @@ img { outline: 1px solid rgba(0, 0, 0, .1); outline-offset: -1px; }
 .apartment-bookings__chevron { width: 20px; height: 20px; color: var(--color-muted); transition-property: rotate; transition-duration: 180ms; transition-timing-function: ease-out; }
 .apartment-bookings__chevron--open { rotate: 180deg; }
 .apartment-bookings__items { padding: .25rem 1rem .5rem; }
-.apartment-bookings__item { display: grid; min-height: 52px; grid-template-columns: minmax(0, 1fr) auto; gap: .75rem; align-items: center; border-top: 1px solid var(--color-line); padding-block: .35rem; }
+.apartment-bookings__item { position: relative; display: grid; min-height: 52px; grid-template-columns: minmax(0, 1fr) auto; gap: .75rem; align-items: center; border-top: 1px solid var(--color-line); padding-block: .35rem; }
 .apartment-bookings__item-content { min-width: 0; }
 .apartment-bookings__item-title { display: flex; min-width: 0; align-items: baseline; justify-content: space-between; gap: .5rem; }
-.apartment-bookings__guest-name { min-width: 0; overflow: hidden; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.apartment-bookings__booking-dates { min-width: 0; overflow: hidden; font-weight: 700; font-variant-numeric: tabular-nums; text-overflow: ellipsis; white-space: nowrap; }
+.apartment-bookings__booking-dates-compact { display: none; }
 .apartment-bookings__item-meta { display: inline-flex; min-width: 0; flex: 0 0 auto; align-items: center; gap: .4rem; color: var(--color-muted); }
 .apartment-bookings__guest-count { font-size: .72rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.apartment-bookings__dates { min-width: 0; overflow: hidden; margin-top: .15rem; color: var(--color-muted); font-size: .72rem; font-variant-numeric: tabular-nums; text-overflow: ellipsis; white-space: nowrap; }
-.apartment-bookings__actions { display: flex; align-items: center; gap: .15rem; }
+.apartment-bookings__details { display: flex; min-width: 0; overflow: hidden; align-items: baseline; gap: .35rem; margin-top: .15rem; color: var(--color-muted); font-size: .72rem; white-space: nowrap; }
+.apartment-bookings__comment { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.apartment-bookings__separator, .apartment-bookings__cash { flex: 0 0 auto; }
+.apartment-bookings__cash { font-variant-numeric: tabular-nums; }
+.apartment-bookings__actions { position: relative; z-index: 2; display: flex; align-items: center; gap: .15rem; }
 .apartment-bookings__actions > * { min-width: 44px; min-height: 44px; transition-property: scale, background-color, color; transition-duration: 150ms; transition-timing-function: ease-out; }
 .apartment-bookings__actions > *:active { scale: .96; }
 .apartment-bookings__empty { border-top: 1px solid var(--color-line); margin-inline: 1rem; padding: .85rem 0 1rem; color: var(--color-muted); font-size: .78rem; }
+.booking-row-open { position: absolute; z-index: 1; inset: 0; border: 0; border-radius: 10px; background: transparent; cursor: pointer; }
+.booking-row-open:hover { background: color-mix(in srgb, var(--color-primary-soft) 36%, transparent); }
+.booking-row-open:focus-visible { outline: 2px solid var(--color-primary); outline-offset: -2px; }
+.stay-details { display: grid; gap: 1rem; }
+.stay-details__header { display: flex; align-items: center; gap: .75rem; }
+.stay-details__icon { display: grid; width: 44px; height: 44px; flex: 0 0 44px; place-items: center; border-radius: 12px; background: var(--color-primary-soft); color: var(--color-primary); }
+.stay-details__facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .5rem; }
+.stay-details__facts > div { border-radius: 10px; background: #f4f8f6; padding: .65rem .75rem; }
+.stay-details dt { color: var(--color-muted); font-size: .72rem; }
+.stay-details dd { margin-top: .15rem; color: var(--color-ink); font-weight: 650; font-variant-numeric: tabular-nums; }
+.stay-details__section { display: grid; gap: .6rem; border-top: 1px solid var(--color-line); padding-top: 1rem; }
+.stay-details__section h3 { font-weight: 700; }
+.stay-details__list { display: grid; gap: .65rem; }
+.stay-details__list dd { font-weight: 500; white-space: pre-wrap; }
+.stay-details__services { display: grid; gap: .35rem; }
+.stay-details__service, .stay-details__cash { display: flex; min-height: 44px; align-items: center; justify-content: space-between; gap: .75rem; }
+.stay-details__service strong, .stay-details__cash strong { flex: 0 0 auto; font-variant-numeric: tabular-nums; }
+.stay-details__cleaning { display: flex; min-height: 44px; align-items: center; gap: .5rem; border-radius: 10px; padding: .65rem .75rem; font-size: .8rem; font-weight: 650; }
 .calendar-board { max-width: 100%; overflow-x: auto; }
 .calendar-week-grid { display: grid; min-width: 780px; grid-template-columns: 164px minmax(616px, 1fr); }
 .calendar-week-grid--day { min-width: 0; grid-template-columns: 164px minmax(0, 1fr); }
@@ -335,6 +357,13 @@ img { outline: 1px solid rgba(0, 0, 0, .1); outline-offset: -1px; }
 .stay-calendar-popover__notes { display: grid; gap: .3rem; color: var(--color-muted); font-size: .72rem; line-height: 1.35; }
 .stay-calendar-popover__notes strong { color: var(--color-ink); font-weight: 650; }
 .form-grid { display: grid; gap: 1rem; }
+.work-cleanings .border-b, .work-cleanings .border-t { border-color: color-mix(in srgb, var(--color-line) 32%, transparent) !important; }
+.work-cleanings .divide-y > :not([hidden]) ~ :not([hidden]), .work-cleanings .divide-y > :not(:last-child) { border-color: color-mix(in srgb, var(--color-line) 32%, transparent) !important; }
+.user-list-row { display: grid; min-height: 5rem; grid-template-columns: auto minmax(0, 1fr) 6rem 5.75rem; align-items: center; gap: .75rem; padding-block: 1rem; }
+.user-list > * + * { border-top: 1px solid color-mix(in srgb, var(--color-line) 55%, transparent); }
+@media (min-width: 640px) {
+  .user-list-row { grid-template-columns: auto minmax(0, 1fr) 7rem 6rem 5.75rem; gap: 1rem; }
+}
 .cleaning-context-fields { display: grid; gap: 1rem; }
 .cleaning-context-fields--linked { border-bottom: 1px solid var(--color-line); padding-bottom: 1rem; }
 .cleaning-tariff-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .5rem; border-top: 1px solid var(--color-line); padding-top: .75rem; }
@@ -490,6 +519,7 @@ html[dir="rtl"] .page-header__actions, html[dir="rtl"] .dashboard-page-header__a
   .stay-agenda-day__date { display: flex; align-items: baseline; gap: .35rem; }
   .stay-agenda-day__date-full { display: none; }
   .stay-agenda-day__date-compact { display: inline; }
+  .stay-agenda-day__event-total { display: none; }
   .stay-agenda-day__header h2 { flex: 0 0 auto; font-size: clamp(.72rem, 3.2vw, .82rem); text-wrap: nowrap; }
   .stay-agenda-day__header p { flex: 0 0 auto; margin-top: 0; font-size: clamp(.6rem, 2.6vw, .68rem); }
   .stay-agenda-day__controls { flex: 0 0 auto; gap: .1rem; }
@@ -518,7 +548,11 @@ html[dir="rtl"] .page-header__actions, html[dir="rtl"] .dashboard-page-header__a
   .apartment-bookings__item { grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto auto; column-gap: .35rem; row-gap: .15rem; padding-block: .25rem; }
   .apartment-bookings__item-content { display: contents; }
   .apartment-bookings__item-title { grid-column: 1 / -1; }
-  .apartment-bookings__dates { grid-column: 1; grid-row: 2; margin-top: 0; align-self: center; }
+  .apartment-bookings__booking-dates { overflow: visible; flex: 0 0 auto; font-size: .98rem; text-overflow: clip; }
+  .apartment-bookings__booking-dates-full { display: none; }
+  .apartment-bookings__booking-dates-compact { display: inline; }
+  .apartment-bookings__item-meta { overflow: hidden; flex: 1 1 auto; justify-content: flex-end; }
+  .apartment-bookings__details { grid-column: 1; grid-row: 2; margin-top: 0; align-self: center; }
   .apartment-bookings__actions { grid-column: 2; grid-row: 2; gap: .5rem; justify-content: flex-end; }
   .apartment-bookings__actions > * { position: relative; width: 36px; min-width: 36px; height: 36px; min-height: 36px; flex-basis: 36px; }
   .apartment-bookings__actions > *::after { position: absolute; top: 50%; left: 50%; width: 44px; height: 44px; content: ""; translate: -50% -50%; }

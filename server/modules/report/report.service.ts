@@ -236,7 +236,7 @@ export async function globalReport(actor: Actor, query: ReportQuery): Promise<Gl
     const apartment = apartmentMap.get(entry.apartmentId)!
     const managerNames = entry.managerTeamSnapshot.map(manager => manager.name)
     const managerKey = entry.managerTeamSnapshot.map(manager => manager.id).join(',') || 'unassigned'
-    const managerLabel = managerNames.join(', ') || 'Без управляющих'
+    const managerLabel = managerNames.join(', ') || 'Без собственников'
     if (entry.type === 'guest_service_charge') guestServices = guestServices.plus(entry.amountEur)
     else operatingExpenses = operatingExpenses.plus(entry.amountEur)
     addAmount(byTypeMap, entry.type, financeTypeLabels[entry.type] ?? entry.type, entry.amountEur)

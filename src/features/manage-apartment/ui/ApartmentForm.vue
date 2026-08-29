@@ -89,7 +89,6 @@ async function save(event: FormSubmitEvent<ApartmentInput>) {
         <div class="apartment-form-section__icon"><UIcon name="i-lucide-map-pin" class="size-5" /></div>
         <div>
           <h2 class="text-lg font-semibold">{{ t('apartments.objectLocation') }}</h2>
-          <p class="mt-1 text-sm text-[var(--color-muted)]">{{ t('apartments.objectLocationHint') }}</p>
         </div>
       </div>
 
@@ -128,7 +127,6 @@ async function save(event: FormSubmitEvent<ApartmentInput>) {
         <div class="apartment-form-section__icon"><UIcon name="i-lucide-sliders-horizontal" class="size-5" /></div>
         <div>
           <h2 class="text-lg font-semibold">{{ t('apartments.parameters') }}</h2>
-          <p class="mt-1 text-sm text-[var(--color-muted)]">{{ t('apartments.parametersHint') }}</p>
         </div>
       </div>
 
@@ -178,7 +176,6 @@ async function save(event: FormSubmitEvent<ApartmentInput>) {
         <div class="apartment-form-section__icon"><UIcon name="i-lucide-notebook-pen" class="size-5" /></div>
         <div>
           <h2 class="text-lg font-semibold">{{ t('apartments.teamInstructions') }}</h2>
-          <p class="mt-1 text-sm text-[var(--color-muted)]">{{ t('apartments.teamInstructionsHint') }}</p>
         </div>
       </div>
       <UFormField name="instructions" :label="t('apartments.instructions')" class="mt-5">

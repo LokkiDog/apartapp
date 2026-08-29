@@ -213,10 +213,20 @@ export const consumables = pgTable('consumables', {
   name: text('name').notNull(),
   category: text('category').notNull(),
   unit: text('unit').notNull(),
-  autoWriteOffEnabled: boolean('auto_write_off_enabled').notNull().default(false),
-  autoWriteOffQuantity: numeric('auto_write_off_quantity', { precision: 12, scale: 3, mode: 'number' }).notNull().default(0),
   ...timestamps
-}, table => [check('consumable_auto_write_off_valid', sql`(${table.autoWriteOffEnabled} = false AND ${table.autoWriteOffQuantity} = 0) OR (${table.autoWriteOffEnabled} = true AND ${table.autoWriteOffQuantity} > 0)`)] )
+})
+
+export const apartmentTypeConsumableWriteOffs = pgTable('apartment_type_consumable_write_offs', {
+  organizationId: uuid('organization_id').notNull().references(() => organizations.id),
+  apartmentTypeId: uuid('apartment_type_id').notNull().references(() => apartmentTypes.id, { onDelete: 'cascade' }),
+  consumableId: uuid('consumable_id').notNull().references(() => consumables.id, { onDelete: 'cascade' }),
+  quantity: numeric('quantity', { precision: 12, scale: 3 }).notNull(),
+  ...timestamps
+}, table => [
+  primaryKey({ columns: [table.apartmentTypeId, table.consumableId] }),
+  index('apartment_type_write_off_org_type_idx').on(table.organizationId, table.apartmentTypeId),
+  check('apartment_type_write_off_quantity_positive', sql`${table.quantity} > 0`)
+])
 
 export const apartmentConsumables = pgTable('apartment_consumables', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -400,7 +410,7 @@ export const usersRelations = relations(users, ({ many }) => ({
   createdTasks: many(tasks, { relationName: 'taskCreator' })
 }))
 
-export const apartmentTypesRelations = relations(apartmentTypes, ({ many }) => ({ apartments: many(apartments) }))
+export const apartmentTypesRelations = relations(apartmentTypes, ({ many }) => ({ apartments: many(apartments), autoWriteOffs: many(apartmentTypeConsumableWriteOffs) }))
 export const hotelsRelations = relations(hotels, ({ many }) => ({ apartments: many(apartments) }))
 export const apartmentsRelations = relations(apartments, ({ one, many }) => ({
   hotel: one(hotels, { fields: [apartments.hotelId], references: [hotels.id] }),
@@ -454,7 +464,11 @@ export const tasksRelations = relations(tasks, ({ one }) => ({
   assignee: one(users, { fields: [tasks.assigneeId], references: [users.id], relationName: 'taskAssignee' }),
   createdBy: one(users, { fields: [tasks.createdById], references: [users.id], relationName: 'taskCreator' })
 }))
-export const consumablesRelations = relations(consumables, ({ many }) => ({ apartmentStocks: many(apartmentConsumables) }))
+export const consumablesRelations = relations(consumables, ({ many }) => ({ apartmentStocks: many(apartmentConsumables), apartmentTypeWriteOffs: many(apartmentTypeConsumableWriteOffs) }))
+export const apartmentTypeConsumableWriteOffsRelations = relations(apartmentTypeConsumableWriteOffs, ({ one }) => ({
+  apartmentType: one(apartmentTypes, { fields: [apartmentTypeConsumableWriteOffs.apartmentTypeId], references: [apartmentTypes.id] }),
+  consumable: one(consumables, { fields: [apartmentTypeConsumableWriteOffs.consumableId], references: [consumables.id] })
+}))
 export const apartmentConsumablesRelations = relations(apartmentConsumables, ({ one }) => ({
   apartment: one(apartments, { fields: [apartmentConsumables.apartmentId], references: [apartments.id] }),
   consumable: one(consumables, { fields: [apartmentConsumables.consumableId], references: [consumables.id] })

@@ -10,6 +10,7 @@ import { useCurrentUser } from '#fsd/shared/auth'
 import { DateRangeInput, EmptyState, MoneyInput, PageHeader } from '#fsd/shared/ui'
 import StayCalendarPopover from './StayCalendarPopover.vue'
 import StayServiceIcons from './StayServiceIcons.vue'
+import StayDetailsSlideover from './StayDetailsSlideover.vue'
 import ApartmentBookingsView from './ApartmentBookingsView.vue'
 import { useI18n } from 'vue-i18n'
 import { assignMonthWeekLanes, createWeekSegments, type CalendarStaySegment } from './model/calendar-timeline'
@@ -59,6 +60,8 @@ const cleaningAssignmentFilter = ref<CleaningAssignmentFilter>('all')
 const selectedAgendaStatuses = ref<StayAgendaStatus[]>([...allAgendaStatuses])
 const cursor = ref(todayKey())
 const open = ref(false)
+const detailsOpen = ref(false)
+const selectedStay = ref<Stay | null>(null)
 const editingStay = ref<Stay | null>(null)
 const deleteOpen = ref(false)
 const stayToDelete = ref<Stay | null>(null)
@@ -195,7 +198,7 @@ function agendaDateLabel(day: string, compact = false) {
     timeZone: 'Europe/Sofia'
   }).format(dateFromKey(day))
   if (day === today) return `${t('common.today')}, ${formatted.replace(/^./, letter => letter.toLowerCase())}`
-  if (day === tomorrow) return `${t('calendar.next')}, ${formatted.replace(/^./, letter => letter.toLowerCase())}`
+  if (day === tomorrow) return `${t('calendarExtra.tomorrow')}, ${formatted.replace(/^./, letter => letter.toLowerCase())}`
   return formatted.replace(/^./, letter => letter.toUpperCase())
 }
 function agendaCategory(status: StayAgendaStatus) {
@@ -257,6 +260,10 @@ function openEdit(stay: Stay) {
   })
   error.value = ''
   open.value = true
+}
+function openDetails(stay: Stay) {
+  selectedStay.value = stay
+  detailsOpen.value = true
 }
 function setServiceSelected(serviceId: string, selected: boolean | 'indeterminate') {
   if (selected === true) {
@@ -360,9 +367,9 @@ async function saveStay() {
       <UCollapsible v-for="(day, dayIndex) in agendaDays" :key="day.date" as="section" :default-open="dayIndex === 0" class="stay-agenda-day surface">
         <template #default="{ open }">
           <button type="button" class="stay-agenda-day__header">
-            <div class="stay-agenda-day__date">
+            <div class="stay-agenda-day__date ">
               <h2><span class="stay-agenda-day__date-full">{{ agendaDateLabel(day.date) }}</span><span class="stay-agenda-day__date-compact">{{ agendaDateLabel(day.date, true) }}</span></h2>
-              <p>{{ agendaEventCount(day.totalCount) }}</p>
+              <p class="stay-agenda-day__event-total">{{ agendaEventCount(day.totalCount) }}</p>
             </div>
             <div class="stay-agenda-day__controls">
               <div class="stay-agenda-day__summary" :aria-label="t('reports.dateAndCategory')">
@@ -384,6 +391,7 @@ async function saveStay() {
               </header>
               <div class="stay-agenda-category__items">
                 <article v-for="item in category.items" :key="`${day.date}-${item.stay.id}-${item.status}`" class="stay-agenda-item">
+                  <button type="button" class="booking-row-open" :aria-label="t('calendarExtra.openBooking', { apartment: item.stay.apartment.name })" @click="openDetails(item.stay)" />
                   <div class="stay-agenda-item__content">
                     <div class="stay-agenda-item__title-row">
                       <p class="stay-agenda-item__apartment">{{ item.stay.apartment.name }} <span>· {{ item.stay.apartment.hotel.name }}</span></p>
@@ -413,7 +421,7 @@ async function saveStay() {
     </div>
     <EmptyState v-else-if="bookingView === 'dates'" icon="i-lucide-calendar-check-2" :title="t('calendar.eventTypes')" :description="t('calendar.chooseScope')"><template #actions><UButton @click="openCreate">{{ t('calendar.newBooking') }}</UButton></template></EmptyState>
 
-    <ApartmentBookingsView v-else-if="bookingView === 'apartments' && visibleApartments.length" :apartments="visibleApartments" :stays="filteredStays" :can-edit="canEditStays" :can-delete="Boolean(user?.roles.includes('administrator'))" @edit="openEdit" @delete="openDelete" />
+    <ApartmentBookingsView v-else-if="bookingView === 'apartments' && visibleApartments.length" :apartments="visibleApartments" :stays="filteredStays" :can-edit="canEditStays" :can-delete="Boolean(user?.roles.includes('administrator'))" @open="openDetails" @edit="openEdit" @delete="openDelete" />
     <EmptyState v-else-if="bookingView === 'apartments'" icon="i-lucide-building-2" :title="t('scope.apartmentsLabel')" :description="t('scope.loadErrorDescription')" />
 
     <div v-else-if="bookingView === 'calendar' && calendarPeriod !== 'month' && visibleApartments.length" class="calendar-board surface">
@@ -530,6 +538,8 @@ async function saveStay() {
         </template>
       </div>
     </div>
+
+    <StayDetailsSlideover v-model:open="detailsOpen" :stay="selectedStay" :can-edit="canEditStays" :can-manage-cleaning="Boolean(user?.roles.includes('administrator'))" @edit="openEdit" />
 
     <USlideover v-model:open="open" :title="editingStay ? t('calendar.editBooking') : t('calendar.newStay')">
       <template #body>

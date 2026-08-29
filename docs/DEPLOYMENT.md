@@ -215,6 +215,22 @@ cd /home/aparts-bansko
 
 ## Host Nginx и TLS
 
+Отключите стандартную страницу Nginx и установите default virtual host,
+который отклоняет обращения по IP и запросы с неизвестным `Host`:
+
+```sh
+sudo cp deploy/nginx/aparts-default.conf /etc/nginx/sites-available/aparts-default
+sudo ln -sfn /etc/nginx/sites-available/aparts-default /etc/nginx/sites-enabled/aparts-default
+sudo rm -f /etc/nginx/sites-enabled/default
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+Ответ по HTTP-IP будет закрыт без тела, а TLS-handshake по HTTPS-IP будет
+отклонен. Домены
+`aparts-bansko.com` и `crm.aparts-bansko.com` продолжат обслуживаться своими
+virtual host.
+
 Сначала установите временный HTTP virtual host:
 
 ```sh

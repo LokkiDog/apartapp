@@ -43,10 +43,17 @@ function withCalculatedTariff<Shape extends z.ZodRawShape>(shape: Shape) {
 }
 
 const checklistLabelsSchema = z.array(z.string().trim().min(1).max(200)).max(100)
-export const apartmentTypeInputSchema = withCalculatedTariff({ name: z.string().trim().min(1).max(100), defaultChecklist: checklistLabelsSchema.default(['Сменить белье и полотенца', 'Проверить санузел и кухню', 'Проверить расходники']) })
+const apartmentTypeAutoWriteOffSchema = z.object({ consumableId: z.uuid(), quantity: z.coerce.number().finite().positive().max(9_999_999.999) })
+export const apartmentTypeInputSchema = withCalculatedTariff({
+  name: z.string().trim().min(1).max(100),
+  defaultChecklist: checklistLabelsSchema.default(['Сменить белье и полотенца', 'Проверить санузел и кухню', 'Проверить расходники']),
+  autoWriteOffs: z.array(apartmentTypeAutoWriteOffSchema).max(500).default([]).superRefine((rules, context) => {
+    if (new Set(rules.map(rule => rule.consumableId)).size !== rules.length) context.addIssue({ code: 'custom', message: 'Расходники в автосписании не должны повторяться' })
+  })
+})
 const apartmentTariffInputSchema = withCalculatedTariff({})
-const apartmentManagerIdsSchema = z.array(z.uuid({ error: 'Выберите корректных управляющих' })).max(100).superRefine((managerIds, context) => {
-  if (new Set(managerIds).size !== managerIds.length) context.addIssue({ code: 'custom', message: 'Управляющие не должны повторяться' })
+const apartmentManagerIdsSchema = z.array(z.uuid({ error: 'Выберите корректных собственников' })).max(100).superRefine((managerIds, context) => {
+  if (new Set(managerIds).size !== managerIds.length) context.addIssue({ code: 'custom', message: 'Собственники не должны повторяться' })
 })
 
 export const apartmentInputSchema = z.object({
@@ -197,16 +204,7 @@ export const taskUpdateSchema = taskInputSchema.partial().extend({ status: taskS
 export const consumableInputSchema = z.object({
   name: z.string().trim().min(1).max(160),
   category: z.string().trim().min(1).max(100),
-  unit: z.string().trim().min(1).max(32),
-  autoWriteOffEnabled: z.boolean().default(false),
-  autoWriteOffQuantity: z.coerce.number().finite().nonnegative().max(9_999_999.999).default(0)
-}).transform(value => ({
-  ...value,
-  autoWriteOffQuantity: value.autoWriteOffEnabled ? value.autoWriteOffQuantity : 0
-})).superRefine((value, context) => {
-  if (value.autoWriteOffEnabled && value.autoWriteOffQuantity <= 0) {
-    context.addIssue({ code: 'custom', path: ['autoWriteOffQuantity'], message: 'Укажите количество для автосписания' })
-  }
+  unit: z.string().trim().min(1).max(32)
 })
 
 export const inventoryReplenishmentInputSchema = z.object({

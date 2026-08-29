@@ -36,6 +36,15 @@ function validateInventoryReports(reports: InventoryReport[], configuredIds: Set
   if (new Set(reports.map(report => report.consumableId)).size !== reports.length) throw createError({ statusCode: 400, statusMessage: 'Расходники в отчёте не должны повторяться' })
 }
 
+async function configuredConsumables(conn: any, cleaning: { organizationId: string; apartmentId: string }) {
+  const [items, apartment] = await Promise.all([
+    conn.query.apartmentConsumables.findMany({ where: and(eq(apartmentConsumables.apartmentId, cleaning.apartmentId), eq(apartmentConsumables.active, true)), with: { consumable: true } }),
+    conn.query.apartments.findFirst({ where: and(eq(apartments.id, cleaning.apartmentId), eq(apartments.organizationId, cleaning.organizationId)), with: { type: { with: { autoWriteOffs: true } } } })
+  ])
+  const writeOffs = new Map((apartment?.type?.autoWriteOffs ?? []).map((rule: any) => [rule.consumableId, Number(rule.quantity)]))
+  return items.map((item: any) => ({ ...item, autoWriteOffQuantity: writeOffs.get(item.consumableId) ?? null }))
+}
+
 async function reverseCleaningInventoryEffects(tx: any, cleaning: { id: string }) {
   const previousMovements = await tx.select().from(inventoryMovements).where(and(eq(inventoryMovements.sourceType, 'cleaning'), eq(inventoryMovements.sourceId, cleaning.id), eq(inventoryMovements.origin, 'cleaning_report'))).orderBy(desc(inventoryMovements.createdAt))
   for (const movement of previousMovements) {
@@ -50,7 +59,7 @@ async function reverseCleaningInventoryEffects(tx: any, cleaning: { id: string }
 }
 
 export async function applyCleaningInventoryReports(tx: any, actor: Actor, cleaning: { id: string; organizationId: string; apartmentId: string }, submittedReports?: InventoryReport[]) {
-  const configured = await tx.query.apartmentConsumables.findMany({ where: and(eq(apartmentConsumables.apartmentId, cleaning.apartmentId), eq(apartmentConsumables.active, true)), with: { consumable: true } })
+  const configured = await configuredConsumables(tx, cleaning)
   const configuredIds = new Set<string>(configured.map((item: any) => item.consumableId))
   validateInventoryReports(submittedReports ?? [], configuredIds)
   const savedReports = await tx.query.cleaningInventoryReports.findMany({ where: eq(cleaningInventoryReports.cleaningId, cleaning.id) })
@@ -90,7 +99,7 @@ export async function applyCleaningInventoryReports(tx: any, actor: Actor, clean
 }
 
 export async function saveCleaningInventoryDrafts(tx: any, actor: Actor, cleaning: { id: string; organizationId: string; apartmentId: string }, reports: InventoryReport[]) {
-  const configured = await tx.query.apartmentConsumables.findMany({ where: and(eq(apartmentConsumables.apartmentId, cleaning.apartmentId), eq(apartmentConsumables.active, true)), with: { consumable: true } })
+  const configured = await configuredConsumables(tx, cleaning)
   validateInventoryReports(reports, new Set<string>(configured.map((item: any) => item.consumableId)))
   await reverseCleaningInventoryEffects(tx, cleaning)
   await tx.delete(cleaningInventoryReports).where(eq(cleaningInventoryReports.cleaningId, cleaning.id))
@@ -108,15 +117,16 @@ export async function saveCleaningInventoryDrafts(tx: any, actor: Actor, cleanin
 export async function inventoryForCleaning(actor: Actor, cleaningId: string) {
   const cleaning = await cleaningAccess(actor, cleaningId)
   const [items, reports, balances] = await Promise.all([
-    db.query.apartmentConsumables.findMany({ where: and(eq(apartmentConsumables.apartmentId, cleaning.apartmentId), eq(apartmentConsumables.active, true)), with: { consumable: true } }),
+    configuredConsumables(db, cleaning),
     db.query.cleaningInventoryReports.findMany({ where: eq(cleaningInventoryReports.cleaningId, cleaningId) }),
     db.select({ consumableId: inventoryLots.consumableId, quantity: sql<string>`coalesce(sum(${inventoryLots.remainingQuantity}), 0)` }).from(inventoryLots).where(eq(inventoryLots.apartmentId, cleaning.apartmentId)).groupBy(inventoryLots.consumableId)
   ])
-  return items.map(item => {
+  return items.map((item: any) => {
     const quantity = Number(balances.find(balance => balance.consumableId === item.consumableId)?.quantity ?? 0)
     const report = reports.find(value => value.consumableId === item.consumableId)
-    const autoWriteOffQuantity = !['completed', 'canceled'].includes(cleaning.status) && item.consumable.autoWriteOffEnabled ? Number(item.consumable.autoWriteOffQuantity) : 0
-    return { consumable: item.consumable, quantity, usedQuantity: report ? Number(report.usedQuantity) : autoWriteOffQuantity, remainingQuantity: report ? Number(report.remainingQuantity) : Math.max(0, quantity - autoWriteOffQuantity), discrepancyQuantity: report ? Number(report.discrepancyQuantity) : 0 }
+    const autoWriteOffQuantity = !['completed', 'canceled'].includes(cleaning.status) ? item.autoWriteOffQuantity : null
+    const usedQuantity = report ? Number(report.usedQuantity) : autoWriteOffQuantity ?? 0
+    return { consumable: item.consumable, autoWriteOffQuantity, quantity, usedQuantity, remainingQuantity: report ? Number(report.remainingQuantity) : Math.max(0, quantity - usedQuantity), discrepancyQuantity: report ? Number(report.discrepancyQuantity) : 0 }
   })
 }
 
@@ -152,9 +162,13 @@ export async function inventoryForApartment(actor: Actor, apartmentId: string) {
     return Boolean(assignedTask)
   })()
   if (!canRead) throw createError({ statusCode: 403, statusMessage: 'Нет доступа к остатку' })
-  const items = await db.query.apartmentConsumables.findMany({ where: eq(apartmentConsumables.apartmentId, apartmentId), with: { consumable: true } })
+  const [items, apartment] = await Promise.all([
+    db.query.apartmentConsumables.findMany({ where: eq(apartmentConsumables.apartmentId, apartmentId), with: { consumable: true } }),
+    db.query.apartments.findFirst({ where: and(eq(apartments.id, apartmentId), eq(apartments.organizationId, actor.organizationId)), with: { type: { with: { autoWriteOffs: true } } } })
+  ])
+  const writeOffs = new Map((apartment?.type?.autoWriteOffs ?? []).map(rule => [rule.consumableId, Number(rule.quantity)]))
   const balances = await db.select({ consumableId: inventoryLots.consumableId, quantity: sql<string>`coalesce(sum(${inventoryLots.remainingQuantity}), 0)` }).from(inventoryLots).where(eq(inventoryLots.apartmentId, apartmentId)).groupBy(inventoryLots.consumableId)
-  return items.map(item => ({ ...item, quantity: Number(balances.find(balance => balance.consumableId === item.consumableId)?.quantity ?? 0), isLow: Number(balances.find(balance => balance.consumableId === item.consumableId)?.quantity ?? 0) <= Number(item.minimumQuantity) }))
+  return items.map(item => ({ ...item, autoWriteOffQuantity: writeOffs.get(item.consumableId) ?? null, quantity: Number(balances.find(balance => balance.consumableId === item.consumableId)?.quantity ?? 0), isLow: Number(balances.find(balance => balance.consumableId === item.consumableId)?.quantity ?? 0) <= Number(item.minimumQuantity) }))
 }
 
 export async function createConsumable(actor: Actor, input: unknown) {

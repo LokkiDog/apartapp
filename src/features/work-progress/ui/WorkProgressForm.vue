@@ -1,6 +1,6 @@
 <script setup lang="ts">
 type ChecklistItem = { label: string; checked: boolean }
-type InventoryItem = { consumable: { id: string; name: string; unit: string; autoWriteOffEnabled?: boolean; autoWriteOffQuantity?: number }; quantity: number; usedQuantity: number; remainingQuantity: number; discrepancyQuantity: number; remainingTouched?: boolean }
+type InventoryItem = { consumable: { id: string; name: string; unit: string }; autoWriteOffQuantity: number | null; quantity: number; usedQuantity: number; remainingQuantity: number; discrepancyQuantity: number; remainingTouched?: boolean }
 type ProgressPayload = { checklist: ChecklistItem[]; comment: string; hasProblem: boolean; problemDescription: string; inventoryReports?: Array<{ consumableId: string; usedQuantity: number; remainingQuantity: number }>; photo: File | null }
 const { t } = useI18n()
 
@@ -62,7 +62,7 @@ const unfinished = computed(() => checklist.value.filter(item => !item.checked).
       <div class="progress-section__heading"><div><h2>{{ t('progress.stock') }}</h2><p class="progress-section__mobile-description">{{ t('progress.stockDescription') }}</p></div><UIcon name="i-lucide-package" class="size-5 text-[var(--color-primary)]" /></div>
       <div v-if="inventoryReports.length" class="progress-stock-list space-y-3">
         <div v-for="item in inventoryReports" :key="item.consumable.id" class="progress-stock-row">
-          <div><p class="font-medium">{{ item.consumable.name }}</p><p class="text-sm text-[var(--color-muted)]">{{ t('progress.current') }}: {{ item.quantity }} {{ item.consumable.unit }}<span v-if="item.consumable.autoWriteOffEnabled"> · {{ t('inventory.auto') }}: {{ item.consumable.autoWriteOffQuantity }} {{ item.consumable.unit }}</span></p></div>
+          <div><p class="font-medium">{{ item.consumable.name }}</p><p class="text-sm text-[var(--color-muted)]">{{ t('progress.current') }}: {{ item.quantity }} {{ item.consumable.unit }}<span v-if="item.autoWriteOffQuantity !== null"> · {{ t('inventory.auto') }}: {{ item.autoWriteOffQuantity }} {{ item.consumable.unit }}</span></p></div>
           <div class="progress-stock-fields mt-3 grid grid-cols-2 gap-3"><UFormField><template #label><span class="progress-stock-label--desktop">{{ t('progress.used') }}</span><span class="progress-stock-label--mobile">{{ t('progress.added') }}</span></template><UInput v-model.number="item.usedQuantity" type="number" min="0" step=".001" :disabled="!editable && !inventoryEditable" @update:model-value="syncExpectedRemaining(item)"><template #trailing>{{ item.consumable.unit }}</template></UInput></UFormField><UFormField :label="t('progress.remaining')"><UInput v-model.number="item.remainingQuantity" type="number" min="0" step=".001" :disabled="!editable && !inventoryEditable" @update:model-value="item.remainingTouched = true"><template #trailing>{{ item.consumable.unit }}</template></UInput></UFormField></div>
           <p v-if="item.discrepancyQuantity" class="mt-2 text-xs text-amber-700">{{ t('progress.discrepancy') }}: {{ item.discrepancyQuantity > 0 ? '+' : '' }}{{ item.discrepancyQuantity }} {{ item.consumable.unit }}</p>
         </div>

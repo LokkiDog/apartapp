@@ -7,6 +7,8 @@ const translations: Record<string, Partial<Record<ApiLocale, string>>> = {
   'Отель не найден': { en: 'Property not found', he: 'הנכס לא נמצא' },
   'Тип апартамента не найден': { en: 'Apartment type not found', he: 'סוג הדירה לא נמצא' },
   'Пользователь не найден': { en: 'User not found', he: 'המשתמש לא נמצא' },
+  'Повторно отправить приглашение можно только приглашённому пользователю': { en: 'An invitation can only be resent to an invited user', he: 'ניתן לשלוח הזמנה מחדש רק למשתמש שהוזמן' },
+  'Повторное приглашение пока недоступно': { en: 'The invitation cannot be resent yet', he: 'עדיין לא ניתן לשלוח את ההזמנה מחדש' },
   'Ссылка недействительна или истекла': { en: 'This link is invalid or has expired', he: 'הקישור אינו תקף או שפג תוקפו' },
   'Пароли не совпадают': { en: 'Passwords do not match', he: 'הסיסמאות אינן תואמות' },
   'Неверный месяц': { en: 'Invalid month', he: 'חודש לא חוקי' },

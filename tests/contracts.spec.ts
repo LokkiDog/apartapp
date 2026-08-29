@@ -93,17 +93,21 @@ describe('CRM contracts', () => {
     expect(completionInputSchema.safeParse({ checklist: [], inventoryReports: [{ consumableId, usedQuantity: -1, remainingQuantity: 2 }] }).success).toBe(false)
   })
 
-  it('validates and normalizes consumable auto write-off settings', () => {
+  it('validates apartment-type auto write-off settings', () => {
     const base = { name: 'Туалетная бумага', category: 'Ванная', unit: 'шт.' }
-    expect(consumableInputSchema.parse(base)).toMatchObject({ autoWriteOffEnabled: false, autoWriteOffQuantity: 0 })
-    expect(consumableInputSchema.parse({ ...base, autoWriteOffEnabled: false, autoWriteOffQuantity: 3 })).toMatchObject({ autoWriteOffEnabled: false, autoWriteOffQuantity: 0 })
-    expect(consumableInputSchema.parse({ ...base, autoWriteOffEnabled: true, autoWriteOffQuantity: 1.5 })).toMatchObject({ autoWriteOffEnabled: true, autoWriteOffQuantity: 1.5 })
-    expect(consumableInputSchema.safeParse({ ...base, autoWriteOffEnabled: true, autoWriteOffQuantity: 0 }).success).toBe(false)
+    expect(consumableInputSchema.parse(base)).toEqual(base)
+    expect(consumableInputSchema.parse({ ...base, autoWriteOffEnabled: true, autoWriteOffQuantity: 9 })).toEqual(base)
+    expect(apartmentTypeInputSchema.parse({ name: 'Studio', cleanerPoolEur: 5, laundryEur: 3, serviceEur: 2 }).autoWriteOffs).toEqual([])
+    const consumableId = '00000000-0000-4000-8000-000000000001'
+    expect(apartmentTypeInputSchema.parse({ name: 'Studio', cleanerPoolEur: 5, laundryEur: 3, serviceEur: 2, autoWriteOffs: [{ consumableId, quantity: 1.5 }] }).autoWriteOffs).toEqual([{ consumableId, quantity: 1.5 }])
+    expect(apartmentTypeInputSchema.safeParse({ name: 'Studio', cleanerPoolEur: 5, laundryEur: 3, serviceEur: 2, autoWriteOffs: [{ consumableId, quantity: 0 }] }).success).toBe(false)
+    expect(apartmentTypeInputSchema.safeParse({ name: 'Studio', cleanerPoolEur: 5, laundryEur: 3, serviceEur: 2, autoWriteOffs: [{ consumableId, quantity: 1 }, { consumableId, quantity: 2 }] }).success).toBe(false)
   })
 
   it('prioritizes manual and draft inventory reports over automatic write-off', () => {
-    const configured = [{ consumableId: 'guest', consumable: { autoWriteOffEnabled: true, autoWriteOffQuantity: 2 } }, { consumableId: 'cleaner', consumable: { autoWriteOffEnabled: false, autoWriteOffQuantity: 0 } }]
+    const configured = [{ consumableId: 'guest', autoWriteOffQuantity: 2 }, { consumableId: 'cleaner', autoWriteOffQuantity: null }]
     expect(resolveCompletionInventoryReports({ configured, balances: [{ consumableId: 'guest', quantity: 7 }, { consumableId: 'cleaner', quantity: 4 }], savedReports: [] })).toEqual([{ consumableId: 'guest', usedQuantity: 2, remainingQuantity: 5 }])
+    expect(resolveCompletionInventoryReports({ configured: [{ consumableId: 'guest', autoWriteOffQuantity: 5 }], balances: [{ consumableId: 'guest', quantity: 7 }], savedReports: [] })).toEqual([{ consumableId: 'guest', usedQuantity: 5, remainingQuantity: 2 }])
     expect(resolveCompletionInventoryReports({ configured, balances: [{ consumableId: 'guest', quantity: 7 }], savedReports: [{ consumableId: 'guest', usedQuantity: 1, remainingQuantity: 6 }] })).toEqual([{ consumableId: 'guest', usedQuantity: 1, remainingQuantity: 6 }])
     expect(resolveCompletionInventoryReports({ configured, balances: [{ consumableId: 'guest', quantity: 7 }], savedReports: [{ consumableId: 'guest', usedQuantity: 1, remainingQuantity: 6 }], submittedReports: [{ consumableId: 'guest', usedQuantity: 0, remainingQuantity: 7 }] })).toEqual([{ consumableId: 'guest', usedQuantity: 0, remainingQuantity: 7 }])
   })

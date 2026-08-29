@@ -20,16 +20,16 @@
 
 - Creating a stay does not automatically create a cleaning. An administrator creates a planned or stay-linked cleaning manually.
 - A stay can have at most one linked cleaning; deleting that cleaning keeps the stay and makes assignment available again.
-- Only administrators can create, edit, assign, reorder and delete cleanings. Managers and cleaners retain only their permitted operational actions.
+- Only administrators can create, edit, assign, reorder and delete cleanings. Owners (`manager`) and cleaners retain only their permitted operational actions.
 - A cleaning may have multiple cleaners. New assignments go to the end of each cleaner's route; existing route positions are preserved when possible.
 - A cleaner may start, complete and report problems for assigned work. Completed or canceled work cannot be edited by cleaners.
-- Cleaning completion may include an optional inventory report: explicit usage becomes a manager-visible expense using FIFO cost, while the actual remaining quantity becomes the apartment stock. Discrepancies are logged without charging them twice.
+- Cleaning completion may include an optional inventory report: explicit usage becomes an owner-visible expense using FIFO cost, while the actual remaining quantity becomes the apartment stock. Discrepancies are logged without charging them twice.
 - Cleaning deletion is transactional: linked assignments, attachments, financial rows and inventory movements are removed, and used stock is restored.
 
 ## Roles and data isolation
 
 - `administrator` has organization-wide access and full manual cleaning CRUD.
-- `manager` is limited to owned apartments and their financial/work data.
+- `manager` is the owner role and is limited to owned apartments and their financial/work data.
 - `cleaner` sees assigned work and can operate only on assigned cleanings/tasks.
 - Every server query and mutation must scope data by `actor.organizationId`; use `requireActor`, `requireRole` and `canManageApartment` instead of client-only checks.
 
@@ -38,6 +38,7 @@
 - Keep route composition in `src/pages`; extract a feature only when the interaction is genuinely reused in multiple places.
 - Export feature/entity APIs through their `index.ts`; do not bypass slice public APIs.
 - Reuse Nuxt UI controls and keep interactive hit areas at least 44px on mobile.
+- In lists and grouped content, use subtle low-contrast separators; dividers should support grouping without competing with the content.
 - Use `UTextarea` at full form width; when a form has multiple columns, make its `UFormField` span all columns and give the control `w-full`.
 - For a date range, use one `DateRangeInput` rather than separate «с» and «по» controls; keep the start and end values separate in the submitted API contract when needed.
 - Use the existing slideover forms and ellipsis action menus for work operations. Dangerous deletion requires the shared confirmation modal.

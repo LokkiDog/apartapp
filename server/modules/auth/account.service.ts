@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto'
-import { and, eq, gt, inArray, isNull, or } from 'drizzle-orm'
+import { and, eq, gt, inArray, isNull, or, sql } from 'drizzle-orm'
 import type { Actor } from '../../infrastructure/auth/actor'
 import { requireRole } from '../../infrastructure/auth/actor'
 import { writeAuditLog } from '../../infrastructure/audit/log'
@@ -7,6 +7,7 @@ import { db } from '../../infrastructure/database/client'
 import { apartmentManagers, attachments, authTokens, cleaningAssignments, cleanings, financialEntries, inventoryLots, inventoryMovements, notifications, stays, stayServices, tasks, users } from '../../infrastructure/database/schema'
 import { sendAccountLink } from '../../infrastructure/mail/send'
 import { fileStorage } from '../../infrastructure/storage/local'
+import { invitationResendAvailableAt, invitationResendWaitSeconds } from './invitation-cooldown'
 
 const hash = (value: string) => createHash('sha256').update(value).digest('hex')
 const expiry = () => new Date(Date.now() + 1000 * 60 * 60 * 24)
@@ -26,6 +27,43 @@ export async function inviteUser(input: { organizationId: string; name: string; 
   const token = await issueToken(user.id, 'invitation')
   await sendAccountLink({ to: user.email, name: user.name, type: 'invitation', token, locale: user.locale })
   return { id: user.id, email: user.email }
+}
+
+export async function resendInvitation(actor: Actor, userId: string) {
+  requireRole(actor, 'administrator')
+  const token = randomBytes(32).toString('base64url')
+  const issued = await db.transaction(async tx => {
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${userId}))`)
+    const user = await tx.query.users.findFirst({ where: and(eq(users.id, userId), eq(users.organizationId, actor.organizationId)) })
+    if (!user) throw createError({ statusCode: 404, statusMessage: 'Пользователь не найден' })
+    if (user.status !== 'invited') throw createError({ statusCode: 409, statusMessage: 'Повторно отправить приглашение можно только приглашённому пользователю' })
+
+    const latestInvitation = await tx.query.authTokens.findFirst({
+      where: and(eq(authTokens.userId, user.id), eq(authTokens.type, 'invitation')),
+      orderBy: (tokens, { desc }) => [desc(tokens.createdAt)]
+    })
+    if (latestInvitation && invitationResendWaitSeconds(latestInvitation.createdAt) > 0) {
+      throw createError({
+        statusCode: 429,
+        statusMessage: 'Повторное приглашение пока недоступно',
+        data: { invitationResendAvailableAt: invitationResendAvailableAt(latestInvitation.createdAt).toISOString() }
+      })
+    }
+
+    const [tokenRecord] = await tx.insert(authTokens).values({ userId: user.id, type: 'invitation', tokenHash: hash(token), expiresAt: expiry() }).returning()
+    if (!tokenRecord) throw createError({ statusCode: 500, statusMessage: 'Не удалось создать приглашение' })
+    return { user, tokenRecord }
+  })
+
+  try {
+    await sendAccountLink({ to: issued.user.email, name: issued.user.name, type: 'invitation', token, locale: issued.user.locale })
+  } catch (cause) {
+    await db.delete(authTokens).where(eq(authTokens.id, issued.tokenRecord.id))
+    throw cause
+  }
+
+  await writeAuditLog({ organizationId: actor.organizationId, actorId: actor.id, action: 'user.invitation_resent', entityType: 'user', entityId: userId })
+  return { ok: true, invitationResendAvailableAt: invitationResendAvailableAt(issued.tokenRecord.createdAt).toISOString() }
 }
 
 export async function requestPasswordReset(email: string) {

@@ -46,12 +46,12 @@ watch(() => user.value?.locale, value => {
 </script>
 
 <template>
-  <UDropdownMenu :items="items" :content="{ align: 'end', sideOffset: 8 }">
+  <UDropdownMenu :items="items" :content="{ align: 'end', sideOffset: 8 }" :modal="false">
     <UButton
       color="neutral"
       variant="ghost"
       icon="i-lucide-languages"
-      class="topbar-action language-switcher"
+      class="cursor-pointer topbar-action language-switcher"
       :aria-label="$t('common.language')"
       :loading="pending"
     >
