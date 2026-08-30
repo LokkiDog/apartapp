@@ -51,6 +51,8 @@ function blur() {
     :placeholder="placeholder"
     :disabled="disabled"
     :required="required"
+    :color="invalid ? 'error' : undefined"
+    :highlight="invalid"
     :aria-invalid="invalid"
     class="w-full tabular-nums"
     @update:model-value="update"

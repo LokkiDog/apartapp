@@ -23,6 +23,15 @@
     0 0 0 1px rgba(16, 46, 34, 0.06), 0 24px 80px -24px rgba(16, 46, 34, 0.28);
 }
 
+.border-\[var\(--color-line\)\] {
+  border-color: var(--color-line);
+}
+
+.divide-y.divide-\[var\(--color-line\)\] > :not([hidden]) ~ :not([hidden]),
+.divide-y.divide-\[var\(--color-line\)\] > :not(:last-child) {
+  border-color: var(--color-line);
+}
+
 html,
 body,
 #__nuxt {
@@ -72,7 +81,7 @@ textarea,
 select {
   font: inherit;
 }
-[data-slot="base"][aria-label] {
+[data-slot="base"][aria-label]:not([role="checkbox"]) {
   display: inline-flex;
   min-width: 44px;
   min-height: 44px;
@@ -2006,6 +2015,61 @@ img {
     transparent
   ) !important;
 }
+.work-cleanings {
+  display: grid;
+  gap: 1rem;
+}
+.work-group-header {
+  background-color: #f1f3f2;
+}
+.work-cleaning-row {
+  margin-inline: -1.25rem;
+  padding-inline: 1.25rem;
+  transition-property: background-color;
+  transition-duration: 160ms;
+  transition-timing-function: ease;
+}
+.work-cleaning-row--urgent {
+  background-color: color-mix(in srgb, #fef3c7 82%, transparent);
+}
+.work-cleaning-row__urgent-label {
+  color: #b45309;
+  font-weight: 700;
+}
+.work-route-order-controls {
+  width: 2rem;
+  height: 2.75rem;
+  flex: 0 0 2rem;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+  gap: 0;
+}
+.work-route-order-controls .work-route-order-button {
+  width: 2rem !important;
+  min-width: 2rem !important;
+  max-width: 2rem !important;
+  height: 1.375rem !important;
+  min-height: 1.375rem !important;
+  max-height: 1.375rem !important;
+  padding: 0 !important;
+}
+.work-route-order-controls .work-route-order-button:first-child {
+  border-radius: 0.5rem 0.5rem 0.1875rem 0.1875rem;
+}
+.work-route-order-controls .work-route-order-button:last-child {
+  border-radius: 0.1875rem 0.1875rem 0.5rem 0.5rem;
+}
+.work-route-order-controls [data-slot="leadingIcon"] {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+@media (min-width: 640px) {
+  .work-cleaning-row {
+    margin-inline: -1.5rem;
+    padding-inline: 1.5rem;
+  }
+}
 .work-cleanings .divide-y > :not([hidden]) ~ :not([hidden]),
 .work-cleanings .divide-y > :not(:last-child) {
   border-color: color-mix(
@@ -2206,6 +2270,17 @@ img {
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
+}
+.work-planning-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+.work-finished-filter-button,
+.work-history-button {
+  min-height: 44px;
 }
 .manager-expense-toolbar {
   display: flex;
@@ -2873,9 +2948,13 @@ html[dir="rtl"] .dashboard-page-header__actions {
   .work-planning-switch > * [data-slot="leadingIcon"] {
     display: none;
   }
+  .work-planning-actions {
+    width: 100%;
+    align-items: stretch;
+  }
+  .work-finished-filter-button,
   .work-history-button {
     width: 100%;
-    min-height: 44px;
     justify-content: flex-start;
   }
   article[draggable].group {

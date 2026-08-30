@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { FormSubmitEvent } from '@nuxt/ui'
 import { apartmentInputSchema, type ApartmentInput } from '@contracts/crm'
+import { createFormValidator, useSubmitFormValidation } from '#fsd/shared/lib'
 import {
   createApartmentFormState,
   type ApartmentFormHotel,
@@ -27,6 +28,8 @@ const form = reactive<ApartmentFormState>(createApartmentFormState(props.initial
 const { t } = useI18n()
 const pending = ref(false)
 const error = ref('')
+const validation = useSubmitFormValidation()
+const validate = createFormValidator(apartmentInputSchema, t)
 
 const activeHotels = computed(() => props.hotels.filter(hotel => hotel.status === 'active'))
 const activeManagers = computed(() => props.managers.filter(member => member.status === 'active' && member.roles.includes('manager')))
@@ -38,7 +41,6 @@ const canSubmit = computed(() => missingReferences.value.length === 0 && !pendin
 const submitLabel = computed(() => props.mode === 'edit' ? t('apartments.saveChanges') : t('apartments.create'))
 
 async function save(event: FormSubmitEvent<ApartmentInput>) {
-  if (!canSubmit.value) return
   pending.value = true
   error.value = ''
   try {
@@ -58,7 +60,16 @@ async function save(event: FormSubmitEvent<ApartmentInput>) {
 </script>
 
 <template>
-  <UForm :schema="apartmentInputSchema" :state="form" class="apartment-form" @submit="save">
+  <UForm
+    :key="validation.formKey.value"
+    :state="form"
+    :validate="validate"
+    :validate-on="validation.validateOn.value"
+    novalidate
+    class="apartment-form"
+    @error="validation.onError"
+    @submit="save"
+  >
     <UAlert
       v-if="missingReferences.length"
       color="warning"

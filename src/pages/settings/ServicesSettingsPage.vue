@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import type { DropdownMenuItem } from '@nuxt/ui'
-import { formatEuro } from '#fsd/shared/lib'
+import { createFormValidator, formatEuro, useSubmitFormValidation } from '#fsd/shared/lib'
 import { MoneyInput, PageHeader, EmptyState, StatusBadge, DeleteConfirmModal } from '#fsd/shared/ui'
 import { useCurrentUser } from '#fsd/shared/auth'
 import { useI18n } from 'vue-i18n'
 import { specialServiceIconOptions, type SpecialServiceIconName } from '#shared/config/special-service-icons'
 import ServiceIconPicker from './ui/ServiceIconPicker.vue'
+import { specialServiceInputSchema } from '@contracts/crm'
 
 const currentUser = useCurrentUser()
 const { t } = useI18n()
@@ -15,9 +16,11 @@ const { data: services, refresh, status } = await useAsyncData('settings-service
 const open = ref(false); const pending = ref(false); const error = ref('')
 const serviceToEdit = ref<Service | null>(null); const serviceToDelete = ref<Service | null>(null); const deleteOpen = ref(false); const deletePending = ref(false)
 const form = reactive({ name: '', iconName: specialServiceIconOptions[0].name, priceEur: 0 as number | null, managerSharePercent: 0, active: true })
+const validation = useSubmitFormValidation()
+const validate = createFormValidator(specialServiceInputSchema, t)
 function resetForm() { Object.assign(form, { name: '', iconName: specialServiceIconOptions[0].name, priceEur: 0, managerSharePercent: 0, active: true }) }
-function openCreate() { serviceToEdit.value = null; resetForm(); error.value = ''; open.value = true }
-function openEdit(service: Service) { serviceToEdit.value = service; Object.assign(form, service); error.value = ''; open.value = true }
+function openCreate() { serviceToEdit.value = null; resetForm(); validation.reset(); error.value = ''; open.value = true }
+function openEdit(service: Service) { serviceToEdit.value = service; Object.assign(form, service); validation.reset(); error.value = ''; open.value = true }
 async function save() { pending.value = true; error.value = ''; try { await $fetch(serviceToEdit.value ? `/api/special-services/${serviceToEdit.value.id}` : '/api/special-services', { method: serviceToEdit.value ? 'PATCH' : 'POST', body: form }); open.value = false; serviceToEdit.value = null; resetForm(); await refresh() } catch (cause: any) { error.value = cause?.data?.statusMessage ?? t('common.error') } finally { pending.value = false } }
 async function toggle(service: Service) { await $fetch(`/api/special-services/${service.id}`, { method: 'PATCH', body: { name: service.name, iconName: service.iconName, priceEur: service.priceEur, managerSharePercent: service.managerSharePercent, active: !service.active } }); await refresh() }
 function askToDelete(service: Service) { serviceToDelete.value = service; error.value = ''; deleteOpen.value = true }
@@ -36,6 +39,6 @@ function serviceMenuItems(service: Service): DropdownMenuItem[][] { return [[{ l
       </article>
     </div>
     <EmptyState v-else icon="i-lucide-concierge-bell" :title="t('services.emptyTitle')" :description="t('services.emptyDescription')" />
-    <USlideover v-model:open="open" :title="serviceToEdit ? t('services.edit') : t('services.new')"><template #body><form id="service-form" class="form-grid" @submit.prevent="save"><UFormField :label="t('services.name')"><UInput v-model="form.name" placeholder="Late checkout" required /></UFormField><UFormField :label="t('services.icon')"><ServiceIconPicker v-model="form.iconName" /></UFormField><UFormField :label="t('services.price')"><MoneyInput v-model="form.priceEur" required /></UFormField><UFormField :label="t('services.sharePercent')"><UInput v-model.number="form.managerSharePercent" type="number" min="0" max="100" required /></UFormField><UCheckbox v-model="form.active" :label="t('services.available')" /><UAlert v-if="error && !deleteOpen" color="error" variant="soft" :description="error" /></form></template><template #footer><div class="form-actions form-actions--footer"><UButton type="button" color="neutral" variant="ghost" @click="open = false">{{ t('services.cancel') }}</UButton><UButton type="submit" form="service-form" :loading="pending">{{ serviceToEdit ? t('services.saveChanges') : t('services.add') }}</UButton></div></template></USlideover><DeleteConfirmModal v-model:open="deleteOpen" :title="t('services.delete')" :description="t('common.irreversible')" :loading="deletePending" :error="error" @confirm="removeService" />
+    <USlideover v-model:open="open" :title="serviceToEdit ? t('services.edit') : t('services.new')"><template #body><UForm :key="validation.formKey.value" id="service-form" :state="form" :validate="validate" :validate-on="validation.validateOn.value" novalidate class="form-grid" @error="validation.onError" @submit="save"><UFormField name="name" :label="t('services.name')"><UInput v-model="form.name" placeholder="Late checkout" /></UFormField><UFormField name="iconName" :label="t('services.icon')"><ServiceIconPicker v-model="form.iconName" /></UFormField><UFormField name="priceEur" :label="t('services.price')"><MoneyInput v-model="form.priceEur" /></UFormField><UFormField name="managerSharePercent" :label="t('services.sharePercent')"><UInput v-model.number="form.managerSharePercent" type="number" min="0" max="100" /></UFormField><UCheckbox v-model="form.active" :label="t('services.available')" /><UAlert v-if="error && !deleteOpen" color="error" variant="soft" :description="error" /></UForm></template><template #footer><div class="form-actions form-actions--footer"><UButton type="button" color="neutral" variant="ghost" @click="open = false">{{ t('services.cancel') }}</UButton><UButton type="submit" form="service-form" :loading="pending">{{ serviceToEdit ? t('services.saveChanges') : t('services.add') }}</UButton></div></template></USlideover><DeleteConfirmModal v-model:open="deleteOpen" :title="t('services.delete')" :description="t('common.irreversible')" :loading="deletePending" :error="error" @confirm="removeService" />
   </section>
 </template>

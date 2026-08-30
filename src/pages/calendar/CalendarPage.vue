@@ -5,7 +5,7 @@ import type { Stay } from '#fsd/entities/stay'
 import type { Hotel } from '#fsd/entities/hotel'
 import type { DateValue } from '@internationalized/date'
 import { filterApartmentsByScope, isPropertyScopeReady, propertyScopeQuery, PropertyScopeFilter, type PropertyScopeValue } from '#fsd/features/select-property-scope'
-import { apartmentCalendarColor, formatDate, formatEuro } from '#fsd/shared/lib'
+import { apartmentCalendarColor, createFormValidator, formatDate, formatEuro, useSubmitFormValidation } from '#fsd/shared/lib'
 import { useCurrentUser } from '#fsd/shared/auth'
 import { DateRangeInput, EmptyState, MoneyInput, PageHeader } from '#fsd/shared/ui'
 import StayCalendarPopover from './StayCalendarPopover.vue'
@@ -17,6 +17,7 @@ import { assignMonthWeekLanes, createWeekSegments, type CalendarStaySegment } fr
 import { bookingsForApartment, calendarRange as calendarPeriodRange, migrateCalendarView, type BookingView, type CalendarPeriod } from './model/calendar-view'
 import { createStayAgenda, filterStayAgenda, stayAgendaQueryFrom, type StayAgendaStatus } from './model/stay-agenda'
 import { stayCleaningHref, stayCleaningPresentation } from './model/stay-cleaning'
+import { stayInputSchema } from '@contracts/crm'
 
 type CleaningAssignmentFilter = 'all' | 'assigned' | 'unassigned'
 type StayForm = {
@@ -69,6 +70,8 @@ const error = ref('')
 const pending = ref(false)
 const expandedMonthWeeks = ref(new Set<string>())
 const form = reactive<StayForm>(emptyStayForm())
+const validation = useSubmitFormValidation()
+const validate = createFormValidator(stayInputSchema, t, { pathMap: { checkOutOn: 'checkInOn' } })
 const showGuestDetails = computed(() => Boolean(user.value?.roles.some(role => ['administrator', 'manager'].includes(role))))
 const showFinancialDetails = computed(() => Boolean(user.value?.roles.includes('administrator')))
 const canEditStays = computed(() => Boolean(user.value?.roles.some(role => ['administrator', 'manager'].includes(role))))
@@ -240,6 +243,7 @@ function goToday() { cursor.value = todayKey() }
 function openCreate() {
   editingStay.value = null
   Object.assign(form, emptyStayForm())
+  validation.reset()
   error.value = ''
   open.value = true
 }
@@ -258,6 +262,7 @@ function openEdit(stay: Stay) {
     serviceIds: stay.services?.map(service => service.specialServiceId) ?? [],
     cashAmountEur: stay.cashAmountEur ?? null
   })
+  validation.reset()
   error.value = ''
   open.value = true
 }
@@ -543,24 +548,23 @@ async function saveStay() {
 
     <USlideover v-model:open="open" :title="editingStay ? t('calendar.editBooking') : t('calendar.newStay')">
       <template #body>
-        <form id="stay-form" class="form-grid stay-form-grid" @submit.prevent="saveStay">
-          <UFormField :label="t('calendar.apartment')">
+        <UForm :key="validation.formKey.value" id="stay-form" :state="form" :validate="validate" :validate-on="validation.validateOn.value" novalidate class="form-grid stay-form-grid" @error="validation.onError" @submit="saveStay">
+          <UFormField name="apartmentId" :label="t('calendar.apartment')">
             <USelect
               v-model="form.apartmentId"
               :items="visibleApartments.map(apartment => ({ label: `${apartment.name} · ${apartment.hotel.name}`, value: apartment.id }))"
               :disabled="Boolean(editingStay)"
               class="w-full"
-              required
             />
           </UFormField>
-          <UFormField :label="t('calendar.stayPeriod')"><DateRangeInput v-model:start="form.checkInOn" v-model:end="form.checkOutOn" :is-date-disabled="isStayDateDisabled" required /></UFormField>
+          <UFormField name="checkInOn" :error-pattern="/^check(In|Out)On$/" :label="t('calendar.stayPeriod')"><DateRangeInput v-model:start="form.checkInOn" v-model:end="form.checkOutOn" :is-date-disabled="isStayDateDisabled" /></UFormField>
           <p class="text-sm text-[var(--color-muted)]">{{ t('calendar.departureFree') }}</p>
           <div class="grid grid-cols-2 gap-3">
-            <UFormField :label="t('calendar.adults')"><UInput v-model.number="form.adultCount" type="number" min="1" /></UFormField>
-            <UFormField :label="t('calendar.children')"><UInput v-model.number="form.childCount" type="number" min="0" /></UFormField>
+            <UFormField name="adultCount" :label="t('calendar.adults')"><UInput v-model.number="form.adultCount" type="number" min="1" /></UFormField>
+            <UFormField name="childCount" :label="t('calendar.children')"><UInput v-model.number="form.childCount" type="number" min="0" /></UFormField>
           </div>
           <USeparator />
-          <UFormField :label="t('calendar.guestComment')"><UTextarea v-model="form.guestComment" class="w-full" /></UFormField>
+          <UFormField name="guestComment" :label="t('calendar.guestComment')"><UTextarea v-model="form.guestComment" class="w-full" /></UFormField>
           <div v-if="formServices.length" class="rounded-xl bg-[#f4f8f6] px-0 py-1">
             <p class="font-semibold">{{ t('calendar.extraServices') }}</p>
             <label v-for="service in formServices" :key="service.id" class="mt-1 flex min-h-11 items-center justify-between gap-3 text-sm">
@@ -571,9 +575,9 @@ async function saveStay() {
               <span class="font-semibold tabular-nums">{{ formatEuro(service.priceEur) }}</span>
             </label>
           </div>
-          <UFormField :label="t('calendar.cash')"><MoneyInput v-model="form.cashAmountEur" /></UFormField>
+          <UFormField name="cashAmountEur" :label="t('calendar.cash')"><MoneyInput v-model="form.cashAmountEur" /></UFormField>
           <UAlert v-if="error" color="error" variant="soft" :description="error" />
-        </form>
+        </UForm>
       </template>
       <template #footer>
         <div class="form-actions form-actions--footer">

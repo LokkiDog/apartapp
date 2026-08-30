@@ -3,6 +3,10 @@ import Decimal from 'decimal.js'
 type Tariff = { ownerTotalEur: number; cleanerPoolEur: number; laundryEur: number; serviceEur: number }
 type UsageMovement = { apartmentId: string; consumableId: string; quantity: string; totalCostEur: number }
 
+export function canBeWorkAssignee(roles: string[]) {
+  return roles.includes('cleaner') || roles.includes('administrator')
+}
+
 export function canChangeTaskApartment(status: string, hasInventoryMovements: boolean) {
   return status === 'open' && !hasInventoryMovements
 }

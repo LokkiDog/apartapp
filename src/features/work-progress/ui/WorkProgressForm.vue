@@ -126,7 +126,7 @@ const unfinished = computed(() => checklist.value.filter(item => !item.checked).
       <template v-if="kind === 'cleaning'">
         <div class="work-progress-actions__secondary"><slot name="actions-left" /></div>
         <div class="work-progress-actions__primary">
-          <UButton v-if="editable" type="submit" color="neutral" variant="soft" icon="i-lucide-save" :aria-label="t('progress.save')" :loading="busy" />
+          <UButton v-if="editable" type="submit" color="neutral" variant="soft" icon="i-lucide-save" :loading="busy">{{ t('progress.save') }}</UButton>
           <UButton v-if="canComplete" type="button" icon="i-lucide-circle-check" :loading="busy" @click="complete">{{ t('progress.complete') }}</UButton>
         </div>
       </template>

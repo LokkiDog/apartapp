@@ -17,7 +17,7 @@ export default defineAppConfig({
     checkbox: { slots: {
       root: 'flex min-h-11 items-center gap-3 rounded-[10px] px-2 py-1.5 text-[var(--color-ink)] transition-colors hover:bg-[var(--color-primary-soft)]',
       container: 'flex items-center',
-      base: 'size-5 rounded-[6px] ring-[var(--color-line)] focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] data-[state=checked]:bg-[var(--color-primary)] data-[state=checked]:text-white',
+      base: 'size-4 rounded-[5px] bg-white ring-1 ring-inset ring-[var(--color-line)] focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] data-[state=checked]:bg-[var(--color-primary)] data-[state=checked]:text-white',
       indicator: 'grid place-items-center',
       icon: 'size-3.5 stroke-[3]',
       wrapper: 'min-w-0',

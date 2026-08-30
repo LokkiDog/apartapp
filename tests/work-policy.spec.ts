@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import { canChangeTaskApartment, cleaningTariffHasChanged, restoredInventoryLot } from '../server/modules/work/work-policy'
+import { canBeWorkAssignee, canChangeTaskApartment, cleaningTariffHasChanged, restoredInventoryLot } from '../server/modules/work/work-policy'
 
 describe('work server policies', () => {
+  it('allows active cleaners and administrators to be work assignees', () => {
+    expect(canBeWorkAssignee(['cleaner'])).toBe(true)
+    expect(canBeWorkAssignee(['administrator'])).toBe(true)
+    expect(canBeWorkAssignee(['administrator', 'manager'])).toBe(true)
+    expect(canBeWorkAssignee(['manager'])).toBe(false)
+    expect(canBeWorkAssignee([])).toBe(false)
+  })
+
   it('allows changing a task apartment only before work and inventory usage', () => {
     expect(canChangeTaskApartment('open', false)).toBe(true)
     expect(canChangeTaskApartment('open', true)).toBe(false)

@@ -2,11 +2,18 @@
 import type { Apartment } from "#fsd/entities/apartment";
 import type { Cleaning } from "#fsd/entities/cleaning";
 import type { Stay } from "#fsd/entities/stay";
-import { formatEuro } from "#fsd/shared/lib";
+import {
+  createFormValidator,
+  formatEuro,
+  useSubmitFormValidation,
+} from "#fsd/shared/lib";
 import { DateInput, MoneyInput } from "#fsd/shared/ui";
 import { useI18n } from "vue-i18n";
+import { cleaningInputSchema } from "@contracts/crm";
 
 type ChecklistItem = { label: string; checked: boolean };
+type TeamOption = { label: string; value: string };
+type TeamOptionGroup = Array<TeamOption | { type: "label"; label: string }>;
 export type CleaningDraft = {
   apartmentId: string;
   stayId: string | null;
@@ -55,12 +62,25 @@ const form = reactive<CleaningDraft>({
   checklist: [],
   reason: "",
 });
+const validation = useSubmitFormValidation();
+const validateCleaningContract = createFormValidator(cleaningInputSchema, t);
+function validate(state: unknown) {
+  const errors = validateCleaningContract(state);
+  if (linked.value && !form.stayId) {
+    errors.push({ name: "stayId", message: t("validation.chooseBooking") });
+  }
+  if (tariffChanged.value && form.reason.trim().length < 3) {
+    errors.push({ name: "reason", message: t("validation.tariffReason") });
+  }
+  return errors;
+}
 const standardChecklist = computed(() => [
   t("common.checklistLinen"),
   t("common.checklistBathroom"),
   t("common.checklistSupplies"),
 ]);
 const tariffOpen = ref(false);
+const noAssigneeConfirmationOpen = ref(false);
 const tariffTotal = computed(() =>
   Number((form.cleanerPoolEur + form.laundryEur + form.serviceEur).toFixed(2)),
 );
@@ -82,20 +102,46 @@ const automaticUrgent = computed(() => {
     && props.stays.some(stay => stay.apartmentId === form.apartmentId && stay.checkInOn === form.scheduledOn);
 });
 const effectiveUrgent = computed(() => form.urgencyOverride ?? automaticUrgent.value);
+const showAllStays = ref(false);
+function currentLocalDate() {
+  const date = new Date();
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
 const availableStays = computed(() =>
   props.stays.filter(
-    (stay) => !stay.cleaning || stay.cleaning.id === props.editingCleaning?.id,
+    (stay) =>
+      (showAllStays.value || stay.checkOutOn >= currentLocalDate()) &&
+      (!stay.cleaning || stay.cleaning.id === props.editingCleaning?.id),
   ),
 );
-const cleanerOptions = computed(() =>
-  props.team
+const cleanerOptions = computed(() => {
+  const cleaners = props.team
     .filter((member) => member.roles.includes("cleaner"))
-    .map((member) => ({ label: member.name, value: member.id })),
-);
+    .map((member) => ({ label: member.name, value: member.id }));
+  const administrators = props.team
+    .filter(
+      (member) =>
+        member.roles.includes("administrator") &&
+        !member.roles.includes("cleaner"),
+    )
+    .map((member) => ({ label: member.name, value: member.id }));
+  const groups: TeamOptionGroup[] = [];
+  if (cleaners.length)
+    groups.push([
+      { type: "label" as const, label: t("common.cleaners"), value: "__cleaners__" },
+      ...cleaners,
+    ]);
+  if (administrators.length)
+    groups.push([
+      { type: "label" as const, label: t("common.administrators"), value: "__administrators__" },
+      ...administrators,
+    ]);
+  return groups;
+});
 const cleanerSummary = computed(() =>
-  cleanerOptions.value
-    .filter((option) => form.cleanerIds.includes(option.value))
-    .map((option) => option.label)
+  props.team
+    .filter((member) => form.cleanerIds.includes(member.id))
+    .map((member) => member.name)
     .join(", "),
 );
 const canChangeContext = computed(
@@ -112,12 +158,25 @@ function checklistFromApartment(apartmentId: string) {
     : standardChecklist.value;
   return labels.map((label) => ({ label, checked: false }));
 }
+const checklistChanged = computed(() => {
+  if (!form.apartmentId) return false;
+  const template = checklistFromApartment(form.apartmentId);
+  return (
+    form.checklist.length !== template.length ||
+    form.checklist.some(
+      (item, index) =>
+        item.label !== template[index]?.label ||
+        item.checked !== template[index]?.checked,
+    )
+  );
+});
 
 function reset() {
   const cleaning = props.editingCleaning;
   const stayId = cleaning?.stayId ?? props.initialStayId ?? null;
   const stay = props.stays.find((item) => item.id === stayId);
   linked.value = Boolean(stayId);
+  showAllStays.value = false;
   Object.assign(form, {
     apartmentId: cleaning?.apartmentId ?? stay?.apartmentId ?? "",
     stayId,
@@ -134,6 +193,7 @@ function reset() {
     reason: "",
   });
   tariffOpen.value = false;
+  validation.reset();
 }
 watch([() => form.apartmentId, () => form.scheduledOn, automaticUrgent], () => {
   if (form.urgencyOverride === null) form.isUrgent = automaticUrgent.value;
@@ -196,14 +256,23 @@ function addChecklistItem() {
 function restoreChecklistTemplate() {
   form.checklist = checklistFromApartment(form.apartmentId);
 }
-function submit() {
-  if (!form.scheduledOn) return;
-  if (tariffChanged.value && form.reason.trim().length < 3) return;
+function emitSubmit() {
   emit("submit", {
     ...form,
     stayId: linked.value ? form.stayId : null,
     checklist: form.checklist.filter((item) => item.label.trim()),
   });
+}
+function confirmWithoutAssignee() {
+  noAssigneeConfirmationOpen.value = false;
+  emitSubmit();
+}
+function submit() {
+  if (!props.editingCleaning && !form.cleanerIds.length) {
+    noAssigneeConfirmationOpen.value = true;
+    return;
+  }
+  emitSubmit();
 }
 </script>
 
@@ -220,21 +289,31 @@ function submit() {
     @update:open="emit('update:open', $event)"
   >
     <template #body>
-      <form id="cleaning-form" class="form-grid" @submit.prevent="submit">
+      <UForm
+        :key="validation.formKey.value"
+        id="cleaning-form"
+        :state="form"
+        :validate="validate"
+        :validate-on="validation.validateOn.value"
+        novalidate
+        class="form-grid"
+        @error="validation.onError"
+        @submit="submit"
+      >
         <UFormField v-if="!editingCleaning" :label="t('common.cleaningType')"
           ><UFieldGroup class="w-full"
-            ><UButton
-              type="button"
-              class="flex-1"
-              :variant="!linked ? 'solid' : 'soft'"
-              @click="linked = false"
-              >{{ t("common.unscheduled") }}</UButton
             ><UButton
               type="button"
               class="flex-1"
               :variant="linked ? 'solid' : 'soft'"
               @click="linked = true"
               >{{ t("common.byBooking") }}</UButton
+            ><UButton
+              type="button"
+              class="flex-1"
+              :variant="!linked ? 'solid' : 'soft'"
+              @click="linked = false"
+              >{{ t("common.unscheduled") }}</UButton
             ></UFieldGroup
           ></UFormField
         >
@@ -242,7 +321,7 @@ function submit() {
           class="cleaning-context-fields"
           :class="{ 'cleaning-context-fields--linked': linked }"
         >
-          <UFormField v-if="linked" :label="t('common.booking')"
+          <UFormField v-if="linked" name="stayId" :label="t('common.booking')"
             ><USelect
               :model-value="form.stayId ?? undefined"
               :items="
@@ -253,10 +332,23 @@ function submit() {
               "
               class="w-full"
               :disabled="!canChangeContext"
-              required
               @update:model-value="form.stayId = $event || null"
-          /></UFormField>
-          <UFormField :label="t('work.apartment')"
+            >
+              <template #content-bottom>
+                <div class="border-t border-[var(--color-line)] p-2">
+                  <UButton
+                    type="button"
+                    color="neutral"
+                    variant="ghost"
+                    class="w-full justify-center"
+                    @click.stop="showAllStays = true"
+                  >
+                    {{ t("common.showAll") }}
+                  </UButton>
+                </div>
+              </template>
+            </USelect></UFormField>
+          <UFormField name="apartmentId" :label="t('work.apartment')"
             ><USelect
               :model-value="form.apartmentId"
               :items="
@@ -267,19 +359,18 @@ function submit() {
               "
               class="w-full"
               :disabled="linked || !canChangeContext"
-              required
               @update:model-value="chooseApartment($event)"
           /></UFormField>
-          <UFormField :label="t('common.cleaningDate')" required
+          <UFormField name="scheduledOn" :label="t('common.cleaningDate')" required
             ><DateInput
               v-model="form.scheduledOn"
               :disabled="!canChangeContext"
           /></UFormField>
         </div>
-        <UFormField :label="t('work.assignee')"
+        <UFormField name="cleanerIds" :label="t('work.assignee')"
           ><USelectMenu
             v-model="form.cleanerIds"
-            :items="cleanerOptions"
+            :items="cleanerOptions as any"
             value-key="value"
             multiple
             :disabled="!canChangeContext"
@@ -350,25 +441,26 @@ function submit() {
             >
           </div>
           <div v-if="tariffOpen" class="cleaning-tariff-fields">
-            <UFormField :label="t('reports.cleaning')"
+            <UFormField name="cleanerPoolEur" :label="t('reports.cleaning')"
               ><MoneyInput
                 v-model="form.cleanerPoolEur"
                 :empty-value="0"
-                required /></UFormField
-            ><UFormField :label="t('common.laundry')"
+                /></UFormField
+            ><UFormField name="laundryEur" :label="t('common.laundry')"
               ><MoneyInput
                 v-model="form.laundryEur"
                 :empty-value="0"
-                required /></UFormField
-            ><UFormField :label="t('common.service')"
-              ><MoneyInput v-model="form.serviceEur" :empty-value="0" required
+                /></UFormField
+            ><UFormField name="serviceEur" :label="t('common.service')"
+              ><MoneyInput v-model="form.serviceEur" :empty-value="0"
             /></UFormField>
           </div>
         </section>
         <UFormField
           v-if="tariffOpen && tariffChanged"
+          name="reason"
           :label="t('common.adjustment')"
-          ><UTextarea v-model="form.reason" required
+          ><UTextarea v-model="form.reason"
         /></UFormField>
         <section>
           <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
@@ -384,19 +476,20 @@ function submit() {
                 color="neutral"
                 variant="ghost"
                 size="sm"
-                icon="i-lucide-rotate-ccw"
-                :disabled="!canChangeContext || !form.apartmentId"
-                @click="restoreChecklistTemplate"
-                >{{ t("common.template") }}</UButton
-              ><UButton
-                type="button"
-                color="neutral"
-                variant="ghost"
-                size="sm"
                 icon="i-lucide-plus"
                 :disabled="!canChangeContext"
                 @click="addChecklistItem"
                 >{{ t("common.add") }}</UButton
+              ><UButton
+                v-if="checklistChanged"
+                type="button"
+                color="neutral"
+                variant="ghost"
+                size="sm"
+                icon="i-lucide-rotate-ccw"
+                :disabled="!canChangeContext || !form.apartmentId"
+                @click="restoreChecklistTemplate"
+                >{{ t("common.reset") }}</UButton
               >
             </div>
           </div>
@@ -406,12 +499,14 @@ function submit() {
               :key="index"
               class="flex items-center gap-2"
             >
-              <UInput
-                v-model="item.label"
-                class="flex-1"
-                :disabled="!canChangeContext"
-                :placeholder="t('common.action')"
-              /><UButton
+              <UFormField :name="`checklist.${index}.label`" class="min-w-0 flex-1">
+                <UInput
+                  v-model="item.label"
+                  class="w-full"
+                  :disabled="!canChangeContext"
+                  :placeholder="t('common.action')"
+                />
+              </UFormField><UButton
                 type="button"
                 color="neutral"
                 variant="ghost"
@@ -434,7 +529,7 @@ function submit() {
           variant="soft"
           :description="error"
         />
-      </form>
+      </UForm>
     </template>
     <template #footer>
       <div class="form-actions form-actions--footer">
@@ -448,10 +543,6 @@ function submit() {
           type="submit"
           form="cleaning-form"
           :loading="pending"
-          :disabled="
-            !form.scheduledOn ||
-            Boolean(tariffChanged && form.reason.trim().length < 3)
-          "
           >{{
             editingCleaning
               ? t("calendar.saveChanges")
@@ -463,4 +554,29 @@ function submit() {
       </div>
     </template>
   </USlideover>
+  <UModal
+    v-model:open="noAssigneeConfirmationOpen"
+    :title="t('common.confirm')"
+  >
+    <template #body>
+      <div class="space-y-5">
+        <p class="text-sm leading-6 text-[var(--color-muted)]">
+          {{ t("common.createWithoutAssignee") }}
+        </p>
+        <div class="form-actions">
+          <UButton
+            type="button"
+            color="neutral"
+            variant="ghost"
+            @click="noAssigneeConfirmationOpen = false"
+          >
+            {{ t("common.chooseAssignee") }}
+          </UButton>
+          <UButton type="button" @click="confirmWithoutAssignee">
+            {{ t("common.yes") }}
+          </UButton>
+        </div>
+      </div>
+    </template>
+  </UModal>
 </template>

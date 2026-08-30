@@ -8,7 +8,7 @@ import { administratorsForOrganization, notifyUsers } from '../../infrastructure
 import { createFinancialEntry } from '../finance/finance.service'
 import { serializeApartment } from '../apartment/apartment-view'
 import { deleteWorkRecord } from '../work/work-record.service'
-import { cleaningTariffHasChanged } from '../work/work-policy'
+import { canBeWorkAssignee, cleaningTariffHasChanged } from '../work/work-policy'
 import { applyCleaningInventoryReports, saveCleaningInventoryDrafts } from '../inventory/inventory.service'
 import { calculateCleaningUrgency } from './cleaning-urgency'
 
@@ -24,7 +24,7 @@ export async function createCleaning(actor: Actor, input: unknown) {
     if (existing) throw createError({ statusCode: 409, statusMessage: 'Для этого заезда уборка уже назначена' })
   }
   const assignees = data.cleanerIds.length ? await db.select().from(users).where(and(inArray(users.id, data.cleanerIds), eq(users.organizationId, actor.organizationId), eq(users.status, 'active'))) : []
-  if (assignees.length !== data.cleanerIds.length || assignees.some(user => !user.roles.includes('cleaner'))) throw createError({ statusCode: 400, statusMessage: 'Исполнитель должен быть активной уборщицей' })
+  if (assignees.length !== data.cleanerIds.length || assignees.some(user => !canBeWorkAssignee(user.roles))) throw createError({ statusCode: 400, statusMessage: 'Исполнитель должен быть активной уборщицей или администратором' })
   const status = data.cleanerIds.length ? 'assigned' : 'unassigned'
   const isUrgent = data.urgencyOverride ?? await calculateCleaningUrgency(actor.organizationId, data.apartmentId, data.scheduledOn)
   const checklist = data.checklist?.map(item => ({ ...item })) ?? apartment.type.defaultChecklist.map(label => ({ label, checked: false }))
@@ -68,7 +68,7 @@ export async function assignCleaners(actor: Actor, cleaningId: string, input: un
     eq(users.organizationId, actor.organizationId),
     eq(users.status, 'active')
   ))
-  if (assignees.length !== data.cleanerIds.length || assignees.some(user => !user.roles.includes('cleaner'))) throw createError({ statusCode: 400, statusMessage: 'Исполнитель должен быть активной уборщицей' })
+  if (assignees.length !== data.cleanerIds.length || assignees.some(user => !canBeWorkAssignee(user.roles))) throw createError({ statusCode: 400, statusMessage: 'Исполнитель должен быть активной уборщицей или администратором' })
   await db.transaction(async tx => {
     const positions = new Map<string, number>()
     for (const cleanerId of data.cleanerIds) {
@@ -170,8 +170,8 @@ export async function updateCleaning(actor: Actor, cleaningId: string, input: un
         eq(users.status, 'active')
       ))
     : []
-  if (assignees.length !== data.cleanerIds.length || assignees.some(user => !user.roles.includes('cleaner'))) {
-    throw createError({ statusCode: 400, statusMessage: 'Исполнитель должен быть активной уборщицей' })
+  if (assignees.length !== data.cleanerIds.length || assignees.some(user => !canBeWorkAssignee(user.roles))) {
+    throw createError({ statusCode: 400, statusMessage: 'Исполнитель должен быть активной уборщицей или администратором' })
   }
 
   const { cleanerIds, scheduledOn, reason, apartmentId, stayId, checklist, urgencyOverride, ...tariffSnapshot } = data
@@ -238,7 +238,7 @@ export async function reorderCleaningRoute(actor: Actor, input: unknown) {
   requireRole(actor, 'administrator')
   const data = cleaningRouteUpdateSchema.parse(input)
   const cleaner = await db.query.users.findFirst({ where: and(eq(users.id, data.cleanerId), eq(users.organizationId, actor.organizationId), eq(users.status, 'active')) })
-  if (!cleaner || !cleaner.roles.includes('cleaner')) throw createError({ statusCode: 400, statusMessage: 'Исполнитель не найден' })
+  if (!cleaner || !canBeWorkAssignee(cleaner.roles)) throw createError({ statusCode: 400, statusMessage: 'Исполнитель не найден' })
   const rows = await db.query.cleanings.findMany({ where: and(eq(cleanings.organizationId, actor.organizationId), eq(cleanings.scheduledOn, data.scheduledOn)), with: { assignments: true } })
   const selected = rows.filter(cleaning => data.cleaningIds.includes(cleaning.id))
   if (selected.length !== data.cleaningIds.length || selected.some(cleaning => ['completed', 'canceled'].includes(cleaning.status) || !cleaning.assignments.some(assignment => assignment.cleanerId === data.cleanerId))) {

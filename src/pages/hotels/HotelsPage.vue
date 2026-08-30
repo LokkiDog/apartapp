@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import type { DropdownMenuItem } from "@nuxt/ui";
+import type { DropdownMenuItem, FormSubmitEvent } from "@nuxt/ui";
 import type { Hotel } from "#fsd/entities/hotel";
 import { useCurrentUser } from "#fsd/shared/auth";
+import { createFormValidator, useSubmitFormValidation } from "#fsd/shared/lib";
 import { EmptyState, PageHeader, StatusBadge } from "#fsd/shared/ui";
 import HotelLocationPicker from "./ui/HotelLocationPicker.vue";
 import { useI18n } from "vue-i18n";
+import { hotelInputSchema, type HotelInput } from "@contracts/crm";
 
 const user = useCurrentUser();
 const { t } = useI18n();
@@ -42,19 +44,22 @@ const form = reactive<{
   latitude: number | null;
   longitude: number | null;
 }>({ name: "", address: "", latitude: null, longitude: null });
+const validation = useSubmitFormValidation();
+const validate = createFormValidator(hotelInputSchema, t, {
+  pathMap: { latitude: "location", longitude: "location" },
+  messages: { location: t("validation.chooseHotelLocation") },
+  validate: (state) => {
+    const value = state as typeof form;
+    return value.latitude === null || value.longitude === null
+      ? [{ name: "location", message: t("validation.chooseHotelLocation") }]
+      : [];
+  },
+});
 const geocoding = ref(false);
 const manualAddress = ref(false);
 let geocodeRequest = 0;
 let geocodeController: AbortController | null = null;
-const canSave = computed(() =>
-  Boolean(
-    form.name.trim() &&
-    form.address.trim() &&
-    form.latitude !== null &&
-    form.longitude !== null &&
-    !geocoding.value,
-  ),
-);
+const canSave = computed(() => !geocoding.value && !pending.value);
 function resetForm() {
   geocodeRequest += 1;
   geocodeController?.abort();
@@ -72,6 +77,7 @@ function resetForm() {
 function openCreate() {
   hotelToEdit.value = null;
   resetForm();
+  validation.reset();
   open.value = true;
 }
 function openEdit(hotel: Hotel) {
@@ -84,6 +90,7 @@ function openEdit(hotel: Hotel) {
   });
   geocoding.value = false;
   manualAddress.value = true;
+  validation.reset();
   error.value = "";
   open.value = true;
 }
@@ -120,17 +127,11 @@ function updateLocation(location: { latitude: number; longitude: number }) {
   form.longitude = location.longitude;
   void resolveAddress(location.latitude, location.longitude);
 }
-async function save() {
-  if (!canSave.value || form.latitude === null || form.longitude === null)
-    return;
+async function save(event: FormSubmitEvent<HotelInput>) {
   pending.value = true;
   error.value = "";
   try {
-    const body = {
-      ...form,
-      latitude: form.latitude,
-      longitude: form.longitude,
-    };
+    const body = event.data;
     if (hotelToEdit.value) {
       const endpoint: string = `/api/hotels/${hotelToEdit.value.id}`;
       await $fetch(endpoint, { method: "PATCH", body });
@@ -319,15 +320,24 @@ function hotelMenuItems(hotel: Hotel): DropdownMenuItem[] {
       :title="hotelToEdit ? t('hotels.edit') : t('hotels.newTitle')"
     >
       <template #body>
-        <form id="hotel-form" class="form-grid" @submit.prevent="save">
-          <UFormField :label="t('hotels.name')" required
+        <UForm
+          :key="validation.formKey.value"
+          id="hotel-form"
+          :state="form"
+          :validate="validate"
+          :validate-on="validation.validateOn.value"
+          novalidate
+          class="form-grid"
+          @error="validation.onError"
+          @submit="save"
+        >
+          <UFormField name="name" :label="t('hotels.name')" required
             ><UInput
               v-model="form.name"
               class="w-full"
               placeholder="Pine Trees"
-              required
           /></UFormField>
-          <UFormField :label="t('hotels.location')">
+          <UFormField name="location" :label="t('hotels.location')">
             <HotelLocationPicker
               :latitude="form.latitude"
               :longitude="form.longitude"
@@ -364,6 +374,7 @@ function hotelMenuItems(hotel: Hotel): DropdownMenuItem[] {
             />{{ t("hotels.detectingAddress") }}
           </p>
           <UFormField
+            name="address"
             v-else-if="
               form.latitude !== null &&
               form.longitude !== null &&
@@ -374,9 +385,9 @@ function hotelMenuItems(hotel: Hotel): DropdownMenuItem[] {
               :model-value="form.address"
               class="w-full"
               readonly
-              required
           /></UFormField>
           <UFormField
+            name="address"
             v-else
             :label="t('hotels.address')"
             :help="t('hotels.addressHint')"
@@ -385,7 +396,6 @@ function hotelMenuItems(hotel: Hotel): DropdownMenuItem[] {
               v-model="form.address"
               class="w-full"
               placeholder="Street, number, Bansko"
-              required
           /></UFormField>
           <UAlert
             v-if="error"
@@ -393,7 +403,7 @@ function hotelMenuItems(hotel: Hotel): DropdownMenuItem[] {
             variant="soft"
             :description="error"
           />
-        </form>
+        </UForm>
       </template>
       <template #footer>
         <div class="form-actions form-actions--footer">

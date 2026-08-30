@@ -15,6 +15,7 @@ const props = withDefaults(defineProps<{
   clearable: true
 })
 const { locale, t } = useI18n()
+const { id, color, highlight, ariaAttrs, emitFormBlur, emitFormFocus, emitFormInput, emitFormChange } = useFormField(props)
 const calendarLocale = computed(() => locale.value === 'en' ? 'en-US' : locale.value === 'he' ? 'he-IL' : 'ru-RU')
 const placeholderText = computed(() => props.placeholder || t('common.chooseDate'))
 
@@ -28,6 +29,8 @@ const calendarValue = computed<DateValue | undefined>({
   set: value => {
     const next = value?.toString() ?? ''
     emit('update:modelValue', next)
+    emitFormInput()
+    emitFormChange()
     if (next) open.value = false
   }
 })
@@ -39,6 +42,8 @@ const displayValue = computed(() => {
 
 function clear() {
   emit('update:modelValue', '')
+  emitFormInput()
+  emitFormChange()
   open.value = false
 }
 
@@ -51,13 +56,17 @@ function chooseToday() {
   <UPopover v-model:open="open" :content="{ align: 'start', sideOffset: 8 }">
     <template #default>
       <UButton
+        :id="id"
         type="button"
-        color="neutral"
+        :color="color ?? 'neutral'"
         variant="outline"
+        :highlight="highlight"
         :disabled="disabled"
         :aria-required="required"
-        :aria-invalid="required && !modelValue"
+        v-bind="ariaAttrs"
         class="date-input-trigger"
+        @blur="emitFormBlur"
+        @focus="emitFormFocus"
       >
         <UIcon name="i-lucide-calendar-days" class="size-4 shrink-0 text-[var(--color-primary)]" />
         <span class="date-input-trigger__value" :class="{ 'date-input-trigger__placeholder': !modelValue }">{{ displayValue }}</span>
@@ -84,5 +93,5 @@ function chooseToday() {
       </div>
     </template>
   </UPopover>
-  <input type="hidden" :value="modelValue ?? ''" :required="required" :disabled="disabled">
+  <input type="hidden" :value="modelValue ?? ''" :disabled="disabled">
 </template>

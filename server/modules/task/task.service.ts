@@ -7,7 +7,7 @@ import { apartments, inventoryMovements, tasks, users } from '../../infrastructu
 import { administratorsForOrganization, notifyUsers } from '../../infrastructure/notification/publish'
 import { createFinancialEntry } from '../finance/finance.service'
 import { deleteWorkRecord } from '../work/work-record.service'
-import { canChangeTaskApartment } from '../work/work-policy'
+import { canBeWorkAssignee, canChangeTaskApartment } from '../work/work-policy'
 import { serializeApartment } from '../apartment/apartment-view'
 
 export async function listTasks(actor: Actor) {
@@ -30,7 +30,7 @@ export async function createTask(actor: Actor, input: unknown) {
   const data = taskInputSchema.parse(input)
   if (data.assigneeId) {
     const assignee = await db.query.users.findFirst({ where: and(eq(users.id, data.assigneeId), eq(users.organizationId, actor.organizationId), eq(users.status, 'active')) })
-    if (!assignee || !assignee.roles.includes('cleaner')) throw createError({ statusCode: 400, statusMessage: 'Исполнитель должен быть активной уборщицей' })
+    if (!assignee || !canBeWorkAssignee(assignee.roles)) throw createError({ statusCode: 400, statusMessage: 'Исполнитель должен быть активной уборщицей или администратором' })
   }
   const [task] = await db.insert(tasks).values({ ...data, organizationId: actor.organizationId, createdById: actor.id }).returning()
   if (!task) throw createError({ statusCode: 500, statusMessage: 'Не удалось создать задачу' })
@@ -87,7 +87,7 @@ export async function updateTask(actor: Actor, taskId: string, input: unknown) {
   }
   if (data.assigneeId) {
     const assignee = await db.query.users.findFirst({ where: and(eq(users.id, data.assigneeId), eq(users.organizationId, actor.organizationId), eq(users.status, 'active')) })
-    if (!assignee || !assignee.roles.includes('cleaner')) throw createError({ statusCode: 400, statusMessage: 'Исполнитель должен быть активной уборщицей' })
+    if (!assignee || !canBeWorkAssignee(assignee.roles)) throw createError({ statusCode: 400, statusMessage: 'Исполнитель должен быть активной уборщицей или администратором' })
   }
   const [updated] = await db.update(tasks).set({ ...data, updatedAt: new Date() }).where(eq(tasks.id, taskId)).returning()
   if (!updated) throw createError({ statusCode: 500, statusMessage: 'Не удалось обновить задачу' })

@@ -115,7 +115,7 @@ async function saveProgress(payload: ProgressPayload, complete = false) {
     await refresh()
     if (complete && !error.value) await router.push('/work')
   } catch (cause: any) {
-    error.value = cause?.data?.statusMessage ?? (complete ? t('common.unexpectedError') : t('common.saveError'))
+    error.value = cause?.data?.statusMessage ?? t('common.error')
   } finally { pending.value = false }
 }
 
@@ -157,7 +157,7 @@ function requestComplete() {
     <div v-if="status === 'pending'" class="grid gap-4"><USkeleton class="h-36 rounded-2xl" /><USkeleton class="h-64 rounded-2xl" /></div>
     <template v-else-if="work">
       <PageHeader class="work-detail-header" :title="title()">
-        <template #actions><StatusBadge :label="statusLabels[work.status] ?? work.status" :tone="statusTones[work.status] ?? 'neutral'" /></template>
+        <template #actions><StatusBadge :label="statusLabels[work.status] ?? ''" :tone="statusTones[work.status] ?? 'neutral'" /></template>
       </PageHeader>
       <section class="work-detail-summary surface grid grid-cols-2 gap-x-4 gap-y-5 p-5 sm:grid-cols-3 sm:p-6">
         <div><p class="detail-label">{{ t('work.date') }}</p><p class="font-semibold">{{ 'scheduledOn' in work ? formatDate(work.scheduledOn) : task?.dueOn ? formatDate(task.dueOn) : t('work.noDeadline') }}</p></div>

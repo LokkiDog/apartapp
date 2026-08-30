@@ -22,6 +22,7 @@ const props = withDefaults(defineProps<{
   isDateDisabled: undefined
 })
 const { locale, t } = useI18n()
+const { id, color, highlight, ariaAttrs, emitFormBlur, emitFormFocus, emitFormInput, emitFormChange } = useFormField(props)
 const calendarLocale = computed(() => locale.value === 'en' ? 'en-US' : locale.value === 'he' ? 'he-IL' : 'ru-RU')
 const placeholderText = computed(() => props.placeholder || t('common.chooseDates'))
 const startLabelText = computed(() => props.startLabel || t('calendar.arrival'))
@@ -40,11 +41,12 @@ const calendarValue = computed<DateRange | null>({
   set: value => {
     emit('update:start', value?.start?.toString() ?? '')
     emit('update:end', value?.end?.toString() ?? '')
+    emitFormInput()
+    emitFormChange()
     if (value?.start && value.end) open.value = false
   }
 })
 const calendarPlaceholder = computed<DateValue>(() => props.start ? parseDate(props.start) : today(getLocalTimeZone()))
-const hasCompleteRange = computed(() => Boolean(props.start && props.end))
 const formatter = computed(() => new Intl.DateTimeFormat(calendarLocale.value, { day: '2-digit', month: 'short', year: 'numeric' }))
 
 function formatValue(value?: string | null) {
@@ -59,6 +61,8 @@ const displayValue = computed(() => {
 function clear() {
   emit('update:start', '')
   emit('update:end', '')
+  emitFormInput()
+  emitFormChange()
 }
 </script>
 
@@ -66,13 +70,17 @@ function clear() {
   <UPopover v-model:open="open" :content="{ align: 'start', sideOffset: 8, collisionPadding: 12 }">
     <template #default>
       <UButton
+        :id="id"
         type="button"
-        color="neutral"
+        :color="color ?? 'neutral'"
         variant="outline"
+        :highlight="highlight"
         :disabled="disabled"
         :aria-required="required"
-        :aria-invalid="required && !hasCompleteRange"
+        v-bind="ariaAttrs"
         class="date-input-trigger date-range-input-trigger"
+        @blur="emitFormBlur"
+        @focus="emitFormFocus"
       >
         <UIcon name="i-lucide-calendar-range" class="size-4 shrink-0 text-[var(--color-primary)]" />
         <span class="date-input-trigger__value" :class="{ 'date-input-trigger__placeholder': !start }">{{ displayValue }}</span>
@@ -105,6 +113,6 @@ function clear() {
       </div>
     </template>
   </UPopover>
-  <input type="hidden" :value="start ?? ''" :required="required" :disabled="disabled">
-  <input type="hidden" :value="end ?? ''" :required="required" :disabled="disabled">
+  <input type="hidden" :value="start ?? ''" :disabled="disabled">
+  <input type="hidden" :value="end ?? ''" :disabled="disabled">
 </template>

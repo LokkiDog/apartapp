@@ -33,7 +33,7 @@ export function sortRoute(cleanings: Cleaning[], cleanerId?: string) {
   return [...cleanings].sort((left, right) => routePosition(left, cleanerId) - routePosition(right, cleanerId) || left.apartment.name.localeCompare(right.apartment.name))
 }
 
-export function buildCleaningPlan(cleanings: Cleaning[], today = localDate()): CleaningPlan {
+export function buildCleaningPlan(cleanings: Cleaning[], today = localDate(), hideFinishedFromToday = false): CleaningPlan {
   const horizon = shiftDate(today, 14)
   const attention: Cleaning[] = []
   const days = new Map<string, Cleaning[]>()
@@ -41,13 +41,13 @@ export function buildCleaningPlan(cleanings: Cleaning[], today = localDate()): C
   const history: Cleaning[] = []
   for (const cleaning of cleanings) {
     const finished = ['completed', 'canceled'].includes(cleaning.status)
-    if (!cleaning.assignments.length) {
-      if (!finished) attention.push(cleaning)
-      else history.push(cleaning)
-      continue
-    }
     if (finished && cleaning.scheduledOn < today) {
       history.push(cleaning)
+      continue
+    }
+    if (hideFinishedFromToday && finished) continue
+    if (!cleaning.assignments.length) {
+      attention.push(cleaning)
       continue
     }
     if (!finished && cleaning.scheduledOn > horizon) {

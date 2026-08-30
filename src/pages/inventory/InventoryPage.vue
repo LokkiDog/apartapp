@@ -2,7 +2,9 @@
 import type { Apartment } from '#fsd/entities/apartment'
 import { useCurrentUser } from '#fsd/shared/auth'
 import { ConfirmActionModal, DeleteConfirmModal, EmptyState, MoneyInput, PageHeader, StatusBadge } from '#fsd/shared/ui'
+import { createFormValidator, useSubmitFormValidation } from '#fsd/shared/lib'
 import { useI18n } from 'vue-i18n'
+import { consumableInputSchema } from '@contracts/crm'
 
 type Stock = { id: string; consumable: { id: string; name: string; unit: string }; autoWriteOffQuantity: number | null; quantity: number; unitCostEur: number; minimumQuantity: number; targetQuantity: number; isLow: boolean }
 type Consumable = { id: string; name: string; category: string; unit: string }
@@ -25,6 +27,12 @@ const replenish = reactive({ consumableId: '', quantity: 1, unitCostEur: 0 as nu
 const catalog = reactive({ name: '', unit: 'шт.' })
 const categoryPreset = ref('Уборка')
 const customCategory = ref('')
+const catalogValidation = useSubmitFormValidation()
+const catalogValidationState = computed(() => ({
+  ...catalog,
+  category: categoryPreset.value === 'custom' ? customCategory.value : categoryPreset.value
+}))
+const validateCatalog = createFormValidator(consumableInputSchema, t)
 const categoryItems = computed(() => [
   { label: t('inventoryCatalog.categoryCleaning'), value: 'Уборка' },
   { label: t('inventoryCatalog.categoryBathroom'), value: 'Ванная' },
@@ -66,7 +74,7 @@ async function addConsumable() {
   catch (cause: any) { error.value = cause?.data?.statusMessage ?? t('common.error') }
   finally { pending.value = false }
 }
-function openCreateCatalog() { error.value = ''; editingConsumableId.value = null; Object.assign(catalog, { name: '', unit: 'шт.' }); categoryPreset.value = 'Уборка'; customCategory.value = ''; catalogOpen.value = true }
+function openCreateCatalog() { error.value = ''; editingConsumableId.value = null; Object.assign(catalog, { name: '', unit: 'шт.' }); categoryPreset.value = 'Уборка'; customCategory.value = ''; catalogValidation.reset(); catalogOpen.value = true }
 function openReplenish() {
   error.value = ''
   editingStockId.value = null
@@ -81,7 +89,7 @@ function openEditStock(stock: Stock) {
 function openEditCatalog(item: Consumable) {
   error.value = ''; editingConsumableId.value = item.id; Object.assign(catalog, { name: item.name, unit: item.unit })
   const standardCategory = categoryItems.value.find(option => option.value === item.category)
-  categoryPreset.value = standardCategory?.value ?? 'custom'; customCategory.value = standardCategory ? '' : item.category; catalogOpen.value = true
+  categoryPreset.value = standardCategory?.value ?? 'custom'; customCategory.value = standardCategory ? '' : item.category; catalogValidation.reset(); catalogOpen.value = true
 }
 function closeCatalog() { catalogOpen.value = false; editingConsumableId.value = null; Object.assign(catalog, { name: '', unit: 'шт.' }); categoryPreset.value = 'Уборка'; customCategory.value = '' }
 function openDiscrepancy(item: InventoryDiscrepancy) {
@@ -175,13 +183,13 @@ async function approveDiscrepancy() {
     <USlideover v-model:open="replenishOpen" :title="editingStockId ? `${t('common.edit')}: ${consumables?.find(item => item.id === replenish.consumableId)?.name ?? ''}` : t('common.replenishStock')"><template #body><form id="replenishment-form" class="form-grid inventory-form" @submit.prevent="addStock"><UFormField :label="t('inventory.consumable')"><USelect v-model="replenish.consumableId" :items="(consumables ?? []).map(item => ({ label: `${item.name} · ${item.category}`, value: item.id }))" class="w-full" :disabled="Boolean(editingStockId)" required /></UFormField><UFormField :label="t('inventory.quantity')"><UInput v-model.number="replenish.quantity" type="number" min="0" step=".001" required><template #trailing>{{ replenishmentUnit }}</template></UInput></UFormField><UFormField :label="t('inventory.unitPrice')"><MoneyInput v-model="replenish.unitCostEur" required /></UFormField><UFormField :label="t('common.thresholdStock')"><UInput v-model.number="replenish.minimumQuantity" type="number" min="0" step="1" required><template #trailing>{{ replenishmentUnit }}</template></UInput></UFormField><UFormField :label="t('common.targetStock')" :help="t('common.targetHelp')"><UInput v-model.number="replenish.targetQuantity" type="number" min="0" step="1" required><template #trailing>{{ replenishmentUnit }}</template></UInput></UFormField><p class="text-sm leading-5 text-[var(--color-muted)]">{{ t('inventoryHints.thresholdAndTargetHint') }}</p><UFormField :label="t('inventory.note')"><UInput v-model="replenish.note" placeholder="Например: закупка у поставщика" /></UFormField><UAlert v-if="error" color="error" variant="soft" :description="error" /></form></template><template #footer><div class="form-actions form-actions--footer"><UButton v-if="editingStockId" type="button" color="error" variant="soft" icon="i-lucide-trash-2" @click="confirmDeleteStock">{{ t('inventoryStockDelete.action') }}</UButton><div class="flex items-center gap-2"><UButton type="button" color="neutral" variant="ghost" @click="replenishOpen = false">{{ t('common.cancel') }}</UButton><UButton type="submit" form="replenishment-form" :loading="pending">{{ editingStockId ? t('inventory.save') : t('inventory.replenish') }}</UButton></div></div></template></USlideover>
     <USlideover v-model:open="catalogOpen" :title="editingConsumableId ? t('common.edit') : t('common.newConsumableType')">
       <template #body>
-        <form id="consumable-form" class="form-grid inventory-form" @submit.prevent="addConsumable">
-          <UFormField :label="t('inventoryCatalog.name')"><UInput v-model="catalog.name" required /></UFormField>
-          <UFormField :label="t('inventoryCatalog.category')"><USelect v-model="categoryPreset" :items="categoryItems" class="w-full" required /></UFormField>
-          <UFormField v-if="categoryPreset === 'custom'" :label="t('inventoryCatalog.customCategory')"><UInput v-model="customCategory" required /></UFormField>
-          <UFormField :label="t('inventory.unitPrice')"><UInput v-model="catalog.unit" :placeholder="t('inventory.unitPrice')" required /></UFormField>
+        <UForm :key="catalogValidation.formKey.value" id="consumable-form" :state="catalogValidationState" :validate="validateCatalog" :validate-on="catalogValidation.validateOn.value" novalidate class="form-grid inventory-form" @error="catalogValidation.onError" @submit="addConsumable">
+          <UFormField name="name" :label="t('inventoryCatalog.name')"><UInput v-model="catalog.name" /></UFormField>
+          <UFormField name="category" :label="t('inventoryCatalog.category')"><USelect v-model="categoryPreset" :items="categoryItems" class="w-full" /></UFormField>
+          <UFormField v-if="categoryPreset === 'custom'" name="category" :label="t('inventoryCatalog.customCategory')"><UInput v-model="customCategory" /></UFormField>
+          <UFormField name="unit" :label="t('inventory.unitPrice')"><UInput v-model="catalog.unit" :placeholder="t('inventory.unitPrice')" /></UFormField>
           <UAlert v-if="error" color="error" variant="soft" :description="error" />
-        </form>
+        </UForm>
       </template>
       <template #footer>
         <div class="form-actions form-actions--footer">

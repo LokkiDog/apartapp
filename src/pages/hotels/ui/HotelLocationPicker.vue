@@ -8,6 +8,7 @@ const props = defineProps<{
   longitude: number | null
 }>()
 const { t } = useI18n()
+const { id, ariaAttrs, emitFormFocus, emitFormBlur, emitFormInput, emitFormChange } = useFormField()
 
 const emit = defineEmits<{
   'update:location': [location: { latitude: number, longitude: number }]
@@ -48,6 +49,8 @@ function selectLocation(latitude: number, longitude: number) {
   if (marker) marker.setLatLng(point)
   else createMarker(point)
   emit('update:location', location)
+  emitFormInput()
+  emitFormChange()
 }
 
 function handleMapClick(event: LeafletMouseEvent) {
@@ -84,7 +87,15 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="hotel-location-picker">
+  <div
+    :id="id"
+    class="hotel-location-picker"
+    :class="{ 'hotel-location-picker--error': ariaAttrs?.['aria-invalid'] }"
+    tabindex="0"
+    v-bind="ariaAttrs"
+    @focus="emitFormFocus"
+    @blur="emitFormBlur"
+  >
     <div ref="mapElement" class="hotel-location-picker__map" role="application" :aria-label="t('uiExtra.chooseLocation')" />
     <p class="hotel-location-picker__hint">{{ t('uiExtra.locationHint') }}</p>
   </div>
@@ -97,6 +108,11 @@ onBeforeUnmount(() => {
   border-radius: 1rem;
   background: var(--color-surface-muted);
   box-shadow: 0 8px 24px rgb(15 23 42 / 0.08);
+}
+
+.hotel-location-picker--error {
+  border-color: var(--color-error-500);
+  box-shadow: 0 0 0 1px var(--color-error-500);
 }
 
 .hotel-location-picker__map {
