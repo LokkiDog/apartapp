@@ -9,7 +9,7 @@ export function usePushSubscription() {
   const supported = useState('push-subscription-supported', () => false)
   const permission = useState<NotificationPermission | 'unsupported'>('push-subscription-permission', () => 'unsupported')
   const subscribed = useState('push-subscription-subscribed', () => false)
-  const error = useState('push-subscription-error', () => '')
+  const error = useState<'' | 'error' | 'unavailable'>('push-subscription-error', () => '')
 
   async function registration() {
     return navigator.serviceWorker.ready
@@ -35,10 +35,14 @@ export function usePushSubscription() {
 
   async function subscribe() {
     const key = useRuntimeConfig().public.vapidPublicKey
-    if (!supported.value || !key) return false
+    if (!supported.value) return false
     pending.value = true
     error.value = ''
     try {
+      if (!key) {
+        error.value = 'unavailable'
+        return false
+      }
       const nextPermission = await Notification.requestPermission()
       permission.value = nextPermission
       if (nextPermission !== 'granted') return false
@@ -76,6 +80,7 @@ export function usePushSubscription() {
   const canUnsubscribe = computed(() => supported.value && subscribed.value)
   const visible = computed(() => supported.value && (permission.value !== 'granted' || subscribed.value || Boolean(error.value)))
   const description = computed(() => {
+    if (error.value === 'unavailable') return 'unavailable'
     if (error.value) return 'error'
     if (permission.value === 'denied') return 'denied'
     if (subscribed.value) return 'enabled'

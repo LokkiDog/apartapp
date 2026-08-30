@@ -21,7 +21,7 @@ watch(open, value => { if (!value) query.value = '' })
     <template #default>
       <UButton type="button" color="neutral" variant="outline" class="min-h-11 w-full justify-start gap-3 bg-white text-left">
         <span class="grid size-8 shrink-0 place-items-center rounded-lg bg-[var(--color-primary-soft)] text-[var(--color-primary)]"><UIcon :name="selected.name" class="size-5" /></span>
-        <span class="min-w-0 flex-1 truncate">{{ selected.label }}</span>
+        <span class="min-w-0 flex-1 truncate text-left">{{ selected.label }}</span>
         <UIcon name="i-lucide-chevrons-up-down" class="size-4 shrink-0 text-[var(--color-muted)]" />
       </UButton>
     </template>

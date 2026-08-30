@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { FormSubmitEvent } from '@nuxt/ui'
-import { apartmentInputSchema, type ApartmentInput } from '@contracts/crm'
+import { apartmentInputSchema, isApartmentOwnerEligible, type ApartmentInput } from '@contracts/crm'
 import { createFormValidator, useSubmitFormValidation } from '#fsd/shared/lib'
 import {
   createApartmentFormState,
@@ -32,13 +32,18 @@ const validation = useSubmitFormValidation()
 const validate = createFormValidator(apartmentInputSchema, t)
 
 const activeHotels = computed(() => props.hotels.filter(hotel => hotel.status === 'active'))
-const activeManagers = computed(() => props.managers.filter(member => member.status === 'active' && member.roles.includes('manager')))
+const activeManagers = computed(() => props.managers.filter(member => member.status === 'active' && isApartmentOwnerEligible(member.roles)))
+const ownerOptions = computed(() => activeManagers.value.map(member => ({
+  label: member.name,
+  value: member.id,
+  roleLabel: member.roles.includes('administrator') ? t('roles.administrator') : t('roles.manager')
+})))
 const missingReferences = computed(() => [
   activeHotels.value.length ? null : { label: t('hotels.add'), to: '/hotels' },
   props.apartmentTypes.length ? null : { label: t('apartments.addType'), to: '/settings/apartment-types' }
 ].filter((item): item is { label: string; to: string } => Boolean(item)))
 const canSubmit = computed(() => missingReferences.value.length === 0 && !pending.value)
-const submitLabel = computed(() => props.mode === 'edit' ? t('apartments.saveChanges') : t('apartments.create'))
+const submitLabel = computed(() => props.mode === 'edit' ? t('common.save') : t('apartments.create'))
 
 async function save(event: FormSubmitEvent<ApartmentInput>) {
   pending.value = true
@@ -141,12 +146,16 @@ async function save(event: FormSubmitEvent<ApartmentInput>) {
         <UFormField name="managerIds" :label="t('apartments.managers')" :help="t('apartments.managersHelp')">
           <USelect
             v-model="form.managerIds"
-            :items="activeManagers.map(member => ({ label: member.name, value: member.id }))"
+            :items="ownerOptions"
             multiple
             class="w-full"
             size="xl"
             :placeholder="t('apartments.managers')"
-          />
+          >
+            <template #item-label="{ item }">
+              <span>{{ item.label }}</span><span class="text-[var(--color-muted)]"> · {{ item.roleLabel }}</span>
+            </template>
+          </USelect>
         </UFormField>
         <UFormField name="apartmentTypeId" :label="t('apartments.type')" required>
           <USelect
@@ -200,26 +209,23 @@ async function save(event: FormSubmitEvent<ApartmentInput>) {
     <UAlert v-if="error" color="error" variant="soft" icon="i-lucide-circle-alert" :title="t('apartments.saveError')" :description="error" />
 
     <div class="apartment-form-actions surface">
+      <UButton
+        to="/apartments"
+        color="neutral"
+        variant="ghost"
+        class="min-h-11 transition-transform duration-150 ease-out active:scale-[0.96]"
+      >
+        {{ t('common.cancel') }}
+      </UButton>
       <p class="hidden text-sm text-[var(--color-muted)] sm:block">{{ t('apartments.saveRequiredHint') }}</p>
-      <div class="apartment-form-actions__buttons">
-        <UButton
-          to="/apartments"
-          color="neutral"
-          variant="ghost"
-          class="min-h-11 transition-transform duration-150 ease-out active:scale-[0.96]"
-        >
-          {{ t('common.cancel') }}
-        </UButton>
-        <UButton
-          type="submit"
-          icon="i-lucide-check"
-          :loading="pending"
-          :disabled="!canSubmit"
-          class="min-h-11 transition-transform duration-150 ease-out active:scale-[0.96]"
-        >
-          {{ submitLabel }}
-        </UButton>
-      </div>
+      <UButton
+        type="submit"
+        :loading="pending"
+        :disabled="!canSubmit"
+        class="min-h-11 transition-transform duration-150 ease-out active:scale-[0.96]"
+      >
+        {{ submitLabel }}
+      </UButton>
     </div>
   </UForm>
 </template>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { apartmentInputSchema, apartmentTypeInputSchema, apartmentUpdateSchema, cleaningAssignmentInputSchema, cleaningInputSchema, cleaningRouteUpdateSchema, cleaningTariffOverrideSchema, cleaningUpdateSchema, completionInputSchema, consumableInputSchema, hotelInputSchema, hotelReverseGeocodeQuerySchema, specialServiceInputSchema, stayInputSchema, stayListQuerySchema, taskInputSchema, workProgressInputSchema } from '../shared/contracts/crm'
+import { apartmentInputSchema, apartmentTypeInputSchema, apartmentUpdateSchema, cleaningAssignmentInputSchema, cleaningInputSchema, cleaningRouteUpdateSchema, cleaningTariffOverrideSchema, cleaningUpdateSchema, completionInputSchema, consumableInputSchema, hotelInputSchema, hotelReverseGeocodeQuerySchema, isApartmentOwnerEligible, specialServiceInputSchema, stayInputSchema, stayListQuerySchema, taskInputSchema, workProgressInputSchema } from '../shared/contracts/crm'
 import { formatEuroInput, parseEuroInput } from '../src/shared/lib/money'
 import { apartmentCalendarColor } from '../src/shared/lib/calendar'
 import { calculateFifoUsage } from '../server/modules/inventory/fifo'
@@ -11,6 +11,13 @@ import { buildStayServiceSnapshot } from '../server/modules/stay/stay-service-sn
 import { hasCleaningUrgency } from '../server/modules/cleaning/cleaning-urgency'
 
 describe('CRM contracts', () => {
+  it('allows managers and administrators to own apartments', () => {
+    expect(isApartmentOwnerEligible(['manager'])).toBe(true)
+    expect(isApartmentOwnerEligible(['administrator'])).toBe(true)
+    expect(isApartmentOwnerEligible(['administrator', 'cleaner'])).toBe(true)
+    expect(isApartmentOwnerEligible(['cleaner'])).toBe(false)
+  })
+
   it('accepts valid hotel coordinates and rejects invalid ones', () => {
     expect(hotelInputSchema.safeParse({ name: 'Hotel', address: 'Bansko', latitude: 41.84, longitude: 23.49 }).success).toBe(true)
     expect(hotelInputSchema.safeParse({ name: 'Hotel', address: 'Bansko', latitude: 91, longitude: 23.49 }).success).toBe(false)
@@ -59,6 +66,12 @@ describe('CRM contracts', () => {
     expect(specialServiceInputSchema.safeParse({ name: 'Трансфер', priceEur: 20, managerSharePercent: 25, iconName: specialServiceIconOptions[1].name }).success).toBe(true)
     expect(specialServiceInputSchema.safeParse({ name: 'Трансфер', priceEur: 20, managerSharePercent: 25, iconName: 'i-lucide-not-a-real-icon' }).success).toBe(false)
     expect(specialServiceInputSchema.safeParse({ name: 'Поздний выезд', priceEur: 20, managerSharePercent: 101 }).success).toBe(false)
+  })
+
+  it('provides an expanded unique service icon catalogue', () => {
+    const iconNames = specialServiceIconOptions.map(option => option.name)
+    expect(iconNames).toHaveLength(330)
+    expect(new Set(iconNames)).toHaveLength(iconNames.length)
   })
 
   it('normalizes apartment filters for the stay list', () => {

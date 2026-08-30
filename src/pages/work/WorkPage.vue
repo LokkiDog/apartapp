@@ -843,7 +843,7 @@ function taskMenuItems(task: Task): DropdownMenuItem[] {
                 <article
                   v-for="cleaning in route.cleanings"
                   :key="`${day.date}-${route.cleanerId}-${cleaning.id}`"
-                  class="work-cleaning-row group flex items-center gap-3"
+                  class="work-cleaning-row work-route-cleaning-row group items-center gap-3"
                   :class="{ 'work-cleaning-row--urgent': cleaning.isUrgent }"
                   :draggable="isAdministrator && !isFinished(cleaning)"
                   @dragstart="startDragging($event, cleaning.id)"
@@ -867,12 +867,31 @@ function taskMenuItems(task: Task): DropdownMenuItem[] {
                           )
                     }}</span
                   >
-                  <div class="min-w-0 flex-1">
+                  <div class="work-route-cleaning-row__content">
                     <p class="truncate font-semibold">
-                      <span v-if="cleaning.isUrgent" class="work-cleaning-row__urgent-label">{{ t("work.urgentCleaning") }}</span><span v-if="cleaning.isUrgent" aria-hidden="true"> · </span>{{ cleaning.apartment.name }}
+                      <span
+                        v-if="cleaning.isUrgent"
+                        role="img"
+                        :aria-label="t('work.urgentCleaning')"
+                        class="work-route-cleaning-row__urgent-dot"
+                      ></span><span
+                        v-if="cleaning.isUrgent"
+                        class="work-cleaning-row__urgent-label work-route-cleaning-row__urgent-text"
+                        >{{ t("work.urgentCleaning") }}</span
+                      ><span
+                        v-if="cleaning.isUrgent"
+                        class="work-route-cleaning-row__urgent-separator"
+                        aria-hidden="true"
+                        > · </span
+                      >{{ cleaning.apartment.name
+                      }}<span
+                        class="work-route-cleaning-row__mobile-hotel"
+                        > · {{ cleaning.apartment.hotel.name }}</span
+                      >
                     </p>
                     <p class="truncate text-sm text-[var(--color-muted)]">
-                      {{ cleaningSubtitle(cleaning) }}
+                      <span class="work-route-cleaning-row__mobile-subtitle">{{ guestCountLabel(cleaning) }}</span
+                      ><span class="work-route-cleaning-row__desktop-subtitle">{{ cleaningSubtitle(cleaning) }}</span>
                     </p>
                     <p
                       v-if="cleaning.hasProblem"
@@ -986,7 +1005,7 @@ function taskMenuItems(task: Task): DropdownMenuItem[] {
                 <article
                   v-for="cleaning in day.cleanings"
                   :key="`${employee.cleanerId}-${day.date}-${cleaning.id}`"
-                  class="work-cleaning-row group flex items-center gap-3"
+                  class="work-cleaning-row work-route-cleaning-row group items-center gap-3"
                   :class="{ 'work-cleaning-row--urgent': cleaning.isUrgent }"
                   :draggable="isAdministrator && !isFinished(cleaning)"
                   @dragstart="startDragging($event, cleaning.id)"
@@ -1015,12 +1034,31 @@ function taskMenuItems(task: Task): DropdownMenuItem[] {
                           )
                     }}</span
                   >
-                  <div class="min-w-0 flex-1">
+                  <div class="work-route-cleaning-row__content">
                     <p class="truncate font-semibold">
-                      <span v-if="cleaning.isUrgent" class="work-cleaning-row__urgent-label">{{ t("work.urgentCleaning") }}</span><span v-if="cleaning.isUrgent" aria-hidden="true"> · </span>{{ cleaning.apartment.name }}
+                      <span
+                        v-if="cleaning.isUrgent"
+                        role="img"
+                        :aria-label="t('work.urgentCleaning')"
+                        class="work-route-cleaning-row__urgent-dot"
+                      ></span><span
+                        v-if="cleaning.isUrgent"
+                        class="work-cleaning-row__urgent-label work-route-cleaning-row__urgent-text"
+                        >{{ t("work.urgentCleaning") }}</span
+                      ><span
+                        v-if="cleaning.isUrgent"
+                        class="work-route-cleaning-row__urgent-separator"
+                        aria-hidden="true"
+                        > · </span
+                      >{{ cleaning.apartment.name
+                      }}<span
+                        class="work-route-cleaning-row__mobile-hotel"
+                        > · {{ cleaning.apartment.hotel.name }}</span
+                      >
                     </p>
                     <p class="truncate text-sm text-[var(--color-muted)]">
-                      {{ cleaningSubtitle(cleaning) }}
+                      <span class="work-route-cleaning-row__mobile-subtitle">{{ guestCountLabel(cleaning) }}</span
+                      ><span class="work-route-cleaning-row__desktop-subtitle">{{ cleaningSubtitle(cleaning) }}</span>
                     </p>
                   </div>
                   <StatusBadge
@@ -1300,29 +1338,61 @@ function taskMenuItems(task: Task): DropdownMenuItem[] {
         <article
           v-for="task in tasks"
           :key="task.id"
-          class="flex items-center gap-3"
+          class="work-task-row group items-center gap-3"
           @click="openTaskCard($event, task)"
         >
           <div
-            class="grid size-10 shrink-0 place-items-center rounded-xl bg-[#edf3f7] text-[#356882]"
+            class="work-task-row__icon grid shrink-0 place-items-center bg-[#edf3f7] text-[#356882]"
           >
-            <UIcon name="i-lucide-clipboard-check" class="size-5" />
+            <UIcon
+              name="i-lucide-clipboard-check"
+              class="work-task-row__icon-symbol"
+            />
           </div>
-          <div class="min-w-0 flex-1">
+          <div class="work-task-row__content">
             <NuxtLink
               :to="workHref('task', task.id)"
               class="block rounded-lg p-1 -m-1 hover:bg-[var(--color-surface-muted)]"
-              ><p class="truncate font-semibold">{{ task.title }}</p>
-              <p class="mt-1 truncate text-sm text-[var(--color-muted)]">
-                {{ task.dueOn ? formatDate(task.dueOn) : t("work.noDeadline") }}
-                · {{ task.assignee?.name ?? t("work.notAssigned") }}
+              ><p class="truncate font-semibold">
+                <span
+                  role="img"
+                  :aria-label="priorityLabels[task.priority] ?? ''"
+                  class="work-task-row__priority-dot"
+                  :class="`work-task-row__priority-dot--${task.priority}`"
+                ></span>{{ task.title
+                }}<span class="work-task-row__mobile-apartment">
+                  · {{ task.apartment.name }}</span
+                >
               </p>
-              <p class="truncate text-sm text-[var(--color-muted)]">
-                {{ task.apartment.name }} · {{ task.apartment.hotel.name }}
+              <p class="mt-1 truncate text-sm text-[var(--color-muted)]">
+                <span class="work-task-row__mobile-subtitle"
+                  >{{
+                    task.dueOn
+                      ? formatDate(task.dueOn)
+                      : t("work.noDeadline")
+                  }}
+                  · {{ task.assignee?.name ?? t("work.notAssigned") }}</span
+                ><span class="work-task-row__desktop-subtitle"
+                  >{{
+                    task.dueOn
+                      ? formatDate(task.dueOn)
+                      : t("work.noDeadline")
+                  }}
+                  · {{ task.assignee?.name ?? t("work.notAssigned") }} ·
+                  {{ task.apartment.name }} ·
+                  {{ task.apartment.hotel.name }}</span
+                >
+              </p>
+              <p
+                v-if="task.hasProblem"
+                class="mt-1 truncate text-sm text-red-700"
+              >
+                {{ task.problemDescription }}
               </p></NuxtLink
             >
           </div>
           <StatusBadge
+            class="work-task-row__priority"
             :label="priorityLabels[task.priority] ?? ''"
             :tone="
               task.priority === 'urgent'
@@ -1332,27 +1402,25 @@ function taskMenuItems(task: Task): DropdownMenuItem[] {
                   : 'neutral'
             "
           /><StatusBadge
+            class="work-task-row__status"
             :label="statusLabels[task.status] ?? ''"
             :tone="statusTones[task.status] ?? 'neutral'"
-          /><UDropdownMenu
-            v-if="taskMenuItems(task).length"
-            :items="taskMenuItems(task)"
-            :content="{ align: 'end' }"
-            ><UButton
-              color="neutral"
-              variant="ghost"
-              icon="i-lucide-ellipsis-vertical"
-              :aria-label="t('workExtra.taskActions')"
-              class="min-h-11 min-w-11 active:scale-[0.96] transition-transform" /></UDropdownMenu
-          ><UAlert
-            v-if="task.hasProblem"
-            class="mt-3"
-            color="error"
-            variant="soft"
-            icon="i-lucide-circle-alert"
-            :title="t('workExtra.problem')"
-            :description="task.problemDescription"
           />
+          <div
+            v-if="taskMenuItems(task).length"
+            class="work-task-row__menu"
+          >
+            <UDropdownMenu
+              :items="taskMenuItems(task)"
+              :content="{ align: 'end' }"
+              ><UButton
+                color="neutral"
+                variant="ghost"
+                icon="i-lucide-ellipsis-vertical"
+                :aria-label="t('workExtra.taskActions')"
+                class="min-h-11 min-w-11 active:scale-[0.96] transition-transform"
+            /></UDropdownMenu>
+          </div>
         </article>
       </div>
       <EmptyState

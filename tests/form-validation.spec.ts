@@ -10,14 +10,15 @@ import {
   hotelInputSchema,
   specialServiceInputSchema,
   stayInputSchema,
-  taskInputSchema
+  taskInputSchema,
+  workProgressInputSchema
 } from '../shared/contracts/crm'
 import { expenseInputSchema } from '../shared/contracts/expense'
 
 const messages = {
-  ru: { required: 'Заполните поле', selection: 'Выберите значение', checkout: 'Выезд должен быть позже заезда' },
-  en: { required: 'Fill in this field', selection: 'Select a value', checkout: 'Check-out must be after check-in' },
-  he: { required: 'יש למלא את השדה', selection: 'יש לבחור ערך', checkout: 'היציאה חייבת להיות אחרי הכניסה' }
+  ru: { required: 'Заполните поле', selection: 'Выберите значение', checkout: 'Выезд должен быть позже заезда', problem: 'Опишите проблему' },
+  en: { required: 'Fill in this field', selection: 'Select a value', checkout: 'Check-out must be after check-in', problem: 'Describe the problem' },
+  he: { required: 'יש למלא את השדה', selection: 'יש לבחור ערך', checkout: 'היציאה חייבת להיות אחרי הכניסה', problem: 'יש לתאר את הבעיה' }
 } as const
 
 function translator(locale: keyof typeof messages) {
@@ -26,6 +27,7 @@ function translator(locale: keyof typeof messages) {
       'validation.required': messages[locale].required,
       'validation.selection': messages[locale].selection,
       'validation.checkoutAfterCheckin': messages[locale].checkout,
+      'validation.problemDescriptionRequired': messages[locale].problem,
       'validation.invalid': `${locale}:invalid`,
       'validation.minNumber': `${locale}:min:${params?.value}`,
       'validation.maxNumber': `${locale}:max:${params?.value}`,
@@ -66,6 +68,14 @@ describe('CRUD form validation', () => {
       childCount: 0
     })
     expect(stay.find(error => error.name === 'checkOutOn')?.message).toBe(messages[locale].checkout)
+
+    const progress = createFormValidator(workProgressInputSchema, translator(locale))({
+      checklist: [],
+      comment: '',
+      hasProblem: true,
+      problemDescription: ''
+    })
+    expect(progress.find(error => error.name === 'problemDescription')?.message).toBe(messages[locale].problem)
   })
 
   it('maps composite coordinate errors to one visible location field', () => {

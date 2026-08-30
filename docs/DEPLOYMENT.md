@@ -61,6 +61,13 @@ chmod 600 .env.production
 - публичный и приватный VAPID-ключи;
 - `NUXT_PUBLIC_APP_URL=https://crm.aparts-bansko.com`.
 
+В `.env.production` должны быть заданы `NUXT_VAPID_SUBJECT`,
+`NUXT_VAPID_PUBLIC_KEY`, `NUXT_VAPID_PRIVATE_KEY` и
+`NUXT_PUBLIC_VAPID_PUBLIC_KEY`. Обе переменные публичного ключа содержат одно
+и то же значение. Если хотя бы одно значение отсутствует, production-контейнер
+не запускается, чтобы кнопка Push не отображалась как рабочая при пустой
+конфигурации.
+
 Для пароля PostgreSQL удобно использовать URL-safe hex, чтобы не кодировать
 спецсимволы отдельно:
 

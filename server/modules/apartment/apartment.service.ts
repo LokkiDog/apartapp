@@ -1,6 +1,6 @@
 import { and, asc, eq, inArray, or } from 'drizzle-orm'
 import Decimal from 'decimal.js'
-import { apartmentInputSchema, apartmentTypeInputSchema, apartmentUpdateSchema } from '@contracts/crm'
+import { apartmentInputSchema, apartmentTypeInputSchema, apartmentUpdateSchema, isApartmentOwnerEligible } from '@contracts/crm'
 import { canManageApartment, managedApartmentIds, requireRole, type Actor } from '../../infrastructure/auth/actor'
 import { writeAuditLog } from '../../infrastructure/audit/log'
 import { db } from '../../infrastructure/database/client'
@@ -117,7 +117,7 @@ async function validateManagers(actor: Actor, managerIds: string[]) {
   const managers = await db.query.users.findMany({
     where: and(inArray(users.id, managerIds), eq(users.organizationId, actor.organizationId), eq(users.status, 'active'))
   })
-  if (managers.length !== managerIds.length || managers.some(manager => !manager.roles.includes('manager'))) {
+  if (managers.length !== managerIds.length || managers.some(manager => !isApartmentOwnerEligible(manager.roles))) {
     throw createError({ statusCode: 400, statusMessage: 'Выберите активных собственников' })
   }
 }

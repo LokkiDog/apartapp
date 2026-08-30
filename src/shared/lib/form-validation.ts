@@ -51,7 +51,8 @@ function issueMessage(issue: z.core.$ZodIssue, t: Translate) {
   const customMessages: Record<string, string> = {
     'Выезд должен быть позже заезда': 'validation.checkoutAfterCheckin',
     'Собственники не должны повторяться': 'validation.uniqueOwners',
-    'Расходники в автосписании не должны повторяться': 'validation.uniqueConsumables'
+    'Расходники в автосписании не должны повторяться': 'validation.uniqueConsumables',
+    'Опишите проблему': 'validation.problemDescriptionRequired'
   }
   const translationKey = customMessages[issue.message]
   return translationKey ? t(translationKey) : t('validation.invalid')

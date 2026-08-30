@@ -5,6 +5,9 @@ import { specialServiceIconNames } from '../config/special-service-icons'
 export const moneyEurSchema = z.number().finite().nonnegative().max(9_999_999_999.99).transform(value => Number(new Decimal(value).toDecimalPlaces(2, Decimal.ROUND_HALF_UP)))
 
 export const userRoleSchema = z.enum(['administrator', 'manager', 'cleaner'])
+export function isApartmentOwnerEligible(roles: readonly string[]) {
+  return roles.includes('manager') || roles.includes('administrator')
+}
 export const appLocaleSchema = z.enum(['ru', 'en', 'he'])
 export type AppLocale = z.infer<typeof appLocaleSchema>
 export const hotelStatusSchema = z.enum(['active', 'archived'])

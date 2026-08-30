@@ -10,7 +10,8 @@ import { WorkProgressForm } from '#fsd/features/work-progress'
 type WorkKind = 'cleaning' | 'task'
 type InventoryReportSource = { id: string; reportedBy: { id: string; name: string }; reportedAt: string; appliedAt: string | null; approvedAt: string | null; approvedBy: { id: string; name: string } | null; usedQuantity: number; remainingQuantity: number; discrepancyQuantity: number; startingQuantity: number; expectedRemainingQuantity: number }
 type InventoryItem = { consumable: { id: string; name: string; unit: string }; autoWriteOffQuantity: number | null; quantity: number; usedQuantity: number; remainingQuantity: number; discrepancyQuantity: number; startingQuantity: number; expectedRemainingQuantity: number; report: InventoryReportSource | null }
-type ProgressPayload = { checklist: Array<{ label: string; checked: boolean }>; comment: string; hasProblem: boolean; problemDescription: string; inventoryReports?: Array<{ consumableId: string; usedQuantity: number; remainingQuantity: number }>; photo: File | null }
+type ProgressPayload = { checklist: Array<{ label: string; checked: boolean }>; comment: string; hasProblem: boolean; problemDescription: string; inventoryReports?: Array<{ consumableId: string; usedQuantity: number; remainingQuantity: number }>; photos: File[] }
+type WorkAttachment = { id: string; fileName: string; mimeType: string }
 
 const props = defineProps<{ kind: WorkKind }>()
 const { t } = useI18n()
@@ -24,7 +25,7 @@ const work = workRequest.data as Ref<Cleaning | Task | null>
 const { status, refresh } = workRequest
 const inventoryReports = ref<InventoryItem[]>([])
 const inventoryLoaded = ref(false)
-const attachments = ref<Array<{ id: string; fileName: string; mimeType: string }>>([])
+const attachments = ref<WorkAttachment[]>([])
 const error = ref('')
 const finishHint = ref('')
 const pending = ref(false)
@@ -59,7 +60,7 @@ watch([cleaning, status], async () => {
 }, { immediate: true })
 watch(work, async value => {
   if (!value) return
-  try { attachments.value = await $fetch<Array<{ id: string; fileName: string; mimeType: string }>>('/api/attachments', { query: { entityType: props.kind, entityId: id } }) } catch { attachments.value = [] }
+  await refreshAttachments()
 }, { immediate: true })
 
 onMounted(() => {
@@ -74,13 +75,17 @@ function checklist() { return work.value?.checklist ?? [] }
 function cleanerNames() { return cleaning.value?.assignments.map(item => item.cleaner.name).join(', ') || t('work.notAssigned') }
 function draftBody(payload: ProgressPayload) { return { checklist: payload.checklist, comment: payload.comment, hasProblem: payload.hasProblem, problemDescription: payload.problemDescription, inventoryReports: props.kind === 'cleaning' && inventoryLoaded.value ? payload.inventoryReports : undefined } }
 
-async function uploadPhoto(photo: File | null) {
-  if (!photo) return
-  const upload = new FormData()
-  upload.set('entityType', props.kind)
-  upload.set('entityId', id)
-  upload.set('file', photo)
-  await $fetch('/api/attachments', { method: 'POST', body: upload })
+async function refreshAttachments() {
+  try { attachments.value = await $fetch<WorkAttachment[]>('/api/attachments', { query: { entityType: props.kind, entityId: id } }) } catch { attachments.value = [] }
+}
+async function uploadPhotos(photos: File[]) {
+  for (const photo of photos) {
+    const upload = new FormData()
+    upload.set('entityType', props.kind)
+    upload.set('entityId', id)
+    upload.set('file', photo)
+    await $fetch('/api/attachments', { method: 'POST', body: upload })
+  }
 }
 async function saveInventoryOnly(reports: Array<{ consumableId: string; usedQuantity: number; remainingQuantity: number }>) {
   pending.value = true; error.value = ''
@@ -111,7 +116,11 @@ async function saveProgress(payload: ProgressPayload, complete = false) {
   try {
     if (!complete) await $fetch(`/api/${props.kind}s/${id}/progress`, { method: 'PUT', body: draftBody(payload) })
     else await $fetch(`/api/${props.kind}s/${id}/complete`, { method: 'POST', body: draftBody(payload) })
-    try { await uploadPhoto(payload.photo); if (payload.photo) attachments.value = await $fetch<Array<{ id: string; fileName: string; mimeType: string }>>('/api/attachments', { query: { entityType: props.kind, entityId: id } }) } catch { error.value = t('work.savedPhotoError') }
+    if (payload.photos.length) {
+      try { await uploadPhotos(payload.photos) }
+      catch { error.value = t('work.savedPhotoError') }
+      finally { await refreshAttachments() }
+    }
     await refresh()
     if (complete && !error.value) await router.push('/work')
   } catch (cause: any) {
@@ -147,7 +156,7 @@ function requestComplete() {
   if (!work.value) return
   const incomplete = work.value.checklist.some(item => !item.checked)
   if (incomplete) { finishHint.value = t('work.incompleteHint'); window.setTimeout(() => document.querySelector('.progress-section--attention')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 0); return }
-  void saveProgress({ checklist: work.value.checklist, comment: work.value.comment ?? '', hasProblem: work.value.hasProblem, problemDescription: work.value.problemDescription, inventoryReports: inventoryReports.value.map(item => ({ consumableId: item.consumable.id, usedQuantity: item.usedQuantity, remainingQuantity: item.remainingQuantity })), photo: null }, true)
+  void saveProgress({ checklist: work.value.checklist, comment: work.value.comment ?? '', hasProblem: work.value.hasProblem, problemDescription: work.value.problemDescription, inventoryReports: inventoryReports.value.map(item => ({ consumableId: item.consumable.id, usedQuantity: item.usedQuantity, remainingQuantity: item.remainingQuantity })), photos: [] }, true)
 }
 </script>
 
@@ -166,8 +175,7 @@ function requestComplete() {
         <div v-if="props.kind === 'cleaning' && cleaning?.tariffSnapshot.ownerTotalEur !== undefined"><p class="detail-label">{{ t('work.cost') }}</p><p class="font-semibold tabular-nums">{{ formatEuro(cleaning.tariffSnapshot.ownerTotalEur) }}</p></div>
         <div v-if="props.kind === 'cleaning' && cleaning?.tariffSnapshot.cleanerPoolEur !== undefined"><p class="detail-label">{{ t('work.payout') }}</p><p class="font-semibold tabular-nums">{{ formatEuro(cleaning.tariffSnapshot.cleanerPoolEur) }}</p></div>
       </section>
-      <section v-if="attachments.length" class="surface p-5 sm:p-6"><div class="mb-3 flex items-center gap-2"><UIcon name="i-lucide-paperclip" class="size-5 text-[var(--color-primary)]" /><h2 class="font-semibold">{{ t('work.photos') }}</h2></div><div class="flex flex-wrap gap-2"><a v-for="attachment in attachments" :key="attachment.id" :href="`/api/attachments/${attachment.id}/file`" target="_blank" rel="noreferrer" class="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[var(--color-surface-muted)] px-3 text-sm font-medium hover:bg-[var(--color-primary-soft)]"><UIcon name="i-lucide-image" class="size-4" />{{ attachment.fileName }}</a></div></section>
-      <WorkProgressForm :key="work.id" :kind="props.kind" :checklist="work.checklist" :comment="work.comment" :has-problem="work.hasProblem" :problem-description="work.problemDescription" :inventory-reports="inventoryReports" :focus-consumable-id="focusConsumableId" :editable="canProgress" :inventory-editable="inventoryEditable" :can-approve-inventory-discrepancy="inventoryEditable" :can-complete="canComplete" :can-stock="canStock" :busy="pending" :error="error" :finish-hint="finishHint" @save="payload => saveProgress(payload)" @complete="payload => saveProgress(payload, true)" @save-inventory="saveInventoryOnly" @approve-inventory-discrepancy="requestInventoryDiscrepancyApproval" @stock="quickStock">
+      <WorkProgressForm :key="`${work.id}-${attachments.length}`" :kind="props.kind" :checklist="work.checklist" :comment="work.comment" :has-problem="work.hasProblem" :problem-description="work.problemDescription" :inventory-reports="inventoryReports" :attachments="attachments" :focus-consumable-id="focusConsumableId" :editable="canProgress" :inventory-editable="inventoryEditable" :can-approve-inventory-discrepancy="inventoryEditable" :can-complete="canComplete" :can-stock="canStock" :busy="pending" :error="error" :finish-hint="finishHint" @save="payload => saveProgress(payload)" @complete="payload => saveProgress(payload, true)" @save-inventory="saveInventoryOnly" @approve-inventory-discrepancy="requestInventoryDiscrepancyApproval" @stock="quickStock">
         <template v-if="props.kind === 'cleaning' && canManage" #actions-left>
           <UButton color="error" variant="soft" icon="i-lucide-trash-2" :aria-label="t('work.deleteCleaning')" @click="deleteOpen = true" />
           <UButton :to="`/work?cleaningId=${encodeURIComponent(id)}`" color="neutral" variant="soft" icon="i-lucide-pencil" :aria-label="t('work.editCleaning')" />

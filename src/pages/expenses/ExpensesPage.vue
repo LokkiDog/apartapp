@@ -132,11 +132,11 @@ async function remove() {
     <UAlert v-if="hydrated && error && !open && !deleteOpen" color="error" variant="soft" :description="error" />
     <div v-if="!hydrated || status === 'pending'" class="grid gap-3"><USkeleton v-for="item in 4" :key="item" class="h-[72px] rounded-2xl" /></div>
     <div v-else-if="expenses?.length" class="surface divide-y divide-[var(--color-line)] px-3 sm:px-5">
-      <article v-for="expense in expenses" :key="expense.id" class="flex min-h-[72px] items-center gap-3 py-3 sm:gap-4">
+      <article v-for="expense in expenses" :key="expense.id" class="flex min-h-[72px] cursor-pointer items-center gap-3 py-3 outline-none transition-[background-color] duration-150 focus-visible:bg-[var(--color-surface-muted)] sm:gap-4" role="button" tabindex="0" @click="openEdit(expense)" @keydown.enter="openEdit(expense)" @keydown.space.prevent="openEdit(expense)">
         <div class="grid size-9 shrink-0 place-items-center rounded-xl bg-[var(--color-primary-soft)] text-[var(--color-primary)]"><UIcon name="i-lucide-receipt-euro" class="size-4" /></div>
         <div class="min-w-0 flex-1"><p class="truncate font-semibold leading-5">{{ expense.description }}</p><p class="mt-0.5 flex min-w-0 items-center gap-1 text-sm text-[var(--color-muted)]"><span class="truncate">{{ expense.apartmentName }} · {{ expense.hotelName }}</span><span aria-hidden="true">·</span><time class="shrink-0">{{ formatDate(expense.occurredOn) }}</time></p></div>
         <strong class="shrink-0 whitespace-nowrap tabular-nums text-[var(--color-primary-strong)]">{{ formatEuro(expense.amountEur) }}</strong>
-        <UDropdownMenu :items="expenseMenuItems(expense)" :content="{ align: 'end' }"><UButton color="neutral" variant="ghost" icon="i-lucide-ellipsis-vertical" :aria-label="t('expenses.actions')" class="min-h-11 min-w-11 active:scale-[0.96] transition-transform" /></UDropdownMenu>
+        <UDropdownMenu :items="expenseMenuItems(expense)" :content="{ align: 'end' }"><UButton color="neutral" variant="ghost" icon="i-lucide-ellipsis-vertical" :aria-label="t('expenses.actions')" class="min-h-11 min-w-11 active:scale-[0.96] transition-transform" @click.stop @keydown.stop /></UDropdownMenu>
       </article>
     </div>
     <EmptyState v-else icon="i-lucide-receipt-euro" :title="t('expenses.emptyTitle')" :description="t('expenses.emptyDescription')"><template #actions><UButton @click="openCreate">{{ t('expenses.add') }}</UButton></template></EmptyState>
