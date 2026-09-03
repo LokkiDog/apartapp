@@ -29,6 +29,12 @@ export function managerExpenseReportTotal(lines: ManagerExpenseLine[], visibilit
   return Number(lines.reduce((sum, line) => visibility[line.category] ? sum.plus(line.amountEur || 0) : sum, new Decimal(0)).toDecimalPlaces(2))
 }
 
+export function managerExpenseCategoryLines(lines: ManagerExpenseLine[], category: ManagerExpenseCategory): ManagerExpenseLine[] {
+  const categoryLines = lines.filter(line => line.category === category)
+  if (category !== 'cleaning') return categoryLines
+  return categoryLines.sort((left, right) => (left.occurredOn ?? '\uffff').localeCompare(right.occurredOn ?? '\uffff') || left.position - right.position)
+}
+
 export function managerExpenseReportLines(lines: ManagerExpenseLine[], visibility: ManagerExpenseCategoryVisibility, inventoryLabel = 'Расходники'): ManagerExpenseLine[] {
   const visible = lines.filter(line => visibility[line.category])
   const inventory = visible.filter(line => line.category === 'inventory')

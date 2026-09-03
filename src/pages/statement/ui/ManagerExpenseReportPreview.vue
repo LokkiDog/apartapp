@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import Decimal from 'decimal.js'
 import { formatDate, formatEuro } from '#fsd/shared/lib'
-import { createManagerExpenseCategoryVisibility, visibleManagerExpenseCategories, type ManagerExpenseCategory as Category, type ManagerExpenseCategoryVisibility, type ManagerExpenseLine as Line } from '../model/manager-expense-report'
+import { createManagerExpenseCategoryVisibility, managerExpenseCategoryLines, visibleManagerExpenseCategories, type ManagerExpenseCategory as Category, type ManagerExpenseCategoryVisibility, type ManagerExpenseLine as Line } from '../model/manager-expense-report'
 import { useI18n } from 'vue-i18n'
 
 const props = withDefaults(defineProps<{ lines: Line[], totalEur: number, categoryVisibility?: ManagerExpenseCategoryVisibility, editable?: boolean, editingLineId?: string | null, embedded?: boolean, inventoryExpanded?: boolean }>(), { categoryVisibility: createManagerExpenseCategoryVisibility, editable: false, editingLineId: null, embedded: false, inventoryExpanded: false })
@@ -17,7 +17,7 @@ const { t } = useI18n()
 const labels = computed<Record<Category, string>>(() => ({ cleaning: t('work.cleanings'), inventory: t('reports.procurement'), task: t('work.tasks'), other: t('reports.finance') }))
 const categories = computed(() => visibleManagerExpenseCategories(props.categoryVisibility, props.editable))
 const managerPresentation = computed(() => !props.editable && !props.embedded)
-function categoryLines(category: Category) { return props.lines.filter(line => line.category === category) }
+function categoryLines(category: Category) { return managerExpenseCategoryLines(props.lines, category) }
 function categoryTotal(category: Category) { return Number(categoryLines(category).reduce((sum, line) => sum.plus(line.amountEur), new Decimal(0)).toDecimalPlaces(2)) }
 function showCategoryLines(category: Category) { return category !== 'inventory' || (props.editable && props.inventoryExpanded) }
 </script>
@@ -56,13 +56,13 @@ function showCategoryLines(category: Category) { return category !== 'inventory'
         </div>
         <div v-if="showCategoryLines(category) && categoryLines(category).length" class="manager-expense-lines">
           <template v-for="line in categoryLines(category)" :key="line.id">
-            <form v-if="editable && editingLineId === line.id" class="manager-expense-editor grid gap-2 py-3" @submit.prevent="emit('close')">
-              <UInput :model-value="line.description" :placeholder="t('hotels.name')" autofocus @update:model-value="value => emit('update', line.id, { description: value })" />
+            <form v-if="editable && editingLineId === line.id" class="manager-expense-editor grid gap-2 py-3" :class="{ 'manager-expense-editor--cleaning': category === 'cleaning' }" @submit.prevent="emit('close')">
+              <UInput v-if="category !== 'cleaning'" :model-value="line.description" :placeholder="t('hotels.name')" autofocus @update:model-value="value => emit('update', line.id, { description: value })" />
               <UInput :model-value="line.occurredOn ?? ''" type="date" @update:model-value="value => emit('update', line.id, { occurredOn: value || null })" />
               <UInput :model-value="line.amountEur" type="number" step="0.01" @update:model-value="value => emit('update', line.id, { amountEur: Number(value) || 0 })" />
               <div class="flex gap-1"><UButton type="submit" color="neutral" variant="ghost" icon="i-lucide-check" :aria-label="t('common.save')" class="min-h-11 min-w-11" /><UButton type="button" color="error" variant="ghost" icon="i-lucide-trash-2" :aria-label="t('common.delete')" class="min-h-11 min-w-11" @click="emit('remove', line.id)" /></div>
             </form>
-            <button v-else type="button" class="manager-expense-row grid min-h-14 w-full items-center gap-3 py-3 text-left transition-[background-color,scale] duration-150 hover:bg-[var(--color-surface-muted)] active:scale-[0.96] sm:gap-4" :class="{ 'cursor-default': !editable }" :disabled="!editable" @click="emit('select', line.id)"><span class="min-w-0 justify-self-start truncate text-left font-medium">{{ line.description }}</span><span class="whitespace-nowrap text-xs text-[var(--color-muted)] sm:text-sm">{{ line.occurredOn ? formatDate(line.occurredOn) : '' }}</span><strong class="shrink-0 whitespace-nowrap text-right tabular-nums">{{ formatEuro(line.amountEur) }}</strong></button>
+            <button v-else type="button" class="manager-expense-row grid min-h-14 w-full items-center gap-3 py-3 text-left transition-[background-color,scale] duration-150 hover:bg-[var(--color-surface-muted)] active:scale-[0.96] sm:gap-4" :class="{ 'cursor-default': !editable, 'manager-expense-row--cleaning': category === 'cleaning' }" :disabled="!editable" @click="emit('select', line.id)"><span class="min-w-0 justify-self-start truncate text-left font-medium">{{ category === 'cleaning' ? (line.occurredOn ? formatDate(line.occurredOn) : '') : line.description }}</span><span v-if="category !== 'cleaning'" class="whitespace-nowrap text-xs text-[var(--color-muted)] sm:text-sm">{{ line.occurredOn ? formatDate(line.occurredOn) : '' }}</span><strong class="shrink-0 whitespace-nowrap text-right tabular-nums">{{ formatEuro(line.amountEur) }}</strong></button>
           </template>
         </div>
       </section>
@@ -87,6 +87,10 @@ function showCategoryLines(category: Category) { return category !== 'inventory'
   grid-template-columns: minmax(0, 1fr) 6.75rem auto;
   justify-items: stretch;
   text-align: left;
+}
+
+.manager-expense-row--cleaning {
+  grid-template-columns: minmax(0, 1fr) auto;
 }
 
 .manager-expense-row > :first-child {
@@ -136,6 +140,10 @@ function showCategoryLines(category: Category) { return category !== 'inventory'
   padding-block: .875rem;
 }
 
+.manager-expense-preview--manager .manager-expense-row--cleaning {
+  grid-template-columns: minmax(0, 1fr) max-content;
+}
+
 .manager-expense-preview--manager .manager-expense-row > :first-child {
   overflow: visible;
   line-height: 1.35;
@@ -173,6 +181,10 @@ function showCategoryLines(category: Category) { return category !== 'inventory'
     grid-template-columns: minmax(0, 1fr) 10rem 9rem auto;
   }
 
+  .manager-expense-editor--cleaning {
+    grid-template-columns: 10rem 9rem auto;
+  }
+
   .manager-expense-preview--manager .manager-expense-lines {
     padding-inline: 2.5rem 1.5rem;
   }
@@ -180,6 +192,11 @@ function showCategoryLines(category: Category) { return category !== 'inventory'
   .manager-expense-preview--manager .manager-expense-row {
     grid-template-columns: minmax(0, 1fr) 9rem max-content;
     gap: 1rem;
+  }
+
+  .manager-expense-row--cleaning,
+  .manager-expense-preview--manager .manager-expense-row--cleaning {
+    grid-template-columns: minmax(0, 1fr) max-content;
   }
 }
 </style>

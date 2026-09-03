@@ -2438,10 +2438,6 @@ img {
   align-items: center;
   gap: 0.5rem;
 }
-.manager-expense-category-header button[role="checkbox"] {
-  width: 44px;
-  height: 44px;
-}
 .checklist-edit-row {
   display: flex;
   min-width: 0;

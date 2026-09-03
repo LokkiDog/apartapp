@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { categoryVisibilityFromReport, enabledManagerExpenseLines, managerExpenseTotal } from '../server/modules/finance/manager-expense-report'
 import { managerExpensePdfDefinition, managerExpensePdfFileName } from '../src/pages/statement/lib/manager-expense-pdf'
-import { createManagerExpenseCategoryVisibility, managerExpenseReportLines, managerExpenseReportTotal, updateManagerExpenseCategoryVisibility, visibleManagerExpenseCategories, type ManagerExpenseLine } from '../src/pages/statement/model/manager-expense-report'
+import { createManagerExpenseCategoryVisibility, managerExpenseCategoryLines, managerExpenseReportLines, managerExpenseReportTotal, updateManagerExpenseCategoryVisibility, visibleManagerExpenseCategories, type ManagerExpenseLine } from '../src/pages/statement/model/manager-expense-report'
 
 const lines: ManagerExpenseLine[] = [
   { id: 'cleaning', category: 'cleaning', description: 'Уборка', occurredOn: '2026-08-10', amountEur: 80, position: 0 },
@@ -46,6 +46,16 @@ describe('manager expense report categories', () => {
     ])
   })
 
+  it('orders cleaning rows from the earliest date to the latest', () => {
+    const ordered = managerExpenseCategoryLines([
+      { id: 'later', category: 'cleaning', description: 'Уборка', occurredOn: '2026-08-20', amountEur: 80, position: 0 },
+      { id: 'undated', category: 'cleaning', description: 'Уборка', occurredOn: null, amountEur: 80, position: 1 },
+      { id: 'earlier', category: 'cleaning', description: 'Уборка', occurredOn: '2026-08-03', amountEur: 80, position: 2 }
+    ], 'cleaning')
+
+    expect(ordered.map(line => line.id)).toEqual(['earlier', 'later', 'undated'])
+  })
+
   it('builds the manager PDF without hidden categories and with the matching total', () => {
     const definition = managerExpensePdfDefinition({
       apartmentName: 'L102 · Belvedere',
@@ -58,6 +68,7 @@ describe('manager expense report categories', () => {
     expect(serialized).toContain('Отчёт по расходам')
     expect(serialized).toContain('L102 · Belvedere')
     expect(serialized).toContain('Уборки')
+    expect(serialized).not.toContain('"text":"Уборка","style":"tableText"')
     expect(serialized).toContain('Расходники')
     expect(serialized).not.toContain('Дополнительные работы')
     expect(serialized).not.toContain('Ремонт')

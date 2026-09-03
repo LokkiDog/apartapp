@@ -82,12 +82,12 @@ export async function listManagerExpenseReports(actor: Actor, month: string) {
   const managedIds = await managedApartmentIds(actor)
   if (managedIds && !managedIds.length) return []
   if (managedIds) criteria.push(inArray(apartments.id, managedIds))
-  const apartmentRows = await db.query.apartments.findMany({ where: and(...criteria), with: { managerAssignments: { with: { manager: { columns: { id: true, name: true } } } } } })
+  const apartmentRows = await db.query.apartments.findMany({ where: and(...criteria), with: { hotel: { columns: { name: true } }, managerAssignments: { with: { manager: { columns: { id: true, name: true } } } } } })
   const reports = await Promise.all(apartmentRows.map(async apartment => {
     const report = await storedReport(actor.organizationId, apartment.id, month)
     if (!actor.roles.includes('administrator') && !report?.publishedAt) return null
     const lines = report ? report.lines.map(line => ({ id: line.id, category: line.category, description: line.description, occurredOn: line.occurredOn, amountEur: line.amountEur, position: line.position })) : await automaticLines(actor.organizationId, apartment.id, month)
-    return { apartmentId: apartment.id, apartmentName: apartment.name, managerNames: apartment.managerAssignments.map(assignment => assignment.manager.name).sort((left, right) => left.localeCompare(right, 'ru')), materialized: Boolean(report), published: Boolean(report?.publishedAt), totalEur: managerExpenseTotal(lines, categoryVisibilityFromReport(report)) }
+    return { apartmentId: apartment.id, apartmentName: apartment.name, hotelName: apartment.hotel.name, managerNames: apartment.managerAssignments.map(assignment => assignment.manager.name).sort((left, right) => left.localeCompare(right, 'ru')), materialized: Boolean(report), published: Boolean(report?.publishedAt), totalEur: managerExpenseTotal(lines, categoryVisibilityFromReport(report)) }
   }))
   return reports.filter(Boolean)
 }

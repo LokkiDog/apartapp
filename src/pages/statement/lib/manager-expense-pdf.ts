@@ -1,6 +1,6 @@
 import type { TDocumentDefinitions } from 'pdfmake/interfaces'
 import { formatEuro, getFormatLocale } from '../../../shared/lib'
-import { managerExpenseCategories, managerExpenseReportLines, managerExpenseReportTotal, type ManagerExpenseCategory, type ManagerExpenseCategoryVisibility, type ManagerExpenseLine } from '../model/manager-expense-report'
+import { managerExpenseCategories, managerExpenseCategoryLines, managerExpenseReportLines, managerExpenseReportTotal, type ManagerExpenseCategory, type ManagerExpenseCategoryVisibility, type ManagerExpenseLine } from '../model/manager-expense-report'
 
 type ManagerExpensePdfReport = {
   apartmentName: string
@@ -51,7 +51,7 @@ export function managerExpensePdfDefinition(report: ManagerExpensePdfReport): TD
   ]
 
   for (const category of categories) {
-    const categoryLines = lines.filter(line => line.category === category)
+    const categoryLines = managerExpenseCategoryLines(lines, category)
     const categoryTotal = Number(categoryLines.reduce((sum, line) => sum + line.amountEur, 0).toFixed(2))
     content.push({
       stack: [
@@ -61,15 +61,23 @@ export function managerExpensePdfDefinition(report: ManagerExpensePdfReport): TD
           : [{
               table: {
                 headerRows: 1,
-                widths: ['*', 92, 72],
-                body: [
-                  [{ text: copy.name, style: 'tableHeader' }, { text: copy.date, style: 'tableHeader' }, { text: copy.amount, style: ['tableHeader', 'tableAmount'] }],
-                  ...categoryLines.map(line => [
-                    { text: line.description, style: 'tableText' },
-                    { text: formatDate(line.occurredOn), style: 'tableDate' },
-                    { text: formatEuro(line.amountEur), style: 'tableAmount' }
-                  ])
-                ]
+                widths: category === 'cleaning' ? ['*', 72] : ['*', 92, 72],
+                body: category === 'cleaning'
+                  ? [
+                      [{ text: copy.date, style: 'tableHeader' }, { text: copy.amount, style: ['tableHeader', 'tableAmount'] }],
+                      ...categoryLines.map(line => [
+                        { text: formatDate(line.occurredOn), style: 'tableText' },
+                        { text: formatEuro(line.amountEur), style: 'tableAmount' }
+                      ])
+                    ]
+                  : [
+                      [{ text: copy.name, style: 'tableHeader' }, { text: copy.date, style: 'tableHeader' }, { text: copy.amount, style: ['tableHeader', 'tableAmount'] }],
+                      ...categoryLines.map(line => [
+                        { text: line.description, style: 'tableText' },
+                        { text: formatDate(line.occurredOn), style: 'tableDate' },
+                        { text: formatEuro(line.amountEur), style: 'tableAmount' }
+                      ])
+                    ]
               },
               layout: {
                 hLineWidth: (index: number) => index === 0 ? 0 : 0.5,
