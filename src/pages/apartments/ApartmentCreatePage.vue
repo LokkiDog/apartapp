@@ -7,6 +7,7 @@ import {
 } from '#fsd/features/manage-apartment'
 import { useCurrentUser } from '#fsd/shared/auth'
 import { PageHeader } from '#fsd/shared/ui'
+import ApartmentPhotoPanel from './ApartmentPhotoPanel.vue'
 import { useI18n } from 'vue-i18n'
 
 const currentUser = useCurrentUser()
@@ -27,6 +28,38 @@ const [
 
 const loading = computed(() => [hotelsStatus.value, usersStatus.value, typesStatus.value].some(status => status === 'idle' || status === 'pending'))
 const loadError = computed(() => hotelsError.value || usersError.value || typesError.value)
+const pendingPhotos = ref<File[]>([])
+const uploadPending = ref(false)
+const photoError = ref('')
+
+function addPhotos(files: File[]) {
+  photoError.value = ''
+  pendingPhotos.value = [...pendingPhotos.value, ...files]
+}
+
+function removePendingPhoto(index: number) {
+  pendingPhotos.value = pendingPhotos.value.filter((_, itemIndex) => itemIndex !== index)
+}
+
+async function uploadPendingPhotos(apartmentId: string) {
+  if (!pendingPhotos.value.length) return undefined
+  uploadPending.value = true
+  const failed: File[] = []
+  for (const photo of pendingPhotos.value) {
+    try {
+      const body = new FormData()
+      body.set('entityType', 'apartment')
+      body.set('entityId', apartmentId)
+      body.set('file', photo)
+      await $fetch('/api/attachments', { method: 'POST', body })
+    } catch {
+      failed.push(photo)
+    }
+  }
+  uploadPending.value = false
+  pendingPhotos.value = failed
+  return failed.length ? `/apartments/${apartmentId}/edit?photoUploadFailed=${failed.length}` : undefined
+}
 </script>
 
 <template>
@@ -58,12 +91,22 @@ const loadError = computed(() => hotelsError.value || usersError.value || typesE
       :title="t('common.error')"
       :description="t('scope.loadErrorDescription')"
     />
-    <ApartmentForm
-      v-else
-      mode="create"
-      :hotels="hotels ?? []"
-      :managers="users ?? []"
-      :apartment-types="types ?? []"
-    />
+    <template v-else>
+      <UAlert v-if="photoError" color="error" variant="soft" :description="photoError" />
+      <ApartmentPhotoPanel
+        :pending-photos="pendingPhotos"
+        :uploading="uploadPending"
+        @select="addPhotos"
+        @remove-pending="removePendingPhoto"
+        @invalid-files="photoError = t('apartments.photoFormatError')"
+      />
+      <ApartmentForm
+        mode="create"
+        :hotels="hotels ?? []"
+        :managers="users ?? []"
+        :apartment-types="types ?? []"
+        :after-create="uploadPendingPhotos"
+      />
+    </template>
   </section>
 </template>

@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { useCurrentUser } from '#fsd/shared/auth'
 import { EmptyState, PageHeader, StatusBadge } from '#fsd/shared/ui'
+import ApartmentPhotoCarousel from './ApartmentPhotoCarousel.vue'
 import { useI18n } from 'vue-i18n'
 
 type Attachment = { id: string; fileName: string }
-type Apartment = { id: string; name: string; building: string; status: string; capacity: number; rooms: number; locationDetails?: string; hotel: { id: string; name: string }; managers: Array<{ id: string; name: string }>; type: { name: string }; photo: Attachment | null }
+type Apartment = { id: string; name: string; building: string; status: string; capacity: number; rooms: number; locationDetails?: string; hotel: { id: string; name: string }; managers: Array<{ id: string; name: string }>; type: { name: string }; photo: Attachment | null; photos: Attachment[] }
 const user = useCurrentUser()
 const { t } = useI18n()
 const { data: apartments, status } = await useAsyncData('apartments', () => user.value ? $fetch<Apartment[]>('/api/apartments') : Promise.resolve([]), { server: false, default: () => [], watch: [user] })
@@ -35,15 +36,7 @@ function openApartment(apartmentId: string) {
         @keydown.space.prevent="openApartment(apartment.id)"
       >
         <div class="apartment-card__media">
-          <img
-            v-if="apartment.photo"
-            :src="`/api/attachments/${apartment.photo.id}/file?variant=card`"
-            :alt="apartment.photo.fileName"
-            class="apartment-card__image"
-            :loading="index < 3 ? 'eager' : 'lazy'"
-            :fetchpriority="index === 0 ? 'high' : 'auto'"
-            decoding="async"
-          >
+          <ApartmentPhotoCarousel v-if="apartment.photos.length" :photos="apartment.photos" :apartment-name="apartment.name" :eager="index < 3" />
           <div v-else class="apartment-card__placeholder">
             <UIcon name="i-lucide-building-2" class="size-9" />
             <span>{{ t('apartments.photo') }}</span>

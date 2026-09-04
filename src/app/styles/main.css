@@ -2530,7 +2530,9 @@ img {
   border-radius: 12px;
 }
 .apartment-photo-panel__item {
+  position: relative;
   display: block;
+  margin: 0;
 }
 .apartment-photo-panel__image {
   display: block;
@@ -2540,6 +2542,59 @@ img {
   object-fit: cover;
   outline: 1px solid rgba(0, 0, 0, 0.1);
   outline-offset: -1px;
+}
+.apartment-photo-panel__item--pending {
+  outline: 2px dashed color-mix(in srgb, var(--color-primary) 42%, transparent);
+  outline-offset: -2px;
+}
+.apartment-photo-panel__remove {
+  position: absolute;
+  top: 0.35rem;
+  right: 0.35rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+}
+.apartment-photo-carousel {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+.apartment-photo-carousel__viewport {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+}
+.apartment-photo-carousel__viewport::-webkit-scrollbar {
+  display: none;
+}
+.apartment-photo-carousel__image {
+  flex: 0 0 100%;
+  scroll-snap-align: start;
+}
+.apartment-photo-carousel__control {
+  position: absolute;
+  top: 50%;
+  z-index: 1;
+  translate: 0 -50%;
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--color-ink);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+}
+.apartment-photo-carousel__control--previous { left: 0.5rem; }
+.apartment-photo-carousel__control--next { right: 0.5rem; }
+.apartment-photo-carousel__counter {
+  position: absolute;
+  right: 0.625rem;
+  bottom: 0.625rem;
+  border-radius: 999px;
+  background: rgba(17, 24, 39, 0.72);
+  padding: 0.25rem 0.55rem;
+  color: white;
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
 }
 .apartment-photo-panel__empty {
   display: grid;

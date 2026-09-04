@@ -7,14 +7,15 @@ import {
   type ApartmentFormType
 } from '#fsd/features/manage-apartment'
 import { useCurrentUser } from '#fsd/shared/auth'
-import { DeleteConfirmModal, PageHeader, StatusBadge } from '#fsd/shared/ui'
+import { DeleteConfirmModal, PageHeader } from '#fsd/shared/ui'
+import ApartmentPhotoPanel, { type ApartmentPhotoAttachment } from './ApartmentPhotoPanel.vue'
 import { useI18n } from 'vue-i18n'
 
 type ApartmentRecord = ApartmentInput & {
   id: string
   managers: Array<{ id: string, name: string }>
 }
-type Attachment = { id: string, fileName: string }
+type Attachment = ApartmentPhotoAttachment
 
 const route = useRoute()
 const apartmentId = String(route.params.id)
@@ -56,38 +57,63 @@ const initialValue = computed<Partial<ApartmentInput>>(() => apartment.value ? {
   status: apartment.value.status
 } : {})
 
-const photo = ref<File | null>(null)
-const uploadOpen = ref(false)
 const uploadPending = ref(false)
+const pendingPhotos = ref<File[]>([])
+const photoToDelete = ref<Attachment | null>(null)
+const photoDeleteOpen = ref(false)
+const photoDeletePending = ref(false)
 const archivePending = ref(false)
 const deleteOpen = ref(false)
 const deletePending = ref(false)
-const actionError = ref('')
+const actionError = ref(route.query.photoUploadFailed ? t('apartments.photoUploadPartial') : '')
 const actionSuccess = ref('')
 
-function selectPhoto(event: Event) {
-  photo.value = (event.target as HTMLInputElement).files?.[0] ?? null
+function removePendingPhoto(index: number) {
+  pendingPhotos.value = pendingPhotos.value.filter((_, itemIndex) => itemIndex !== index)
 }
 
-async function uploadPhoto() {
-  if (!photo.value) return
+async function uploadPhotos(files: File[]) {
+  pendingPhotos.value = [...pendingPhotos.value, ...files]
   uploadPending.value = true
   actionError.value = ''
   actionSuccess.value = ''
+  const failed: File[] = []
+  for (const photo of files) {
+    try {
+      const body = new FormData()
+      body.set('entityType', 'apartment')
+      body.set('entityId', apartmentId)
+      body.set('file', photo)
+      await $fetch('/api/attachments', { method: 'POST', body })
+    } catch {
+      failed.push(photo)
+    }
+  }
+  pendingPhotos.value = failed
+  await refreshPhotos()
+  actionError.value = failed.length ? t('apartments.photoUploadPartial') : ''
+  if (!failed.length) actionSuccess.value = t('apartments.photo')
+  uploadPending.value = false
+}
+
+function askToDeletePhoto(attachment: Attachment) {
+  actionError.value = ''
+  photoToDelete.value = attachment
+  photoDeleteOpen.value = true
+}
+
+async function removePhoto() {
+  if (!photoToDelete.value) return
+  photoDeletePending.value = true
   try {
-    const body = new FormData()
-    body.set('entityType', 'apartment')
-    body.set('entityId', apartmentId)
-    body.set('file', photo.value)
-    await $fetch('/api/attachments', { method: 'POST', body })
+    await $fetch(`/api/attachments/${photoToDelete.value.id}`, { method: 'DELETE' })
     await refreshPhotos()
-    uploadOpen.value = false
-    photo.value = null
-    actionSuccess.value = t('apartments.photo')
+    photoDeleteOpen.value = false
+    photoToDelete.value = null
   } catch (cause: any) {
     actionError.value = cause?.data?.statusMessage ?? t('common.error')
   } finally {
-    uploadPending.value = false
+    photoDeletePending.value = false
   }
 }
 
@@ -160,53 +186,16 @@ async function removeApartment() {
       <UAlert v-if="actionSuccess" color="success" variant="soft" icon="i-lucide-circle-check" :description="actionSuccess" />
       <UAlert v-if="actionError && !deleteOpen" color="error" variant="soft" icon="i-lucide-circle-alert" :description="actionError" />
 
-      <section class="apartment-photo-panel surface">
-        <div class="apartment-photo-panel__header">
-          <div>
-            <div class="flex flex-wrap items-center gap-2">
-              <h2 class="text-lg font-semibold">{{ t('apartments.photo') }}</h2>
-              <StatusBadge
-                :label="apartment.status === 'active' ? t('apartments.active') : apartment.status === 'inactive' ? t('apartments.inactive') : t('apartments.archived')"
-                :tone="apartment.status === 'active' ? 'success' : 'neutral'"
-              />
-            </div>
-          </div>
-          <UButton
-            color="neutral"
-            variant="soft"
-            icon="i-lucide-camera"
-            class="min-h-11 transition-transform duration-150 ease-out active:scale-[0.96]"
-            @click="uploadOpen = true"
-          >
-            {{ t('common.addPhoto') }}
-          </UButton>
-        </div>
-
-        <USkeleton v-if="photosStatus === 'pending'" class="apartment-photo-panel__skeleton" />
-        <div v-else-if="photos?.length" class="apartment-photo-panel__gallery">
-          <a
-            v-for="(attachment, index) in photos"
-            :key="attachment.id"
-            :href="`/api/attachments/${attachment.id}/file`"
-            target="_blank"
-            rel="noreferrer"
-            class="apartment-photo-panel__item"
-          >
-            <img
-              :src="`/api/attachments/${attachment.id}/file?variant=card`"
-              :alt="attachment.fileName"
-              class="apartment-photo-panel__image"
-              :loading="index === 0 ? 'eager' : 'lazy'"
-              :fetchpriority="index === 0 ? 'high' : 'auto'"
-              decoding="async"
-            >
-          </a>
-        </div>
-        <div v-else class="apartment-photo-panel__empty">
-          <UIcon name="i-lucide-image" class="size-8" />
-          <span>{{ t('apartments.photo') }}</span>
-        </div>
-      </section>
+      <ApartmentPhotoPanel
+        :attachments="photos ?? []"
+        :pending-photos="pendingPhotos"
+        :loading="photosStatus === 'pending'"
+        :uploading="uploadPending"
+        @select="uploadPhotos"
+        @remove-pending="removePendingPhoto"
+        @remove-attachment="askToDeletePhoto"
+        @invalid-files="actionError = t('apartments.photoFormatError')"
+      />
 
       <ApartmentForm
         mode="edit"
@@ -249,22 +238,14 @@ async function removeApartment() {
       </section>
     </template>
 
-    <UModal v-model:open="uploadOpen" :title="t('common.addPhoto')">
-      <template #body>
-        <form id="apartment-photo-form" class="form-grid" @submit.prevent="uploadPhoto">
-          <UFormField :label="t('apartments.photo')" help="JPG, PNG или WebP">
-            <UInput type="file" accept="image/*" required @change="selectPhoto" />
-          </UFormField>
-          <UAlert v-if="actionError" color="error" variant="soft" :description="actionError" />
-        </form>
-      </template>
-      <template #footer>
-        <div class="form-actions form-actions--footer">
-          <UButton type="button" color="neutral" variant="ghost" @click="uploadOpen = false">{{ t('common.cancel') }}</UButton>
-          <UButton type="submit" form="apartment-photo-form" :loading="uploadPending" :disabled="!photo">{{ t('common.add') }}</UButton>
-        </div>
-      </template>
-    </UModal>
+    <DeleteConfirmModal
+      v-model:open="photoDeleteOpen"
+      :title="t('apartments.deletePhoto')"
+      :description="t('apartments.deletePhotoDescription')"
+      :loading="photoDeletePending"
+      :error="actionError"
+      @confirm="removePhoto"
+    />
 
     <DeleteConfirmModal
       v-model:open="deleteOpen"

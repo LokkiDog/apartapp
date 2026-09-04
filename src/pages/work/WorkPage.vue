@@ -792,6 +792,7 @@ function taskMenuItems(task: Task): DropdownMenuItem[] {
                 v-if="cleaningMenuItems(cleaning).length"
                 :items="cleaningMenuItems(cleaning)"
                 :content="{ align: 'end' }"
+                :modal="false"
                 ><UButton
                   color="neutral"
                   variant="ghost"
@@ -908,6 +909,7 @@ function taskMenuItems(task: Task): DropdownMenuItem[] {
                     v-if="cleaningMenuItems(cleaning).length"
                     :items="cleaningMenuItems(cleaning)"
                     :content="{ align: 'end' }"
+                    :modal="false"
                     ><UButton
                       color="neutral"
                       variant="ghost"
@@ -1069,6 +1071,7 @@ function taskMenuItems(task: Task): DropdownMenuItem[] {
                     v-if="cleaningMenuItems(cleaning).length"
                     :items="cleaningMenuItems(cleaning)"
                     :content="{ align: 'end' }"
+                    :modal="false"
                     ><UButton
                       color="neutral"
                       variant="ghost"
@@ -1214,6 +1217,7 @@ function taskMenuItems(task: Task): DropdownMenuItem[] {
                     v-if="cleaningMenuItems(cleaning).length"
                     :items="cleaningMenuItems(cleaning)"
                     :content="{ align: 'end' }"
+                    :modal="false"
                     ><UButton
                       color="neutral"
                       variant="ghost"
@@ -1413,6 +1417,7 @@ function taskMenuItems(task: Task): DropdownMenuItem[] {
             <UDropdownMenu
               :items="taskMenuItems(task)"
               :content="{ align: 'end' }"
+              :modal="false"
               ><UButton
                 color="neutral"
                 variant="ghost"

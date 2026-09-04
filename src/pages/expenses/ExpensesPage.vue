@@ -136,7 +136,7 @@ async function remove() {
         <div class="grid size-9 shrink-0 place-items-center rounded-xl bg-[var(--color-primary-soft)] text-[var(--color-primary)]"><UIcon name="i-lucide-receipt-euro" class="size-4" /></div>
         <div class="min-w-0 flex-1"><p class="truncate font-semibold leading-5">{{ expense.description }}</p><p class="mt-0.5 flex min-w-0 items-center gap-1 text-sm text-[var(--color-muted)]"><span class="truncate">{{ expense.apartmentName }} · {{ expense.hotelName }}</span><span aria-hidden="true">·</span><time class="shrink-0">{{ formatDate(expense.occurredOn) }}</time></p></div>
         <strong class="shrink-0 whitespace-nowrap tabular-nums text-[var(--color-primary-strong)]">{{ formatEuro(expense.amountEur) }}</strong>
-        <UDropdownMenu :items="expenseMenuItems(expense)" :content="{ align: 'end' }"><UButton color="neutral" variant="ghost" icon="i-lucide-ellipsis-vertical" :aria-label="t('expenses.actions')" class="min-h-11 min-w-11 active:scale-[0.96] transition-transform" @click.stop @keydown.stop /></UDropdownMenu>
+        <UDropdownMenu :items="expenseMenuItems(expense)" :content="{ align: 'end' }" :modal="false"><UButton color="neutral" variant="ghost" icon="i-lucide-ellipsis-vertical" :aria-label="t('expenses.actions')" class="min-h-11 min-w-11 active:scale-[0.96] transition-transform" @click.stop @keydown.stop /></UDropdownMenu>
       </article>
     </div>
     <EmptyState v-else icon="i-lucide-receipt-euro" :title="t('expenses.emptyTitle')" :description="t('expenses.emptyDescription')"><template #actions><UButton @click="openCreate">{{ t('expenses.add') }}</UButton></template></EmptyState>

@@ -4,6 +4,7 @@ import { canAccessAssignedWork, requireActor } from '../../infrastructure/auth/a
 import { db } from '../../infrastructure/database/client'
 import { apartments, attachments, cleanings, tasks } from '../../infrastructure/database/schema'
 import { fileStorage } from '../../infrastructure/storage/local'
+import { validateUploadedImage } from '../../modules/attachment/image-upload'
 
 const allowedTypes = new Set(['cleaning', 'task', 'apartment'])
 export default defineEventHandler(async event => {
@@ -14,8 +15,7 @@ export default defineEventHandler(async event => {
   const file = form?.find(item => item.name === 'file')
   if (!entityType || !entityId || !file || !allowedTypes.has(entityType)) throw createError({ statusCode: 400, statusMessage: 'Неверные данные файла' })
   if (file.data.byteLength > 8 * 1024 * 1024) throw createError({ statusCode: 413, statusMessage: 'Файл больше 8 МБ' })
-  const mimeType = file.type ?? ''
-  if (!mimeType.startsWith('image/')) throw createError({ statusCode: 400, statusMessage: 'Поддерживаются только изображения' })
+  const mimeType = await validateUploadedImage(file.data, file.type ?? '')
   const allowed = await (async () => {
     if (entityType === 'apartment') {
       const apartment = await db.query.apartments.findFirst({ where: and(eq(apartments.id, entityId), eq(apartments.organizationId, actor.organizationId)) })

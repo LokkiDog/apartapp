@@ -101,15 +101,18 @@ export async function listApartments(actor: Actor, hotelId?: string) {
       eq(attachments.entityType, 'apartment'),
       inArray(attachments.entityId, rows.map(row => row.id))
     ))
-    .orderBy(asc(attachments.createdAt))
-  const firstPhotoByApartment = new Map<string, { id: string, fileName: string }>()
+    .orderBy(asc(attachments.createdAt), asc(attachments.id))
+  const photosByApartment = new Map<string, Array<{ id: string, fileName: string }>>()
   for (const photo of photoRows) {
-    if (!firstPhotoByApartment.has(photo.entityId)) {
-      firstPhotoByApartment.set(photo.entityId, { id: photo.id, fileName: photo.fileName })
-    }
+    const photos = photosByApartment.get(photo.entityId) ?? []
+    photos.push({ id: photo.id, fileName: photo.fileName })
+    photosByApartment.set(photo.entityId, photos)
   }
 
-  return rows.map(row => ({ ...serializeApartment(row), photo: firstPhotoByApartment.get(row.id) ?? null }))
+  return rows.map(row => {
+    const photos = photosByApartment.get(row.id) ?? []
+    return { ...serializeApartment(row), photo: photos[0] ?? null, photos }
+  })
 }
 
 async function validateManagers(actor: Actor, managerIds: string[]) {

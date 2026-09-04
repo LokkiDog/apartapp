@@ -413,7 +413,7 @@ async function saveStay() {
                   </div>
                   <div class="stay-agenda-item__actions">
                     <NuxtLink v-if="user?.roles.includes('administrator')" :to="cleaningHref(item.stay)" class="stay-cleaning-indicator" :class="cleaningPresentation(item.stay).className" :title="cleaningPresentation(item.stay).label" :aria-label="cleaningPresentation(item.stay).label"><UIcon :name="cleaningPresentation(item.stay).icon" class="size-4" /></NuxtLink>
-                    <UDropdownMenu v-if="stayMenuItems(item.stay).length" :items="stayMenuItems(item.stay)" :content="{ align: 'end' }">
+                    <UDropdownMenu v-if="stayMenuItems(item.stay).length" :items="stayMenuItems(item.stay)" :content="{ align: 'end' }" :modal="false">
                       <UButton color="neutral" variant="ghost" icon="i-lucide-ellipsis-vertical" :aria-label="`${t('calendar.editBooking')} ${item.stay.apartment.name}`" class="stay-agenda-action active:scale-[0.96] transition-transform" />
                     </UDropdownMenu>
                   </div>

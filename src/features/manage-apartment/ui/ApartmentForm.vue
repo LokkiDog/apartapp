@@ -19,6 +19,7 @@ const props = withDefaults(defineProps<{
   hotels: ApartmentFormHotel[]
   managers: ApartmentFormManager[]
   apartmentTypes: ApartmentFormType[]
+  afterCreate?: (apartmentId: string) => Promise<string | undefined>
 }>(), {
   apartmentId: undefined,
   initialValue: () => ({})
@@ -53,7 +54,9 @@ async function save(event: FormSubmitEvent<ApartmentInput>) {
       if (!props.apartmentId) throw new Error(t('apartments.missingApartment'))
       await $fetch(`/api/apartments/${props.apartmentId}`, { method: 'PATCH', body: event.data })
     } else {
-      await $fetch('/api/apartments', { method: 'POST', body: event.data })
+      const apartment = await $fetch<{ id: string }>('/api/apartments', { method: 'POST', body: event.data })
+      await navigateTo(await props.afterCreate?.(apartment.id) ?? '/apartments')
+      return
     }
     await navigateTo('/apartments')
   } catch (cause: any) {

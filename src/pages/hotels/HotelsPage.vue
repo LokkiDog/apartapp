@@ -289,6 +289,7 @@ function hotelMenuItems(hotel: Hotel): DropdownMenuItem[] {
             <UDropdownMenu
               :items="hotelMenuItems(hotel)"
               :content="{ align: 'end' }"
+              :modal="false"
             >
               <UButton
                 color="neutral"

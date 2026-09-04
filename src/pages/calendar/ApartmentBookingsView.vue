@@ -90,7 +90,7 @@ function menuItems(stay: Stay): DropdownMenuItem[][] {
             </div>
             <div class="apartment-bookings__actions">
               <NuxtLink v-if="canDelete && stay.cleaning?.id" :to="stayCleaningHref(stay)" class="stay-cleaning-indicator" :class="stayCleaningPresentation(stay, t).className" :title="stayCleaningPresentation(stay, t).label" :aria-label="stayCleaningPresentation(stay, t).label"><UIcon :name="stayCleaningPresentation(stay, t).icon" class="size-4" /></NuxtLink>
-              <UDropdownMenu v-if="menuItems(stay).length" :items="menuItems(stay)" :content="{ align: 'end' }"><UButton color="neutral" variant="ghost" icon="i-lucide-ellipsis-vertical" :aria-label="`${t('calendarExtra.bookingActions')}: ${stay.apartment.name}`" class="min-h-11 min-w-11 active:scale-[0.96] transition-transform" /></UDropdownMenu>
+              <UDropdownMenu v-if="menuItems(stay).length" :items="menuItems(stay)" :content="{ align: 'end' }" :modal="false"><UButton color="neutral" variant="ghost" icon="i-lucide-ellipsis-vertical" :aria-label="`${t('calendarExtra.bookingActions')}: ${stay.apartment.name}`" class="min-h-11 min-w-11 active:scale-[0.96] transition-transform" /></UDropdownMenu>
             </div>
           </article>
         </div>
