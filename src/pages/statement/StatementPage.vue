@@ -41,7 +41,7 @@ const hasUnsavedChanges = computed(() => {
   const draft = { categoryVisibility: draftCategoryVisibility.value, lines: draftLines.value.map(({ category, description, occurredOn, amountEur, position }) => ({ category, description, occurredOn, amountEur, position })) }
   return JSON.stringify(saved) !== JSON.stringify(draft)
 })
-const addItems = computed<DropdownMenuItem[][]>(() => [managerExpenseCategories.map(category => ({ label: categoryLabels[category], icon: category === 'cleaning' ? 'i-lucide-sparkles' : category === 'inventory' ? 'i-lucide-package' : category === 'task' ? 'i-lucide-wrench' : 'i-lucide-receipt-euro', onSelect: () => addLine(category) }))])
+const addItems = computed<DropdownMenuItem[][]>(() => [managerExpenseCategories.map(category => ({ label: categoryLabels[category], icon: category === 'cleaning' ? 'i-lucide-broom' : category === 'inventory' ? 'i-lucide-package' : category === 'task' ? 'i-lucide-wrench' : 'i-lucide-receipt-euro', onSelect: () => addLine(category) }))])
 
 async function refreshList() {
   if (!user.value) return

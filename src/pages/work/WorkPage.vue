@@ -674,7 +674,7 @@ function taskMenuItems(task: Task): DropdownMenuItem[] {
       <UButton
         v-if="isAdministrator"
         class="work-create-button"
-        :icon="tab === 'cleanings' ? 'i-lucide-sparkles' : 'i-lucide-plus'"
+        :icon="tab === 'cleanings' ? 'i-lucide-broom' : 'i-lucide-plus'"
         :aria-label="
           tab === 'cleanings' ? t('work.newCleaning') : t('work.newTask')
         "
@@ -766,7 +766,7 @@ function taskMenuItems(task: Task): DropdownMenuItem[] {
               <div
                 class="grid size-9 shrink-0 place-items-center rounded-lg bg-[var(--color-primary-soft)] text-[var(--color-primary)]"
               >
-                <UIcon name="i-lucide-sparkles" class="size-4" />
+                <UIcon name="i-lucide-broom" class="size-4" />
               </div>
               <div class="min-w-0 flex-1">
                 <p class="truncate font-medium">
@@ -1327,7 +1327,7 @@ function taskMenuItems(task: Task): DropdownMenuItem[] {
         </section>
         <EmptyState
           v-if="!cleanings?.length"
-          icon="i-lucide-sparkles"
+          icon="i-lucide-broom"
           :title="t('workExtra.noCleanings')"
           :description="t('workExtra.noCleaningsDescription')"
         />

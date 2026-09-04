@@ -116,7 +116,7 @@ function editStay() {
             <p v-if="stay.cashAmountEur !== null && stay.cashAmountEur !== undefined"><strong>{{ t('calendar.cash') }}:</strong> {{ formatEuro(stay.cashAmountEur) }}</p>
           </div>
 
-          <div class="grid gap-2"><UButton v-if="canEdit" block color="neutral" variant="soft" icon="i-lucide-pencil" @click="editStay">{{ t('calendar.editBooking') }}</UButton><UButton v-if="canManageCleaning" block color="primary" variant="soft" icon="i-lucide-sparkles" :to="hasCleaning ? `/cleanings/${encodeURIComponent(stay.cleaning!.id)}` : `/work?stayId=${encodeURIComponent(stay.id)}`">{{ hasCleaning ? t('work.open') : t('common.assignCleaning') }}</UButton></div>
+          <div class="grid gap-2"><UButton v-if="canEdit" block color="neutral" variant="soft" icon="i-lucide-pencil" @click="editStay">{{ t('calendar.editBooking') }}</UButton><UButton v-if="canManageCleaning" block color="primary" variant="soft" icon="i-lucide-broom" :to="hasCleaning ? `/cleanings/${encodeURIComponent(stay.cleaning!.id)}` : `/work?stayId=${encodeURIComponent(stay.id)}`">{{ hasCleaning ? t('work.open') : t('common.assignCleaning') }}</UButton></div>
         </div>
       </article>
     </template>

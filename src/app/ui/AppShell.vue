@@ -32,7 +32,7 @@ onMounted(() => {
 const work = computed<NavItem[]>(() => [
   { to: "/", label: t("nav.home"), icon: "i-lucide-layout-dashboard" },
   { to: "/calendar", label: t("nav.bookings"), icon: "i-lucide-calendar-days" },
-  { to: "/work", label: t("nav.cleanings"), icon: "i-lucide-sparkles" },
+  { to: "/work", label: t("nav.cleanings"), icon: "i-lucide-broom" },
 ]);
 const expenses = computed<NavItem>(() => ({
   to: "/expenses",

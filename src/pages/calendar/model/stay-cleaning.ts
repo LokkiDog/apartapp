@@ -12,7 +12,7 @@ export function stayCleaningPresentation(stay: Pick<Stay, 'cleaning'>, translate
   const label = (key: string, fallback: string) => translate?.(key) || fallback
   if (!stay.cleaning?.id) {
     return {
-      icon: 'i-lucide-sparkles',
+      icon: 'i-lucide-broom',
       label: label('calendarExtra.cleaningMissing', 'Уборка не назначена'),
       className: 'stay-cleaning-indicator--missing'
     }
@@ -27,7 +27,7 @@ export function stayCleaningPresentation(stay: Pick<Stay, 'cleaning'>, translate
     unassigned: { label: label('calendarExtra.cleaningUnassigned', 'Уборка создана, исполнитель не назначен'), className: 'stay-cleaning-indicator--unassigned' }
   }
   const presentation = statusPresentation[status] ?? { label: label('calendarExtra.cleaningAssigned', 'Уборка назначена'), className: 'stay-cleaning-indicator--assigned' }
-  return { icon: 'i-lucide-sparkles', ...presentation }
+  return { icon: 'i-lucide-broom', ...presentation }
 }
 
 export function stayCleaningHref(stay: Pick<Stay, 'id' | 'cleaning'>) {
