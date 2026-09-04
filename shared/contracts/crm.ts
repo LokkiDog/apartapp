@@ -112,7 +112,9 @@ export const stayListQuerySchema = z.object({
   hotelId: z.uuid({ error: 'Некорректный отель' }).optional(),
   apartmentIds: optionalApartmentIdsSchema,
   from: z.iso.date().optional(),
-  to: z.iso.date().optional()
+  to: z.iso.date().optional(),
+  includeUncleaned: z.union([z.literal('true'), z.literal('false'), z.boolean()]).transform(value => value === true || value === 'true').optional(),
+  onlyVika: z.union([z.literal('true'), z.literal('false'), z.boolean()]).transform(value => value === true || value === 'true').optional()
 }).strict().superRefine((value, context) => {
   if (value.hotelId && value.apartmentIds) {
     context.addIssue({ code: 'custom', path: ['apartmentIds'], message: 'Выберите отель или апартаменты' })

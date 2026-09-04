@@ -158,6 +158,13 @@ describe('CRM contracts', () => {
     expect(cleaningUpdateSchema.safeParse({ ...tariff, cleanerIds: [], scheduledOn: '2026-01-10', urgencyOverride: 'yes' }).success).toBe(false)
   })
 
+  it('parses the optional uncleaned stay history flag', () => {
+    expect(stayListQuerySchema.parse({ from: '2026-08-01', includeUncleaned: 'true' }).includeUncleaned).toBe(true)
+    expect(stayListQuerySchema.parse({ from: '2026-08-01', includeUncleaned: 'false' }).includeUncleaned).toBe(false)
+    expect(stayListQuerySchema.parse({ onlyVika: 'true' }).onlyVika).toBe(true)
+    expect(stayListQuerySchema.parse({ onlyVika: false }).onlyVika).toBe(false)
+  })
+
   it('marks a cleaning urgent only when both departure and arrival exist', () => {
     expect(hasCleaningUrgency(true, true)).toBe(true)
     expect(hasCleaningUrgency(true, false)).toBe(false)

@@ -53,8 +53,12 @@ export const users = pgTable('users', {
   locale: appLocaleEnum('locale').notNull().default('ru'),
   roles: userRoleEnum('roles').array().notNull().default(sql`ARRAY['manager']::user_role[]`),
   status: userStatusEnum('status').notNull().default('invited'),
+  isVika: boolean('is_vika').notNull().default(false),
   ...timestamps
-}, table => [uniqueIndex('users_organization_email_unique').on(table.organizationId, table.email)])
+}, table => [
+  uniqueIndex('users_organization_email_unique').on(table.organizationId, table.email),
+  uniqueIndex('users_one_vika_per_organization_unique').on(table.organizationId).where(sql`${table.isVika}`)
+])
 
 export const hotels = pgTable('hotels', {
   id: uuid('id').primaryKey().defaultRandom(),

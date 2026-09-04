@@ -1,10 +1,10 @@
-import { and, eq, inArray, lt, gt, ne } from 'drizzle-orm'
+import { and, eq, exists, gt, inArray, lt, ne, not, or } from 'drizzle-orm'
 import Decimal from 'decimal.js'
 import { stayInputSchema, type StayListQuery } from '@contracts/crm'
-import { canManageApartment, managedApartmentIds, requireRole, type Actor } from '../../infrastructure/auth/actor'
+import { canManageApartment, isAssignedToApartment, managedApartmentIds, requireRole, type Actor } from '../../infrastructure/auth/actor'
 import { writeAuditLog } from '../../infrastructure/audit/log'
 import { db } from '../../infrastructure/database/client'
-import { cleaningAssignments, cleanings, financialEntries, inventoryLots, inventoryMovements, specialServices, stayServices, stays } from '../../infrastructure/database/schema'
+import { apartmentManagers, cleaningAssignments, cleanings, financialEntries, inventoryLots, inventoryMovements, specialServices, stayServices, stays, users } from '../../infrastructure/database/schema'
 import { administratorsForOrganization, notifyUsers } from '../../infrastructure/notification/publish'
 import { createFinancialEntry } from '../finance/finance.service'
 import { serializeApartment } from '../apartment/apartment-view'
@@ -27,7 +27,23 @@ async function serviceSnapshots(serviceIds: string[], organizationId: string) {
 
 export async function listStays(actor: Actor, query: StayListQuery = {}) {
   const criteria = [eq(stays.organizationId, actor.organizationId)]
-  if (query.from) criteria.push(gt(stays.checkOutOn, query.from))
+  if (query.onlyVika) {
+    requireRole(actor, 'administrator')
+    criteria.push(exists(db.select({ apartmentId: apartmentManagers.apartmentId })
+      .from(apartmentManagers)
+      .innerJoin(users, eq(apartmentManagers.userId, users.id))
+      .where(and(
+        eq(apartmentManagers.apartmentId, stays.apartmentId),
+        eq(apartmentManagers.organizationId, actor.organizationId),
+        eq(users.organizationId, actor.organizationId),
+        eq(users.isVika, true)
+      ))))
+  }
+  if (query.from) {
+    const inRange = gt(stays.checkOutOn, query.from)
+    const missingCleaning = not(exists(db.select({ id: cleanings.id }).from(cleanings).where(and(eq(cleanings.stayId, stays.id), eq(cleanings.organizationId, actor.organizationId)))))
+    criteria.push((query.includeUncleaned ? or(inRange, missingCleaning) : inRange)!)
+  }
   if (query.to) criteria.push(lt(stays.checkInOn, query.to))
   if (query.apartmentIds) criteria.push(inArray(stays.apartmentId, query.apartmentIds))
   const rows = await db.query.stays.findMany({ where: and(...criteria), with: { apartment: { with: { hotel: true, managerAssignments: { with: { manager: { columns: { id: true, name: true } } } } } }, services: true, cleaning: { columns: { id: true, status: true, scheduledOn: true } } }, orderBy: (stays, { asc }) => [asc(stays.checkInOn)] })
@@ -36,16 +52,17 @@ export async function listStays(actor: Actor, query: StayListQuery = {}) {
     .filter(stay => (!managedIds || managedIds.has(stay.apartmentId)) && (!query.hotelId || stay.apartment.hotelId === query.hotelId))
     .map(stay => {
       const apartment = serializeApartment(stay.apartment)
-      if (actor.roles.includes('administrator')) return { ...stay, apartment }
+      const hasCleaning = Boolean(stay.cleaning?.id)
+      if (actor.roles.includes('administrator')) return { ...stay, apartment, hasCleaning }
       const { cleaning: _cleaning, ...safeStay } = stay
-      return { ...safeStay, apartment }
+      return { ...safeStay, apartment, hasCleaning }
     })
 }
 
 export async function createStay(actor: Actor, input: unknown) {
   requireRole(actor, 'administrator', 'manager')
   const data = stayInputSchema.parse(input)
-  if (!(await canManageApartment(actor, data.apartmentId))) throw createError({ statusCode: 403, statusMessage: 'Нет доступа к апартаменту' })
+  if (!(await isAssignedToApartment(actor, data.apartmentId))) throw createError({ statusCode: 403, statusMessage: 'Бронирование можно создать только для своего апартамента' })
   await assertNoOverlap(actor.organizationId, data.apartmentId, data.checkInOn, data.checkOutOn)
   const services = await serviceSnapshots(data.serviceIds, actor.organizationId)
   const cashAmountEur = data.cashAmountEur ?? Number(services.reduce((sum, service) => sum.plus(service.priceEur), new Decimal(0)).toDecimalPlaces(2))

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createStayAgenda, filterStayAgenda, stayAgendaQueryFrom, type StayAgendaSource } from '../src/pages/calendar/model/stay-agenda'
+import { createStayAgenda, filterStayAgenda, isPastStay, stayAgendaQueryFrom, stayHistoryQueryFrom, type StayAgendaSource } from '../src/pages/calendar/model/stay-agenda'
 import { bookingsForApartment, calendarRange, migrateCalendarView } from '../src/pages/calendar/model/calendar-view'
 
 function stay(id: string, checkInOn: string, checkOutOn: string): StayAgendaSource {
@@ -11,6 +11,13 @@ describe('stay agenda', () => {
 
   it('starts the API query one day earlier so departures today are included', () => {
     expect(stayAgendaQueryFrom(today)).toBe('2026-08-19')
+  })
+
+  it('builds rolling ten-day history ranges and keeps today current', () => {
+    expect(stayHistoryQueryFrom(today, 10)).toBe('2026-08-09')
+    expect(stayHistoryQueryFrom(today, 20)).toBe('2026-07-30')
+    expect(isPastStay(stay('yesterday', '2026-08-18', '2026-08-19'), today)).toBe(true)
+    expect(isPastStay(stay('today', '2026-08-19', today), today)).toBe(false)
   })
 
   it('keeps all categories in the fixed operational order', () => {

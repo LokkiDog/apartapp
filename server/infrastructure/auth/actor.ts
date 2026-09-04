@@ -65,6 +65,10 @@ export function canAccessAssignedWork(actor: Actor, assigneeId: string | null) {
 
 export async function canManageApartment(actor: Actor, apartmentId: string) {
   if (isAdministrator(actor)) return true
+  return isAssignedToApartment(actor, apartmentId)
+}
+
+export async function isAssignedToApartment(actor: Actor, apartmentId: string) {
   const assignment = await db.query.apartmentManagers.findFirst({
     where: and(
       eq(apartmentManagers.apartmentId, apartmentId),

@@ -25,4 +25,13 @@ describe('apartment photos', () => {
     expect(form).toContain('accept="image/jpeg,image/png,image/webp" multiple')
     expect(form).toContain('URL.revokeObjectURL')
   })
+
+  it('opens the apartment from the photo while keeping carousel controls independent', () => {
+    const carousel = readFileSync('src/pages/apartments/ApartmentPhotoCarousel.vue', 'utf8')
+
+    expect(carousel).toContain('<div class="apartment-photo-carousel" @keydown.stop>')
+    expect(carousel).not.toContain('class="apartment-photo-carousel" @click.stop')
+    expect(carousel).toContain('@click.stop="previous"')
+    expect(carousel).toContain('@click.stop="next"')
+  })
 })

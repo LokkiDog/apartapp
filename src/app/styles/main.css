@@ -820,6 +820,9 @@ img {
 .apartments-collection--standard {
   gap: 1rem;
 }
+.apartments-collection--dense {
+  gap: 0.75rem;
+}
 .apartments-collection--compact {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.75rem;
@@ -998,6 +1001,36 @@ img {
   justify-content: space-between;
   gap: 1rem;
 }
+.apartment-card--dense .apartment-card__status {
+  top: 0.5rem;
+  inset-inline-start: 0.5rem;
+}
+.apartment-card--dense .apartment-card__body {
+  gap: 0.125rem;
+  padding: 0.75rem;
+}
+.apartment-card--dense .apartment-card__body h2 {
+  margin-top: 0.125rem;
+  font-size: 1rem;
+  line-height: 1.35;
+}
+.apartment-card--dense .apartment-card__body h2 + p {
+  min-height: 2rem;
+  margin-top: 0.125rem;
+  font-size: 0.75rem;
+  line-height: 1rem;
+}
+.apartment-card--dense .apartment-card__facts {
+  gap: 0.375rem;
+  padding-block: 0.5rem;
+}
+.apartment-card--dense .apartment-card__facts dd {
+  margin-top: 0.125rem;
+  font-size: 0.875rem;
+}
+.apartment-card--dense .apartment-card__footer {
+  gap: 0.5rem;
+}
 .calendar-controls {
   display: grid;
   min-width: 0;
@@ -1005,41 +1038,56 @@ img {
   padding: 1.25rem;
 }
 .calendar-controls__top {
-  display: grid;
+  display: flex;
   min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
   gap: 1rem;
 }
 .calendar-controls__top--agenda {
-  justify-items: end;
+  justify-content: flex-end;
 }
 .calendar-controls__top > * {
   min-width: 0;
 }
-.calendar-controls__views {
+.calendar-date-navigation {
   display: flex;
   min-width: 0;
-  flex-direction: column;
+  flex: 1 1 22rem;
+  align-items: center;
+  gap: 0.5rem;
+}
+.calendar-switch-group {
+  display: grid;
+  width: min(100%, 30rem);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  overflow: hidden;
+  border-radius: 12px;
+}
+.calendar-switch-group > * {
+  min-width: 0;
+  min-height: 44px;
+  justify-content: center;
+}
+.calendar-controls__calendar-options {
+  display: flex;
+  min-width: 0;
   flex-wrap: wrap;
   align-items: stretch;
+  justify-content: flex-end;
   gap: 0.75rem;
 }
-.calendar-view-switch {
+.calendar-controls__calendar-context {
+  display: flex;
   min-width: 0;
-}
-.calendar-view-switch > * {
-  min-width: 0;
-}
-.calendar-period-switch {
-  justify-content: flex-end;
-}
-.calendar-period-switch > * {
-  min-width: 0;
+  flex: 1 1 30rem;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
 }
 .calendar-controls__scope {
   width: 100%;
-}
-.calendar-controls__cleaning-filter {
-  width: min(100%, 18rem);
 }
 .calendar-range-title {
   margin-left: 0.35rem;
@@ -1119,6 +1167,10 @@ img {
   display: grid;
   gap: 1rem;
   padding-top: 0.25rem;
+}
+.calendar-settings__content > * {
+  width: 100%;
+  min-width: 0;
 }
 .calendar-settings__event-types {
   border-top: 1px solid var(--color-line);
@@ -1357,6 +1409,97 @@ img {
 .apartment-bookings {
   display: grid;
   gap: 0.75rem;
+}
+.stay-bookings-panel {
+  overflow: hidden;
+}
+.stay-bookings-panel__header {
+  display: flex;
+  width: 100%;
+  min-height: 52px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border-bottom: 1px solid var(--color-line);
+  padding: 0.65rem 1rem;
+}
+.stay-bookings-panel__header--toggle {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: start;
+}
+.stay-bookings-panel__header--toggle:focus-visible {
+  outline: 2px solid var(--color-primary-strong);
+  outline-offset: -2px;
+}
+.stay-bookings-panel__title {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.5rem;
+}
+.stay-bookings-panel__header h2 {
+  font-size: 0.9rem;
+  font-weight: 750;
+  text-wrap: balance;
+}
+.stay-bookings-panel__count {
+  display: inline-grid;
+  min-width: 28px;
+  min-height: 28px;
+  place-items: center;
+  border-radius: 8px;
+  background: var(--color-primary-soft);
+  color: var(--color-primary-strong);
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+}
+.stay-bookings-panel__chevron {
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  padding: 12px;
+  transition-property: rotate;
+  transition-duration: 150ms;
+  transition-timing-function: ease-out;
+}
+.stay-bookings-panel__chevron--open {
+  rotate: 180deg;
+}
+.stay-bookings-panel--warning {
+  background: #fffaf0;
+  color: #854d0e;
+}
+.stay-bookings-panel--warning .stay-bookings-panel__header,
+.stay-bookings-panel--warning .stay-bookings-panel__group + .stay-bookings-panel__group {
+  border-color: color-mix(in srgb, #d97706 18%, transparent);
+}
+.stay-bookings-panel--warning .stay-bookings-panel__count {
+  background: #fef3c7;
+  color: #854d0e;
+}
+.stay-bookings-panel--warning .stay-bookings-panel__group-title,
+.stay-bookings-panel--warning .stay-bookings-panel__empty {
+  color: #a16207;
+}
+.stay-bookings-panel__group + .stay-bookings-panel__group {
+  border-top: 1px solid var(--color-line);
+}
+.stay-bookings-panel__group-title {
+  padding: 0.75rem 1rem 0.35rem;
+  color: var(--color-muted);
+  font-size: 0.75rem;
+  font-weight: 750;
+}
+.stay-bookings-panel__agenda-items {
+  margin-inline-start: 3.25rem;
+  margin-inline-end: 1rem;
+}
+.stay-bookings-panel__empty {
+  padding: 1rem;
+  color: var(--color-muted);
+  font-size: 0.78rem;
 }
 .apartment-bookings__group {
   overflow: hidden;
@@ -2446,10 +2589,20 @@ img {
 .user-list > * + * {
   border-top: 1px solid color-mix(in srgb, var(--color-line) 55%, transparent);
 }
+.user-list-row__vika {
+  grid-column: 2 / -1;
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 0.5rem;
+}
 @media (min-width: 640px) {
   .user-list-row {
-    grid-template-columns: auto minmax(0, 1fr) 7rem 6rem 5.75rem;
+    grid-template-columns: auto minmax(0, 1fr) 7rem 8rem 6rem 5.75rem;
     gap: 1rem;
+  }
+  .user-list-row__vika {
+    grid-column: auto;
   }
 }
 .cleaning-context-fields {
@@ -3161,6 +3314,9 @@ html[dir="rtl"] .dashboard-page-header__actions {
     grid-template-columns: repeat(auto-fill, minmax(11.25rem, 1fr));
     gap: 1rem;
   }
+  .apartments-collection--dense {
+    grid-template-columns: repeat(auto-fill, minmax(14.5rem, 1fr));
+  }
   .apartment-list-item {
     grid-template-columns: 6rem minmax(0, 1.25fr) minmax(10rem, 0.75fr) auto;
     min-height: 6rem;
@@ -3216,14 +3372,27 @@ html[dir="rtl"] .dashboard-page-header__actions {
   }
 }
 
-@media (min-width: 1280px) {
+@media (min-width: 768px) {
   .calendar-controls__top {
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: center;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 30rem);
   }
-  .calendar-controls__views {
-    justify-content: flex-end;
+  .calendar-controls__top--agenda .calendar-view-switch {
+    grid-column: 2;
   }
+}
+
+@media (min-width: 1024px) {
+  .calendar-controls__calendar-options {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 30rem);
+  }
+  .calendar-period-switch {
+    grid-column: 2;
+  }
+}
+
+@media (min-width: 1280px) {
   .report-filters {
     grid-template-columns: 1.05fr 1fr auto;
   }
@@ -3329,39 +3498,35 @@ html[dir="rtl"] .dashboard-page-header__actions {
   .calendar-controls {
     padding: 1rem;
   }
-  .calendar-controls__cleaning-filter {
+  .calendar-date-navigation {
     width: 100%;
+    flex-basis: 100%;
   }
   .calendar-range-title {
-    width: 100%;
+    min-width: 0;
     margin-left: 0;
-    order: 3;
-    padding-top: 0.25rem;
     font-size: 0.9rem;
-  }
-  .calendar-controls__top,
-  .calendar-controls__views {
-    align-items: stretch;
-  }
-  .calendar-controls__views {
-    width: 100%;
-  }
-  .calendar-controls__views > .calendar-events-toggle {
-    width: 100%;
-    justify-content: center;
-  }
-  .calendar-controls__views > .calendar-view-switch {
-    display: flex;
-    width: 100%;
     overflow: hidden;
-  }
-  .calendar-view-switch > * {
-    flex: 1 1 0;
-    justify-content: center;
-    overflow: hidden;
-    padding-inline: 0.5rem;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  .calendar-controls__top,
+  .calendar-controls__calendar-options {
+    align-items: stretch;
+  }
+  .calendar-controls__calendar-context > .calendar-events-toggle {
+    width: 100%;
+    justify-content: center;
+  }
+  .calendar-switch-group {
+    width: 100%;
+  }
+  .calendar-switch-group > * {
+    padding-inline: 0.5rem;
+    line-height: 1.15;
+    text-align: center;
+    text-overflow: ellipsis;
+    white-space: normal;
   }
   .stay-agenda-day__header {
     min-height: 56px;

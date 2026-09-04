@@ -24,7 +24,7 @@ function next() { showPhoto((activeIndex.value + 1) % props.photos.length) }
 </script>
 
 <template>
-  <div class="apartment-photo-carousel" @click.stop @keydown.stop>
+  <div class="apartment-photo-carousel" @keydown.stop>
     <div ref="viewport" class="apartment-photo-carousel__viewport" dir="ltr" @scroll.passive="updateActiveIndex">
       <img
         v-for="(photo, index) in photos"
@@ -38,8 +38,8 @@ function next() { showPhoto((activeIndex.value + 1) % props.photos.length) }
       >
     </div>
     <template v-if="photos.length > 1">
-      <UButton color="neutral" variant="solid" icon="i-lucide-chevron-left" class="apartment-photo-carousel__control apartment-photo-carousel__control--previous min-h-11 min-w-11 active:scale-[0.96] transition-transform" :aria-label="t('apartments.previousPhoto')" @click="previous" />
-      <UButton color="neutral" variant="solid" icon="i-lucide-chevron-right" class="apartment-photo-carousel__control apartment-photo-carousel__control--next min-h-11 min-w-11 active:scale-[0.96] transition-transform" :aria-label="t('apartments.nextPhoto')" @click="next" />
+      <UButton color="neutral" variant="solid" icon="i-lucide-chevron-left" class="apartment-photo-carousel__control apartment-photo-carousel__control--previous min-h-11 min-w-11 active:scale-[0.96] transition-transform" :aria-label="t('apartments.previousPhoto')" @click.stop="previous" />
+      <UButton color="neutral" variant="solid" icon="i-lucide-chevron-right" class="apartment-photo-carousel__control apartment-photo-carousel__control--next min-h-11 min-w-11 active:scale-[0.96] transition-transform" :aria-label="t('apartments.nextPhoto')" @click.stop="next" />
       <span class="apartment-photo-carousel__counter" aria-live="polite">{{ t('apartments.photoPosition', { current: activeIndex + 1, total: photos.length }) }}</span>
     </template>
   </div>

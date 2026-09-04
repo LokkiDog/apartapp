@@ -9,6 +9,7 @@ import { sendAccountLink } from '../../infrastructure/mail/send'
 import { fileStorage } from '../../infrastructure/storage/local'
 import { publishNotification } from '../../infrastructure/notification/realtime'
 import { invitationResendAvailableAt, invitationResendWaitSeconds } from './invitation-cooldown'
+import { isApartmentOwnerEligible } from '@contracts/crm'
 
 const hash = (value: string) => createHash('sha256').update(value).digest('hex')
 const expiry = () => new Date(Date.now() + 1000 * 60 * 60 * 24)
@@ -151,6 +152,25 @@ export async function restoreUser(actor: Actor, userId: string) {
   await db.update(users).set({ status: 'active', updatedAt: new Date() }).where(eq(users.id, userId))
   await writeAuditLog({ organizationId: actor.organizationId, actorId: actor.id, action: 'user.restored', entityType: 'user', entityId: userId })
   return { ok: true }
+}
+
+export async function setVikaUser(actor: Actor, userId: string, isVika: boolean) {
+  requireRole(actor, 'administrator')
+  const user = await db.transaction(async tx => {
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${actor.organizationId}))`)
+    const target = await tx.query.users.findFirst({ where: and(eq(users.id, userId), eq(users.organizationId, actor.organizationId)) })
+    if (!target) throw createError({ statusCode: 404, statusMessage: 'Пользователь не найден' })
+    if (isVika && (target.status === 'archived' || !isApartmentOwnerEligible(target.roles))) {
+      throw createError({ statusCode: 400, statusMessage: 'Викой может быть только собственник или администратор вне архива' })
+    }
+    const now = new Date()
+    if (isVika) await tx.update(users).set({ isVika: false, updatedAt: now }).where(and(eq(users.organizationId, actor.organizationId), eq(users.isVika, true)))
+    const [updated] = await tx.update(users).set({ isVika, updatedAt: now }).where(and(eq(users.id, userId), eq(users.organizationId, actor.organizationId))).returning()
+    if (!updated) throw createError({ statusCode: 500, statusMessage: 'Не удалось обновить пользователя' })
+    return updated
+  })
+  await writeAuditLog({ organizationId: actor.organizationId, actorId: actor.id, action: isVika ? 'user.vika_assigned' : 'user.vika_cleared', entityType: 'user', entityId: userId })
+  return { id: user.id, isVika: user.isVika }
 }
 
 export async function deleteUserPermanently(actor: Actor, userId: string, confirmationName: string) {

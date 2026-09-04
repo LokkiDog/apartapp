@@ -35,6 +35,14 @@ export function stayAgendaQueryFrom(today: string) {
   return addDays(today, -1)
 }
 
+export function stayHistoryQueryFrom(today: string, days: number) {
+  return addDays(today, -(days + 1))
+}
+
+export function isPastStay(stay: Pick<StayAgendaSource, 'checkOutOn'>, today: string) {
+  return stay.checkOutOn < today
+}
+
 export function createStayAgenda<Stay extends StayAgendaSource>(stays: Stay[], today: string): Array<StayAgendaDay<Stay>> {
   const relevantStays = stays.filter(stay => stay.checkOutOn >= today)
   const lastDate = relevantStays.reduce<string | null>((latest, stay) => !latest || stay.checkOutOn > latest ? stay.checkOutOn : latest, null)

@@ -16,6 +16,7 @@ const view = ref<ApartmentView>('standard')
 const sort = ref<ApartmentSort>('name')
 const viewOptions: Array<{ value: ApartmentView; icon: string; label: string }> = [
   { value: 'compact', icon: 'i-lucide-layout-grid', label: 'apartments.compactView' },
+  { value: 'dense', icon: 'i-lucide-grid-2x2', label: 'common.apartmentDenseView' },
   { value: 'standard', icon: 'i-lucide-panels-top-left', label: 'apartments.standardView' },
   { value: 'list', icon: 'i-lucide-list', label: 'apartments.listView' }
 ]
@@ -99,8 +100,8 @@ function openApartment(apartmentId: string) {
       </article>
     </div>
 
-    <div v-else-if="apartments?.length" class="apartments-collection apartments-collection--standard">
-      <article v-for="(apartment, index) in sortedApartments" :key="apartment.id" class="apartment-card surface" :class="{ 'apartment-card--interactive': canEdit }" :role="canEdit ? 'link' : undefined" :tabindex="canEdit ? 0 : undefined" :aria-label="canEdit ? `${t('apartments.edit')}: ${apartment.name}` : undefined" @click="openApartment(apartment.id)" @keydown.enter="openApartment(apartment.id)" @keydown.space.prevent="openApartment(apartment.id)">
+    <div v-else-if="apartments?.length" class="apartments-collection" :class="`apartments-collection--${view}`">
+      <article v-for="(apartment, index) in sortedApartments" :key="apartment.id" class="apartment-card surface" :class="{ 'apartment-card--dense': view === 'dense', 'apartment-card--interactive': canEdit }" :role="canEdit ? 'link' : undefined" :tabindex="canEdit ? 0 : undefined" :aria-label="canEdit ? `${t('apartments.edit')}: ${apartment.name}` : undefined" @click="openApartment(apartment.id)" @keydown.enter="openApartment(apartment.id)" @keydown.space.prevent="openApartment(apartment.id)">
         <div class="apartment-card__media"><ApartmentPhotoCarousel v-if="apartment.photos.length" :photos="apartment.photos" :apartment-name="apartment.name" :eager="index < 3" /><div v-else class="apartment-card__placeholder"><UIcon name="i-lucide-building-2" class="size-9" /><span>{{ t('apartments.photo') }}</span></div><StatusBadge class="apartment-card__status" :label="statusLabel(apartment)" :tone="statusTone(apartment)" /></div>
         <div class="apartment-card__body"><div class="min-w-0"><p class="truncate text-sm font-medium text-[var(--color-primary)]">{{ hotelLabel(apartment) }}</p><h2 class="mt-1 truncate text-xl font-semibold tracking-[-0.03em]">{{ apartment.name }}</h2><p class="mt-1 min-h-10 text-sm leading-5 text-[var(--color-muted)]">{{ apartment.locationDetails || apartment.type.name }}</p></div><dl class="apartment-card__facts"><div><dt>{{ t('apartments.guests') }}</dt><dd>{{ apartment.capacity }}</dd></div><div><dt>{{ t('apartments.rooms') }}</dt><dd>{{ apartment.rooms }}</dd></div></dl><div class="apartment-card__footer"><div class="min-w-0"><p class="text-xs text-[var(--color-muted)]">{{ t('apartments.managers') }}</p><p class="truncate text-sm font-semibold">{{ apartment.managers.map(manager => manager.name).join(', ') || t('apartments.notAssigned') }}</p></div></div></div>
       </article>

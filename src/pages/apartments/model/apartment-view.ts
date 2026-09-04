@@ -1,7 +1,7 @@
 export const apartmentViewStorageKey = 'aparts.apartments.view'
 export const apartmentSortStorageKey = 'aparts.apartments.sort'
 
-export const apartmentViews = ['compact', 'standard', 'list'] as const
+export const apartmentViews = ['compact', 'dense', 'standard', 'list'] as const
 export const apartmentSorts = ['name', 'createdAt', 'hotel'] as const
 
 export type ApartmentView = typeof apartmentViews[number]

@@ -7,7 +7,7 @@ const currentUser = useCurrentUser()
 const { t } = useI18n()
 if (!currentUser.value?.roles.includes('administrator')) await navigateTo('/')
 
-type Member = { id: string; name: string; email: string; roles: string[]; status: string; invitationResendAvailableAt: string | null }
+type Member = { id: string; name: string; email: string; roles: string[]; status: string; isVika: boolean; invitationResendAvailableAt: string | null }
 const { data: users, refresh, status } = await useAsyncData('settings-users', () => currentUser.value ? $fetch<Member[]>('/api/users') : Promise.resolve([]), { server: false, default: () => [], watch: [currentUser] })
 const open = ref(false)
 const pending = ref(false)
@@ -17,6 +17,7 @@ const showArchived = ref(false)
 const search = ref('')
 const archivePending = ref(false)
 const restorePendingId = ref<string | null>(null)
+const vikaPendingId = ref<string | null>(null)
 const resendPendingId = ref<string | null>(null)
 const countdownNow = ref(Date.now())
 const deleteOpen = ref(false)
@@ -38,6 +39,7 @@ const visibleUsers = computed(() => {
 })
 const statusLabel = (status: string) => ({ active: t('users.active'), invited: t('users.invited'), blocked: t('users.blocked'), archived: t('users.archived') }[status] ?? status)
 const statusColor = (status: string) => ({ active: 'success', invited: 'warning', blocked: 'error', archived: 'neutral' }[status] ?? 'neutral') as 'success' | 'warning' | 'error' | 'neutral'
+const canBeVika = (member: Member) => member.status !== 'archived' && (member.roles.includes('manager') || member.roles.includes('administrator'))
 let countdownTimer: ReturnType<typeof setInterval> | undefined
 
 onMounted(() => { countdownTimer = setInterval(() => { countdownNow.value = Date.now() }, 1000) })
@@ -76,6 +78,15 @@ async function restore(member: Member) {
   catch (cause: any) { error.value = cause?.data?.statusMessage ?? t('common.error') }
   finally { restorePendingId.value = null }
 }
+async function setVika(member: Member, isVika: boolean) {
+  vikaPendingId.value = member.id; error.value = ''; notice.value = ''
+  try {
+    await $fetch(`/api/users/${member.id}/vika`, { method: 'PATCH', body: { isVika } })
+    notice.value = t(isVika ? 'users.vikaAssigned' : 'users.vikaRemoved')
+    await refresh()
+  } catch (cause: any) { error.value = cause?.data?.statusMessage ?? t('common.error') }
+  finally { vikaPendingId.value = null }
+}
 async function resendInvite(member: Member) {
   resendPendingId.value = member.id; error.value = ''; notice.value = ''
   try {
@@ -108,6 +119,7 @@ async function deletePermanently() {
         <UAvatar :alt="member.name" :text="member.name.slice(0, 2).toUpperCase()" size="lg" />
         <div class="min-w-0"><p class="truncate font-semibold">{{ member.name }}</p><p class="truncate text-sm text-[var(--color-muted)]">{{ member.email }}</p></div>
         <div class="hidden w-full flex-wrap content-center justify-end gap-1 sm:flex"><UBadge v-for="role in member.roles" :key="role" color="neutral" variant="soft">{{ roleLabels[role] ?? role }}</UBadge></div>
+        <div v-if="canBeVika(member)" class="user-list-row__vika"><UCheckbox :model-value="member.isVika" :label="t('users.vikaAccount')" :disabled="vikaPendingId !== null" :aria-busy="vikaPendingId === member.id" @update:model-value="setVika(member, $event === true)" /><UIcon v-if="vikaPendingId === member.id" name="i-lucide-loader-circle" class="size-4 animate-spin" aria-hidden="true" /></div>
         <div class="flex w-full items-center justify-end"><UBadge :color="statusColor(member.status)" variant="soft">{{ statusLabel(member.status) }}</UBadge></div>
         <div class="flex w-[5.75rem] items-center justify-end gap-1"><template v-if="member.id !== currentUser?.id"><UButton v-if="member.status === 'invited'" color="neutral" variant="ghost" :icon="resendWait(member) ? undefined : 'i-lucide-send'" :aria-label="resendLabel(member)" :title="resendLabel(member)" :disabled="resendWait(member) > 0" :loading="resendPendingId === member.id" class="min-h-11 min-w-11 active:scale-[0.96] transition-transform" @click="resendInvite(member)"><span v-if="resendWait(member)" class="text-xs tabular-nums">{{ resendWait(member) }}</span></UButton><UButton v-if="member.status !== 'archived'" color="neutral" variant="ghost" icon="i-lucide-archive" :aria-label="t('users.archiveAction')" class="min-h-11 min-w-11 active:scale-[0.96] transition-transform" :loading="archivePending" @click="archive(member)" /><template v-else><UButton color="neutral" variant="ghost" icon="i-lucide-archive-restore" :aria-label="t('users.restoreAction')" class="min-h-11 min-w-11 active:scale-[0.96] transition-transform" :loading="restorePendingId === member.id" @click="restore(member)" /><UButton color="error" variant="ghost" icon="i-lucide-trash-2" :aria-label="t('users.deleteAction')" class="min-h-11 min-w-11 active:scale-[0.96] transition-transform" @click="askToDelete(member)" /></template></template></div>
       </div>
