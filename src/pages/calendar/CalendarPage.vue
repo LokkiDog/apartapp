@@ -544,7 +544,7 @@ async function saveStay() {
       </div>
     </div>
 
-    <StayDetailsSlideover v-model:open="detailsOpen" :stay="selectedStay" :can-edit="canEditStays" :can-manage-cleaning="Boolean(user?.roles.includes('administrator'))" @edit="openEdit" />
+    <StayDetailsSlideover v-model:open="detailsOpen" :stay="selectedStay" :can-edit="canEditStays" :can-manage-cleaning="Boolean(user?.roles.includes('administrator'))" :show-service-prices="showFinancialDetails" @edit="openEdit" />
 
     <USlideover v-model:open="open" :title="editingStay ? t('calendar.editBooking') : t('calendar.newStay')">
       <template #body>
@@ -572,7 +572,7 @@ async function saveStay() {
                 <UCheckbox :model-value="form.serviceIds.includes(service.id)" :value="service.id" @update:model-value="setServiceSelected(service.id, $event)" />
                 <span>{{ service.name }} <span v-if="!service.active" class="text-[var(--color-muted)]">({{ t('calendar.unavailable') }})</span></span>
               </span>
-              <span class="font-semibold tabular-nums">{{ formatEuro(service.priceEur) }}</span>
+              <span v-if="showFinancialDetails" class="font-semibold tabular-nums">{{ formatEuro(service.priceEur) }}</span>
             </label>
           </div>
           <UFormField name="cashAmountEur" :label="t('calendar.cash')"><MoneyInput v-model="form.cashAmountEur" /></UFormField>

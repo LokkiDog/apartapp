@@ -10,6 +10,7 @@ const props = defineProps<{
   stay: Stay | null
   canEdit: boolean
   canManageCleaning: boolean
+  showServicePrices: boolean
 }>()
 const emit = defineEmits<{ 'update:open': [value: boolean]; edit: [stay: Stay] }>()
 const { t } = useI18n()
@@ -60,7 +61,7 @@ function editStay() {
           <div class="stay-details__services">
             <div v-for="service in stay.services" :key="service.id" class="stay-details__service">
               <span class="flex min-w-0 items-center gap-2"><StayServiceIcons :services="[service]" /><span class="truncate">{{ service.nameSnapshot }}</span></span>
-              <strong>{{ formatEuro(service.priceEurSnapshot) }}</strong>
+              <strong v-if="showServicePrices">{{ formatEuro(service.priceEurSnapshot) }}</strong>
             </div>
           </div>
         </section>
