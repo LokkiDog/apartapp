@@ -31,4 +31,18 @@ describe('notification realtime broker', () => {
     vi.advanceTimersByTime(25_000)
     expect(peer.send).not.toHaveBeenCalled()
   })
+
+  it('delivers a session revocation only to the archived user', () => {
+    const archivedUser = { id: 'archived-user', send: vi.fn() }
+    const otherUser = { id: 'other-user', send: vi.fn() }
+    registerNotificationPeer('user-a', archivedUser)
+    registerNotificationPeer('user-b', otherUser)
+
+    publishNotification('user-a', { type: 'session.revoked', reason: 'archived' })
+
+    expect(archivedUser.send).toHaveBeenCalledWith({ type: 'session.revoked', reason: 'archived' })
+    expect(otherUser.send).not.toHaveBeenCalled()
+    unregisterNotificationPeer('user-a', archivedUser)
+    unregisterNotificationPeer('user-b', otherUser)
+  })
 })

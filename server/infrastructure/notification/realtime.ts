@@ -3,6 +3,7 @@ export type NotificationRealtimeMessage =
   | { type: 'notification.read'; id: string; readAt: string }
   | { type: 'notifications.read-all'; readAt: string }
   | { type: 'notifications.heartbeat' }
+  | { type: 'session.revoked'; reason: 'archived' }
 
 type NotificationPeer = { id: string; send: (data: NotificationRealtimeMessage) => void }
 

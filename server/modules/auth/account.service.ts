@@ -7,6 +7,7 @@ import { db } from '../../infrastructure/database/client'
 import { apartmentManagers, attachments, authTokens, cleaningAssignments, cleanings, financialEntries, inventoryLots, inventoryMovements, notifications, stays, stayServices, tasks, users } from '../../infrastructure/database/schema'
 import { sendAccountLink } from '../../infrastructure/mail/send'
 import { fileStorage } from '../../infrastructure/storage/local'
+import { publishNotification } from '../../infrastructure/notification/realtime'
 import { invitationResendAvailableAt, invitationResendWaitSeconds } from './invitation-cooldown'
 
 const hash = (value: string) => createHash('sha256').update(value).digest('hex')
@@ -68,7 +69,7 @@ export async function resendInvitation(actor: Actor, userId: string) {
 
 export async function requestPasswordReset(email: string) {
   const user = await db.query.users.findFirst({ where: eq(users.email, email.toLowerCase()) })
-  if (!user || user.status === 'blocked') return
+  if (!user || user.status !== 'active') return
   const token = await issueToken(user.id, 'password_reset')
   await sendAccountLink({ to: user.email, name: user.name, type: 'password_reset', token, locale: user.locale })
 }
@@ -77,8 +78,11 @@ export async function setPassword(token: string, password: string) {
   const record = await db.query.authTokens.findFirst({ where: and(eq(authTokens.tokenHash, hash(token)), gt(authTokens.expiresAt, new Date()), isNull(authTokens.usedAt)) })
   if (!record) throw createError({ statusCode: 400, statusMessage: 'Ссылка недействительна или истекла' })
   await db.transaction(async tx => {
-    await tx.update(users).set({ passwordHash: await hashPassword(password), status: 'active', updatedAt: new Date() }).where(eq(users.id, record.userId))
-    await tx.update(authTokens).set({ usedAt: new Date() }).where(eq(authTokens.id, record.id))
+    const [usedToken] = await tx.update(authTokens).set({ usedAt: new Date() }).where(and(eq(authTokens.id, record.id), isNull(authTokens.usedAt))).returning()
+    if (!usedToken) throw createError({ statusCode: 400, statusMessage: 'Ссылка недействительна или истекла' })
+    const expectedStatus = usedToken.type === 'invitation' ? 'invited' : 'active'
+    const [user] = await tx.update(users).set({ passwordHash: await hashPassword(password), status: 'active', updatedAt: new Date() }).where(and(eq(users.id, usedToken.userId), eq(users.status, expectedStatus))).returning()
+    if (!user) throw createError({ statusCode: 400, statusMessage: 'Ссылка недействительна или истекла' })
   })
 }
 
@@ -87,7 +91,7 @@ async function ensureUserCanBeRemoved(actor: Actor, userId: string) {
   if (actor.id === userId) throw createError({ statusCode: 409, statusMessage: 'Нельзя удалить собственную учетную запись' })
   const user = await db.query.users.findFirst({ where: and(eq(users.id, userId), eq(users.organizationId, actor.organizationId)) })
   if (!user) throw createError({ statusCode: 404, statusMessage: 'Пользователь не найден' })
-  if (user.roles.includes('administrator')) {
+  if (user.status === 'active' && user.roles.includes('administrator')) {
     const activeUsers = await db.query.users.findMany({ where: and(eq(users.organizationId, actor.organizationId), eq(users.status, 'active')) })
     if (activeUsers.filter(candidate => candidate.roles.includes('administrator')).length < 2) throw createError({ statusCode: 409, statusMessage: 'Нельзя удалить или архивировать последнего активного администратора' })
   }
@@ -130,14 +134,22 @@ async function deleteAssignedWork(tx: any, userId: string) {
 export async function archiveUser(actor: Actor, userId: string) {
   const user = await ensureUserCanBeRemoved(actor, userId)
   if (user.status === 'archived') return { ok: true }
-  const storageKeys = await db.transaction(async tx => {
-    const files = await deleteAssignedWork(tx, userId)
-    await tx.delete(apartmentManagers).where(eq(apartmentManagers.userId, userId))
+  await db.transaction(async tx => {
+    await tx.delete(authTokens).where(and(eq(authTokens.userId, userId), isNull(authTokens.usedAt)))
     await tx.update(users).set({ status: 'archived', updatedAt: new Date() }).where(eq(users.id, userId))
-    return files
   })
-  await Promise.allSettled(storageKeys.map((storageKey: string) => fileStorage.remove(storageKey)))
   await writeAuditLog({ organizationId: actor.organizationId, actorId: actor.id, action: 'user.archived', entityType: 'user', entityId: userId })
+  publishNotification(userId, { type: 'session.revoked', reason: 'archived' })
+  return { ok: true }
+}
+
+export async function restoreUser(actor: Actor, userId: string) {
+  requireRole(actor, 'administrator')
+  const user = await db.query.users.findFirst({ where: and(eq(users.id, userId), eq(users.organizationId, actor.organizationId)) })
+  if (!user) throw createError({ statusCode: 404, statusMessage: 'Пользователь не найден' })
+  if (user.status !== 'archived') throw createError({ statusCode: 409, statusMessage: 'Вернуть можно только архивированного пользователя' })
+  await db.update(users).set({ status: 'active', updatedAt: new Date() }).where(eq(users.id, userId))
+  await writeAuditLog({ organizationId: actor.organizationId, actorId: actor.id, action: 'user.restored', entityType: 'user', entityId: userId })
   return { ok: true }
 }
 

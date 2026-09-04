@@ -16,6 +16,7 @@ const notice = ref('')
 const showArchived = ref(false)
 const search = ref('')
 const archivePending = ref(false)
+const restorePendingId = ref<string | null>(null)
 const resendPendingId = ref<string | null>(null)
 const countdownNow = ref(Date.now())
 const deleteOpen = ref(false)
@@ -69,6 +70,12 @@ async function archive(member: Member) {
   catch (cause: any) { error.value = cause?.data?.statusMessage ?? t('common.error') }
   finally { archivePending.value = false }
 }
+async function restore(member: Member) {
+  restorePendingId.value = member.id; error.value = ''; notice.value = ''
+  try { await $fetch(`/api/users/${member.id}/restore`, { method: 'POST' }); notice.value = t('users.restoreAction'); await refresh() }
+  catch (cause: any) { error.value = cause?.data?.statusMessage ?? t('common.error') }
+  finally { restorePendingId.value = null }
+}
 async function resendInvite(member: Member) {
   resendPendingId.value = member.id; error.value = ''; notice.value = ''
   try {
@@ -102,7 +109,7 @@ async function deletePermanently() {
         <div class="min-w-0"><p class="truncate font-semibold">{{ member.name }}</p><p class="truncate text-sm text-[var(--color-muted)]">{{ member.email }}</p></div>
         <div class="hidden w-full flex-wrap content-center justify-end gap-1 sm:flex"><UBadge v-for="role in member.roles" :key="role" color="neutral" variant="soft">{{ roleLabels[role] ?? role }}</UBadge></div>
         <div class="flex w-full items-center justify-end"><UBadge :color="statusColor(member.status)" variant="soft">{{ statusLabel(member.status) }}</UBadge></div>
-        <div class="flex w-[5.75rem] items-center justify-end gap-1"><template v-if="member.id !== currentUser?.id"><UButton v-if="member.status === 'invited'" color="neutral" variant="ghost" :icon="resendWait(member) ? undefined : 'i-lucide-send'" :aria-label="resendLabel(member)" :title="resendLabel(member)" :disabled="resendWait(member) > 0" :loading="resendPendingId === member.id" class="min-h-11 min-w-11 active:scale-[0.96] transition-transform" @click="resendInvite(member)"><span v-if="resendWait(member)" class="text-xs tabular-nums">{{ resendWait(member) }}</span></UButton><UButton v-if="member.status !== 'archived'" color="neutral" variant="ghost" icon="i-lucide-archive" :aria-label="t('users.archiveAction')" class="min-h-11 min-w-11 active:scale-[0.96] transition-transform" :loading="archivePending" @click="archive(member)" /><UButton v-else color="error" variant="ghost" icon="i-lucide-trash-2" :aria-label="t('users.deleteAction')" class="min-h-11 min-w-11 active:scale-[0.96] transition-transform" @click="askToDelete(member)" /></template></div>
+        <div class="flex w-[5.75rem] items-center justify-end gap-1"><template v-if="member.id !== currentUser?.id"><UButton v-if="member.status === 'invited'" color="neutral" variant="ghost" :icon="resendWait(member) ? undefined : 'i-lucide-send'" :aria-label="resendLabel(member)" :title="resendLabel(member)" :disabled="resendWait(member) > 0" :loading="resendPendingId === member.id" class="min-h-11 min-w-11 active:scale-[0.96] transition-transform" @click="resendInvite(member)"><span v-if="resendWait(member)" class="text-xs tabular-nums">{{ resendWait(member) }}</span></UButton><UButton v-if="member.status !== 'archived'" color="neutral" variant="ghost" icon="i-lucide-archive" :aria-label="t('users.archiveAction')" class="min-h-11 min-w-11 active:scale-[0.96] transition-transform" :loading="archivePending" @click="archive(member)" /><template v-else><UButton color="neutral" variant="ghost" icon="i-lucide-archive-restore" :aria-label="t('users.restoreAction')" class="min-h-11 min-w-11 active:scale-[0.96] transition-transform" :loading="restorePendingId === member.id" @click="restore(member)" /><UButton color="error" variant="ghost" icon="i-lucide-trash-2" :aria-label="t('users.deleteAction')" class="min-h-11 min-w-11 active:scale-[0.96] transition-transform" @click="askToDelete(member)" /></template></template></div>
       </div>
     </div>
     <EmptyState v-else icon="i-lucide-users" :title="showArchived ? t('users.emptyArchive') : t('users.emptyTitle')" :description="showArchived ? t('users.emptyArchiveDescription') : t('users.emptyDescription')" />

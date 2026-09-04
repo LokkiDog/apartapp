@@ -15,6 +15,7 @@ export type NotificationRealtimeMessage =
   | { type: 'notification.read'; id: string; readAt: string }
   | { type: 'notifications.read-all'; readAt: string }
   | { type: 'notifications.heartbeat' }
+  | { type: 'session.revoked'; reason: 'archived' }
 
 export function useNotificationState() {
   const unreadCount = useState('notification-unread-count', () => 0)
@@ -30,7 +31,7 @@ export function useNotificationState() {
   }
 
   function applyRealtimeMessage(message: NotificationRealtimeMessage) {
-    if (message.type === 'notifications.heartbeat') return
+    if (message.type === 'notifications.heartbeat' || message.type === 'session.revoked') return
     revision.value += 1
     void refreshUnreadCount()
   }
