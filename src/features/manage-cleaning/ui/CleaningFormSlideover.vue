@@ -548,7 +548,7 @@ function submit() {
               ? t("calendar.saveChanges")
               : initialStayId
                 ? t("common.assignCleaning")
-                : t("work.newCleaning")
+                : t("common.save")
           }}</UButton
         >
       </div>

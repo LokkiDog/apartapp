@@ -9,12 +9,14 @@ import { apartmentCalendarColor, createFormValidator, formatDate, formatEuro, us
 import { useCurrentUser } from '#fsd/shared/auth'
 import { DateRangeInput, EmptyState, MoneyInput, PageHeader } from '#fsd/shared/ui'
 import StayCalendarPopover from './StayCalendarPopover.vue'
+import CalendarEventMarker from './CalendarEventMarker.vue'
 import StayBookingRow from './StayBookingRow.vue'
 import StayDetailsSlideover from './StayDetailsSlideover.vue'
 import ApartmentBookingsView from './ApartmentBookingsView.vue'
 import StayBookingsPanel from './StayBookingsPanel.vue'
 import { useI18n } from 'vue-i18n'
 import { assignMonthWeekLanes, createWeekSegments, type CalendarStaySegment } from './model/calendar-timeline'
+import { createCalendarEventMarkers } from './model/calendar-event-markers'
 import { bookingsForApartment, calendarRange as calendarPeriodRange, migrateCalendarView, type BookingView, type CalendarPeriod } from './model/calendar-view'
 import { createStayAgenda, filterStayAgenda, isPastStay, stayAgendaQueryFrom, stayHistoryQueryFrom, type StayAgendaStatus } from './model/stay-agenda'
 import { stayInputSchema } from '@contracts/crm'
@@ -134,6 +136,7 @@ const monthWeeks = computed(() => Array.from({ length: Math.ceil(monthDays.value
 const monthWeekdayHeadings = computed(() => monthWeeks.value[0] ?? [])
 const agendaDays = computed(() => filterStayAgenda(createStayAgenda(currentStays.value, todayKey()), selectedAgendaStatuses.value))
 const calendarDays = computed(() => calendarPeriod.value === 'day' ? [cursor.value] : weekDays.value)
+const calendarEventMarkers = computed(() => createCalendarEventMarkers(calendarStays.value, calendarPeriod.value === 'month' ? monthDays.value : calendarDays.value))
 const monthWeekLayouts = computed(() => assignMonthWeekLanes(
   calendarStays.value,
   monthWeeks.value.filter(week => week.length).map(week => ({ from: week[0]!, to: addDays(week[0]!, 7) }))
@@ -188,10 +191,9 @@ function isToday(day: string) { return day === todayKey() }
 function isCurrentMonth(day: string) { const current = dateFromKey(cursor.value); const date = dateFromKey(day); return current.getUTCMonth() === date.getUTCMonth() && current.getUTCFullYear() === date.getUTCFullYear() }
 function weekday(day: string, short = false) { return new Intl.DateTimeFormat(formatLocale.value, { weekday: short ? 'short' : 'long', timeZone: 'Europe/Sofia' }).format(dateFromKey(day)) }
 function dayNumber(day: string) { return dateFromKey(day).getUTCDate() }
-function stayArrives(stay: Stay, day: string) { return stay.checkInOn === day }
-function stayDeparts(stay: Stay, day: string) { return stay.checkOutOn === day }
 function staysForApartmentWeek(apartmentId: string) { return calendarStays.value.filter(stay => stay.apartmentId === apartmentId && stay.checkInOn < range.value.to && stay.checkOutOn >= range.value.from) }
 function weekSegmentsForApartment(apartmentId: string) { return createWeekSegments(staysForApartmentWeek(apartmentId), range.value.from, range.value.to) }
+function markersForApartmentWeek(apartmentId: string) { return calendarEventMarkers.value.filter(marker => marker.apartmentId === apartmentId) }
 function isStayDateDisabled(date: DateValue) {
   if (!form.apartmentId) return false
   const day = date.toString()
@@ -204,8 +206,7 @@ function isStayDateDisabled(date: DateValue) {
 }
 function segmentGrid(segment: CalendarStaySegment<Stay>, lane?: number) { return { gridColumn: `${segment.startHalf + 1} / ${segment.endHalf + 1}`, ...(lane === undefined ? {} : { gridRow: String(lane + 1) }) } }
 function weekMarkerGrid(value: string) { const dayIndex = weekDays.value.indexOf(value); return { gridColumn: `${dayIndex * 2 + 1} / span 2` } }
-function monthMarkerEntries(day: string) { return calendarStays.value.filter(stay => stayArrives(stay, day) || stayDeparts(stay, day)) }
-function monthMarkerLabel(stay: Stay, day: string) { return `${stayArrives(stay, day) ? t('calendar.arrival') : t('calendar.departure')} · ${stay.apartment.name}` }
+function monthMarkerEntries(day: string) { return calendarEventMarkers.value.filter(marker => marker.date === day) }
 function agendaDateLabel(day: string, compact = false) {
   const today = todayKey()
   const tomorrow = addDays(today, 1)
@@ -244,11 +245,6 @@ function monthWeekStyle(laneCount: number, expanded: boolean, hasToggle: boolean
   }
 }
 function eventStyle(stay: Stay) { const color = apartmentCalendarColor(stay.apartmentId); return { backgroundColor: color.background, color: color.foreground, '--departure-color': color.departure } }
-function markerEventStyle(kind: 'arrival' | 'departure'): Record<string, string> {
-  return kind === 'arrival'
-    ? { backgroundColor: '#dc2626', color: '#ffffff', borderLeftColor: '#991b1b' }
-    : { backgroundColor: '#2563eb', color: '#ffffff', '--departure-color': '#1e40af' }
-}
 function shift(direction: number) { cursor.value = addDays(cursor.value, direction * (calendarPeriod.value === 'month' ? 31 : calendarPeriod.value === 'week' ? 7 : 1)) }
 function goToday() { cursor.value = todayKey() }
 async function loadMoreHistory() {
@@ -484,8 +480,18 @@ async function saveStay() {
                 @edit="openEdit"
               />
               <template v-else>
-                <StayCalendarPopover v-for="stay in staysForApartmentWeek(apartment.id).filter(item => item.checkInOn >= range.from && item.checkInOn < range.to)" :key="`${stay.id}-arrival`" :stay="stay" context="arrival" :left-label="t('calendar.arrival')" event-class="calendar-arrival calendar-week-marker calendar-week-arrival" :event-style="{ ...markerEventStyle('arrival'), ...weekMarkerGrid(stay.checkInOn) }" :show-guest-details="showGuestDetails" :show-financial-details="showFinancialDetails" :can-edit="canEditStays" :can-manage-cleaning="user?.roles.includes('administrator')" @edit="openEdit" />
-                <StayCalendarPopover v-for="stay in staysForApartmentWeek(apartment.id).filter(item => item.checkOutOn >= range.from && item.checkOutOn < range.to)" :key="`${stay.id}-departure`" :stay="stay" context="departure" :left-label="t('calendar.departure')" event-class="calendar-departure calendar-week-marker calendar-week-departure" :event-style="{ ...markerEventStyle('departure'), ...weekMarkerGrid(stay.checkOutOn) }" :show-guest-details="showGuestDetails" :show-financial-details="showFinancialDetails" :can-edit="canEditStays" :can-manage-cleaning="user?.roles.includes('administrator')" @edit="openEdit" />
+                <CalendarEventMarker
+                  v-for="marker in markersForApartmentWeek(apartment.id)"
+                  :key="`${apartment.id}-${marker.date}`"
+                  :marker="marker"
+                  class="calendar-week-marker"
+                  :style="weekMarkerGrid(marker.date)"
+                  :show-guest-details="showGuestDetails"
+                  :show-financial-details="showFinancialDetails"
+                  :can-edit="canEditStays"
+                  :can-manage-cleaning="user?.roles.includes('administrator')"
+                  @edit="openEdit"
+                />
               </template>
             </div>
           </div>
@@ -503,14 +509,12 @@ async function saveStay() {
             <div v-for="day in week" :key="day" class="calendar-month-day" :class="{ 'calendar-month-day--muted': !isCurrentMonth(day), 'calendar-month-day--today': isToday(day) }">
               <span class="calendar-month-date">{{ dayNumber(day) }}</span>
               <div class="mt-2 space-y-1">
-                <StayCalendarPopover
-                  v-for="stay in monthMarkerEntries(day).slice(0, 3)"
-                  :key="`${stay.id}-${day}`"
-                  :stay="stay"
-                  :context="stayDeparts(stay, day) ? 'departure' : 'arrival'"
-                  :left-label="monthMarkerLabel(stay, day)"
-                  event-class="calendar-month-event"
-                  :event-style="markerEventStyle(stayDeparts(stay, day) ? 'departure' : 'arrival')"
+                <CalendarEventMarker
+                  v-for="marker in monthMarkerEntries(day).slice(0, 3)"
+                  :key="`${marker.apartmentId}-${day}`"
+                  :marker="marker"
+                  class="calendar-month-event"
+                  show-apartment-name
                   :show-guest-details="showGuestDetails"
                   :show-financial-details="showFinancialDetails"
                   :can-edit="canEditStays"

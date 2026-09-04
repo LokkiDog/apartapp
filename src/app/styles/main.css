@@ -13,6 +13,10 @@
   --color-primary-strong: #195844;
   --color-primary-soft: #e7f2ed;
   --color-line: #e7eee9;
+  --calendar-departure-bg: #e8f1f7;
+  --calendar-departure-ink: #356882;
+  --calendar-arrival-bg: #ffebec;
+  --calendar-arrival-ink: #b63843;
   --ui-border: var(--color-line);
   --ui-border-muted: var(--color-line);
   --ui-border-accented: var(--color-line);
@@ -1854,20 +1858,76 @@ img {
   height: 30px;
 }
 .calendar-week-marker {
-  align-self: stretch;
+  align-self: center;
+  height: 30px;
   margin: 0.3rem;
 }
-.calendar-week-arrival {
-  position: relative;
-  top: auto;
-  left: auto;
-  align-self: start;
+.calendar-event-marker {
+  display: grid;
+  min-width: 0;
+  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-flow: column;
+  overflow: hidden;
+  border-radius: 7px;
 }
-.calendar-week-departure {
-  position: relative;
-  right: auto;
-  bottom: auto;
-  align-self: end;
+.calendar-event-marker--combined {
+  background: linear-gradient(
+    105deg,
+    var(--calendar-departure-bg) 0 calc(50% - 1px),
+    rgba(255, 255, 255, 0.94) calc(50% - 1px) calc(50% + 1px),
+    var(--calendar-arrival-bg) calc(50% + 1px) 100%
+  );
+}
+.calendar-event-marker__segment {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  align-items: center;
+  gap: 0.2rem;
+  overflow: hidden;
+  padding: 0.3rem 0.35rem;
+  border-radius: 0;
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  transition-property: filter, background-color;
+  transition-duration: 150ms;
+  transition-timing-function: ease-out;
+}
+.calendar-event-marker--single .calendar-event-marker__segment {
+  border-radius: 7px;
+}
+.calendar-event-marker--combined .calendar-event-marker__segment {
+  background-color: transparent !important;
+}
+.calendar-event-marker--combined .calendar-event-marker__segment--departure {
+  padding-right: 0.55rem;
+}
+.calendar-event-marker--combined .calendar-event-marker__segment--arrival {
+  padding-left: 0.55rem;
+}
+.calendar-event-marker__segment:hover {
+  filter: saturate(1.08) brightness(1.04);
+}
+.calendar-event-marker--combined .calendar-event-marker__segment:hover {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+}
+.calendar-event-marker__segment:focus-visible {
+  z-index: 1;
+  outline: 2px solid rgba(255, 255, 255, 0.94);
+  outline-offset: -2px;
+}
+.calendar-event-marker__segment .stay-calendar-trigger__left {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.calendar-event-marker__segment .stay-service-icons,
+.calendar-event-marker__segment .stay-cleaning-marker {
+  flex-shrink: 0;
 }
 .calendar-stay-bar {
   position: relative;
@@ -2028,7 +2088,11 @@ img {
   color: #68757c;
 }
 .stay-cleaning-marker.stay-cleaning-indicator--missing {
-  opacity: 0.72;
+  border-color: rgba(138, 75, 8, 0.32);
+  background: #fff7e8;
+  color: #8a4b08;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.48);
+  opacity: 1;
 }
 .calendar-arrival {
   position: absolute;
@@ -2109,22 +2173,15 @@ img {
   font-weight: 700;
 }
 .calendar-month-event {
-  display: block;
-  overflow: hidden;
+  height: 24px;
   border-radius: 6px;
+}
+.calendar-month-event .calendar-event-marker__segment {
   padding: 0.25rem 0.35rem;
   font-size: 0.65rem;
   font-weight: 650;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.calendar-month-event .stay-calendar-trigger__left {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 .calendar-month-event .stay-cleaning-marker {
-  float: right;
   margin-left: 0.2rem;
 }
 .calendar-marker-more {
