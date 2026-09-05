@@ -74,6 +74,19 @@ describe('calendar month lanes', () => {
     expect(layouts[1]?.segments[0]).toMatchObject({ continuesLeft: true, hasActualDeparture: true })
   })
 
+  it('reuses empty lanes before a continuing stay with a higher preferred lane', () => {
+    const first = stay('first', 'a', '2026-08-10', '2026-08-16')
+    const second = stay('second', 'b', '2026-08-10', '2026-08-15')
+    const continuing = stay('continuing', 'c', '2026-08-12', '2026-08-20')
+    const nextWeek = stay('next-week', 'd', '2026-08-17', '2026-08-19')
+
+    const layouts = assignMonthWeekLanes([first, second, continuing, nextWeek], weeks)
+
+    expect(layouts[0]?.segments.find(segment => segment.stay.id === 'continuing')?.lane).toBe(2)
+    expect(layouts[1]?.segments.find(segment => segment.stay.id === 'continuing')?.lane).toBe(2)
+    expect(layouts[1]?.segments.find(segment => segment.stay.id === 'next-week')?.lane).toBe(0)
+  })
+
   it('counts unique stays hidden after the third lane for the whole week', () => {
     const bookings = Array.from({ length: 5 }, (_, index) => stay(`stay-${index}`, `apartment-${index}`, '2026-08-10', '2026-08-17'))
     const [layout] = assignMonthWeekLanes(bookings, weeks.slice(0, 1))
