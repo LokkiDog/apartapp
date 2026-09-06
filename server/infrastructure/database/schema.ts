@@ -102,6 +102,7 @@ export const apartments = pgTable('apartments', {
   checkInTime: text('check_in_time').notNull(),
   checkOutTime: text('check_out_time').notNull(),
   instructions: text('instructions').notNull().default(''),
+  additionalChecklist: jsonb('additional_checklist').$type<string[]>().notNull().default(sql`'[]'::jsonb`),
   status: apartmentStatusEnum('status').notNull().default('active'),
   tariffOverride: jsonb('tariff_override').$type<CleaningTariff | null>(),
   ...timestamps
@@ -183,11 +184,21 @@ export const cleaningAssignments = pgTable('cleaning_assignments', {
   cleaningId: uuid('cleaning_id').notNull().references(() => cleanings.id, { onDelete: 'cascade' }),
   cleanerId: uuid('cleaner_id').notNull().references(() => users.id),
   routePosition: integer('route_position').notNull().default(0),
-  assignedAt: timestamp('assigned_at', { withTimezone: true }).notNull().defaultNow()
+  assignedAt: timestamp('assigned_at', { withTimezone: true }).notNull().defaultNow(),
+  acceptedAt: timestamp('accepted_at', { withTimezone: true })
 }, table => [
   uniqueIndex('cleaning_assignment_unique').on(table.cleaningId, table.cleanerId),
   index('cleaning_assignment_route_idx').on(table.cleanerId, table.routePosition)
 ])
+
+export const cleaningProblems = pgTable('cleaning_problems', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  organizationId: uuid('organization_id').notNull().references(() => organizations.id),
+  cleaningId: uuid('cleaning_id').notNull().references(() => cleanings.id, { onDelete: 'cascade' }),
+  description: text('description').notNull(),
+  createdById: uuid('created_by_id').references(() => users.id, { onDelete: 'set null' }),
+  ...timestamps
+}, table => [index('cleaning_problem_cleaning_idx').on(table.cleaningId)])
 
 export const tasks = pgTable('tasks', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -456,11 +467,16 @@ export const cleaningsRelations = relations(cleanings, ({ one, many }) => ({
   apartment: one(apartments, { fields: [cleanings.apartmentId], references: [apartments.id] }),
   stay: one(stays, { fields: [cleanings.stayId], references: [stays.id] }),
   assignments: many(cleaningAssignments),
+  problems: many(cleaningProblems),
   inventoryReports: many(cleaningInventoryReports)
 }))
 export const cleaningAssignmentsRelations = relations(cleaningAssignments, ({ one }) => ({
   cleaning: one(cleanings, { fields: [cleaningAssignments.cleaningId], references: [cleanings.id] }),
   cleaner: one(users, { fields: [cleaningAssignments.cleanerId], references: [users.id] })
+}))
+export const cleaningProblemsRelations = relations(cleaningProblems, ({ one }) => ({
+  cleaning: one(cleanings, { fields: [cleaningProblems.cleaningId], references: [cleanings.id] }),
+  createdBy: one(users, { fields: [cleaningProblems.createdById], references: [users.id] })
 }))
 export const cleaningInventoryReportsRelations = relations(cleaningInventoryReports, ({ one }) => ({
   cleaning: one(cleanings, { fields: [cleaningInventoryReports.cleaningId], references: [cleanings.id] }),

@@ -40,6 +40,8 @@ const problems = computed(() => sortDashboardRecords([
 const undatedWork = computed(() => sortDashboardRecords([
   ...(tasks.value ?? []).filter(item => (activeTask(item.status) || item.hasProblem) && undatedDashboardRecord(item))
 ]))
+function problemCount(item: Cleaning | Task) { return 'problems' in item ? item.problems.length : item.hasProblem ? 1 : 0 }
+const dashboardProblemCount = computed(() => problems.value.reduce((count, item) => count + problemCount(item), 0) + undatedWork.value.reduce((count, item) => count + problemCount(item), 0))
 const cleanerPool = computed(() => Number(openCleanings.value.reduce((sum, item) => sum.plus(item.tariffSnapshot.cleanerPoolEur ?? 0), new Decimal(0)).toDecimalPlaces(2)))
 const statusLabel = computed<Record<string, string>>(() => ({ unassigned: t('work.statusUnassigned'), assigned: t('work.statusAssigned'), in_progress: t('work.statusProgress'), open: t('work.statusOpen') }))
 
@@ -77,7 +79,7 @@ function dashboardWorkHref(work: Cleaning | Task) { return 'title' in work ? `/t
       <NuxtLink v-if="!isWorkerView" to="/calendar" class="dashboard-metric-link"><MetricTile :label="t('dashboard.bookings')" :value="upcoming.length" icon="i-lucide-log-in" /></NuxtLink>
       <NuxtLink v-if="canViewWork" to="/work" class="dashboard-metric-link"><MetricTile :label="t('dashboard.cleanings')" :value="openCleanings.length" icon="i-lucide-broom" /></NuxtLink>
       <NuxtLink v-if="canViewWork" to="/work" class="dashboard-metric-link"><MetricTile :label="t('dashboard.tasks')" :value="openTasks.length" icon="i-lucide-clipboard-check" /></NuxtLink>
-      <NuxtLink v-if="isAdministrator" to="/work" class="dashboard-metric-link"><MetricTile :label="t('dashboard.problems')" :value="problems.length + undatedWork.filter(item => item.hasProblem).length" icon="i-lucide-triangle-alert" :tone="problems.length || undatedWork.some(item => item.hasProblem) ? 'danger' : 'neutral'" /></NuxtLink>
+      <NuxtLink v-if="isAdministrator" to="/work" class="dashboard-metric-link"><MetricTile :label="t('dashboard.problems')" :value="dashboardProblemCount" icon="i-lucide-triangle-alert" :tone="dashboardProblemCount ? 'danger' : 'neutral'" /></NuxtLink>
       <MetricTile v-if="isWorkerView" :label="t('dashboard.pool')" :value="formatEuro(cleanerPool)" icon="i-lucide-wallet" />
     </div>
 

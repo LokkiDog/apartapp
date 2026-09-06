@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, inArray, or } from 'drizzle-orm'
 import { db } from '../../infrastructure/database/client'
-import { attachments, cleaningAssignments, cleaningInventoryReports, cleanings, financialEntries, inventoryLots, inventoryMovements, tasks } from '../../infrastructure/database/schema'
+import { attachments, cleaningAssignments, cleaningInventoryReports, cleaningProblems, cleanings, financialEntries, inventoryLots, inventoryMovements, tasks } from '../../infrastructure/database/schema'
 import { fileStorage } from '../../infrastructure/storage/local'
 import { restoredInventoryLot } from './work-policy'
 import { calculateFifoUsage } from '../inventory/fifo'
@@ -41,11 +41,12 @@ export async function deleteWorkRecord(kind: WorkKind, workId: string) {
     }
     await tx.delete(financialEntries).where(financeConditions.length === 1 ? financeConditions[0] : or(...financeConditions))
 
-    const linkedAttachments = await tx.select({ storageKey: attachments.storageKey }).from(attachments).where(and(
-      eq(attachments.entityType, kind),
-      eq(attachments.entityId, workId)
-    ))
-    await tx.delete(attachments).where(and(eq(attachments.entityType, kind), eq(attachments.entityId, workId)))
+    const problemIds = kind === 'cleaning' ? (await tx.select({ id: cleaningProblems.id }).from(cleaningProblems).where(eq(cleaningProblems.cleaningId, workId))).map(problem => problem.id) : []
+    const attachmentConditions = [and(eq(attachments.entityType, kind), eq(attachments.entityId, workId))]
+    if (problemIds.length) attachmentConditions.push(and(eq(attachments.entityType, 'cleaning_problem'), inArray(attachments.entityId, problemIds)))
+    const attachmentWhere = attachmentConditions.length === 1 ? attachmentConditions[0]! : or(...attachmentConditions)
+    const linkedAttachments = await tx.select({ storageKey: attachments.storageKey }).from(attachments).where(attachmentWhere)
+    await tx.delete(attachments).where(attachmentWhere)
     if (movements.length) await tx.delete(inventoryMovements).where(inArray(inventoryMovements.id, movements.map(movement => movement.id)))
     if (kind === 'cleaning') {
       await tx.delete(cleaningInventoryReports).where(eq(cleaningInventoryReports.cleaningId, workId))

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { apartmentsForCleanings, buildCleaningPlan, routesForDay } from '../src/pages/work/model/work-planning'
+import { apartmentsForCleanings, buildCleaningPlan, routesForDay, unacceptedCleaningsForCleaner } from '../src/pages/work/model/work-planning'
 import type { Cleaning } from '../src/entities/cleaning'
 
 function cleaning(id: string, scheduledOn: string, status = 'assigned', assignments: Array<[string, string, number]> = [['cleaner-1', 'Анна', 0]]): Cleaning {
@@ -12,7 +12,7 @@ function cleaning(id: string, scheduledOn: string, status = 'assigned', assignme
     problemDescription: '',
     apartmentId: `apartment-${id}`,
     apartment: { name: `A-${id}`, managers: [{ id: 'manager-1', name: 'Manager' }], hotel: { name: 'Hotel', address: 'Address', latitude: '1', longitude: '1' } },
-    assignments: assignments.map(([cleanerId, name, routePosition]) => ({ cleanerId, routePosition, cleaner: { id: cleanerId, name } })),
+    assignments: assignments.map(([cleanerId, name, routePosition]) => ({ cleanerId, routePosition, acceptedAt: null, cleaner: { id: cleanerId, name } })),
     tariffSnapshot: {}
   }
 }
@@ -87,6 +87,17 @@ describe('cleaning planning', () => {
     const routes = routesForDay([shared, first])
     expect(routes.find(route => route.cleanerId === 'cleaner-1')?.cleanings.map(item => item.id)).toEqual(['first', 'shared'])
     expect(routes.find(route => route.cleanerId === 'cleaner-2')?.cleanings.map(item => item.id)).toEqual(['shared'])
+  })
+
+  it('collects only active cleanings awaiting the current cleaner acceptance', () => {
+    const later = cleaning('later', '2026-08-12')
+    const first = cleaning('first', '2026-08-11')
+    const accepted = cleaning('accepted', '2026-08-11')
+    accepted.assignments[0]!.acceptedAt = '2026-08-10T12:00:00.000Z'
+    const completed = cleaning('completed', '2026-08-11', 'completed')
+    const anotherCleaner = cleaning('another-cleaner', '2026-08-11', 'assigned', [['cleaner-2', 'Борис', 0]])
+
+    expect(unacceptedCleaningsForCleaner([later, accepted, completed, anotherCleaner, first], 'cleaner-1').map(item => item.id)).toEqual(['first', 'later'])
   })
 
   it('groups scheduled cleanings by apartment and sorts dates and apartments', () => {

@@ -4,9 +4,12 @@ import { createFormValidator, formatDateTime, useSubmitFormValidation } from '#f
 import { workProgressInputSchema } from '@contracts/crm'
 
 type ChecklistItem = { label: string; checked: boolean }
+type WorkAttachment = { id: string; fileName: string }
+type CleaningProblemSource = { id: string; description: string; attachments: WorkAttachment[] }
+type CleaningProblemDraft = CleaningProblemSource & { photos: File[]; previews: Array<{ file: File; url: string }> }
 type InventoryReportSource = { id: string; reportedBy: { id: string; name: string }; reportedAt: string; appliedAt: string | null; approvedAt: string | null; approvedBy: { id: string; name: string } | null; usedQuantity: number; remainingQuantity: number; discrepancyQuantity: number; startingQuantity: number; expectedRemainingQuantity: number }
 type InventoryItem = { consumable: { id: string; name: string; unit: string }; autoWriteOffQuantity: number | null; quantity: number; usedQuantity: number; remainingQuantity: number; discrepancyQuantity: number; startingQuantity: number; expectedRemainingQuantity: number; report: InventoryReportSource | null; remainingTouched?: boolean }
-type ProgressPayload = { checklist: ChecklistItem[]; comment: string; hasProblem: boolean; problemDescription: string; inventoryReports?: Array<{ consumableId: string; usedQuantity: number; remainingQuantity: number }>; photos: File[] }
+type ProgressPayload = { checklist: ChecklistItem[]; comment: string; hasProblem: boolean; problemDescription: string; problems: Array<{ id: string; description: string; photos: File[] }>; inventoryReports?: Array<{ consumableId: string; usedQuantity: number; remainingQuantity: number }>; photos: File[] }
 const { t } = useI18n()
 
 const props = withDefaults(defineProps<{
@@ -15,6 +18,7 @@ const props = withDefaults(defineProps<{
   comment?: string
   hasProblem?: boolean
   problemDescription?: string
+  problems?: CleaningProblemSource[]
   inventoryReports?: InventoryItem[]
   attachments?: Array<{ id: string; fileName: string }>
   focusConsumableId?: string
@@ -26,13 +30,14 @@ const props = withDefaults(defineProps<{
   busy?: boolean
   error?: string
   finishHint?: string
-}>(), { comment: '', hasProblem: false, problemDescription: '', inventoryReports: () => [], attachments: () => [], focusConsumableId: '', editable: false, canComplete: false, canStock: false, inventoryEditable: false, canApproveInventoryDiscrepancy: false, busy: false, error: '', finishHint: '' })
+}>(), { comment: '', hasProblem: false, problemDescription: '', problems: () => [], inventoryReports: () => [], attachments: () => [], focusConsumableId: '', editable: false, canComplete: false, canStock: false, inventoryEditable: false, canApproveInventoryDiscrepancy: false, busy: false, error: '', finishHint: '' })
 
 const emit = defineEmits<{ save: [payload: ProgressPayload]; complete: [payload: ProgressPayload]; saveInventory: [reports: NonNullable<ProgressPayload['inventoryReports']>]; approveInventoryDiscrepancy: [item: InventoryItem]; stock: [] }>()
 const checklist = ref<ChecklistItem[]>([])
 const comment = ref('')
 const hasProblem = ref(false)
 const problemDescription = ref('')
+const problems = ref<CleaningProblemDraft[]>([])
 const photos = ref<File[]>([])
 const photoPreviews = ref<Array<{ file: File; url: string }>>([])
 const inventoryReports = ref<InventoryItem[]>([])
@@ -44,6 +49,7 @@ const validationState = computed(() => ({
   comment: comment.value,
   hasProblem: hasProblem.value,
   problemDescription: problemDescription.value,
+  problems: props.kind === 'cleaning' ? problems.value.map(problem => ({ id: problem.id, description: problem.description })) : [],
   inventoryReports: props.kind === 'cleaning' ? inventoryReports.value.map(item => ({ consumableId: item.consumable.id, usedQuantity: item.usedQuantity, remainingQuantity: item.remainingQuantity })) : undefined
 }))
 const validateProgress = createFormValidator(workProgressInputSchema, t, {
@@ -52,11 +58,13 @@ const validateProgress = createFormValidator(workProgressInputSchema, t, {
     : []
 })
 
-watch(() => [props.checklist, props.comment, props.hasProblem, props.problemDescription, props.inventoryReports], () => {
+watch(() => [props.checklist, props.comment, props.hasProblem, props.problemDescription, props.problems, props.inventoryReports], () => {
+  clearProblemPhotoPreviews()
   checklist.value = props.checklist.map(item => ({ ...item }))
   comment.value = props.comment
   hasProblem.value = props.hasProblem
   problemDescription.value = props.problemDescription
+  problems.value = props.problems.map(problem => ({ ...problem, attachments: problem.attachments.map(attachment => ({ ...attachment })), photos: [], previews: [] }))
   inventoryReports.value = props.inventoryReports.map(item => ({ ...item, consumable: { ...item.consumable }, remainingTouched: false }))
 }, { immediate: true, deep: true })
 
@@ -87,6 +95,7 @@ function payload(): ProgressPayload {
     comment: comment.value,
     hasProblem: hasProblem.value,
     problemDescription: problemDescription.value,
+    problems: props.kind === 'cleaning' ? problems.value.map(problem => ({ id: problem.id, description: problem.description, photos: problem.photos })) : [],
     inventoryReports: props.kind === 'cleaning' ? inventoryReports.value.map(item => ({ consumableId: item.consumable.id, usedQuantity: Number(item.usedQuantity) || 0, remainingQuantity: Number(item.remainingQuantity) || 0 })) : undefined,
     photos: photos.value
   }
@@ -99,6 +108,21 @@ function choosePhotos(event: Event) {
   clearPhotoPreviews()
   photos.value = Array.from((event.target as HTMLInputElement).files ?? [])
   if (import.meta.client) photoPreviews.value = photos.value.map(file => ({ file, url: URL.createObjectURL(file) }))
+}
+function addProblem() {
+  problems.value.push({ id: crypto.randomUUID(), description: '', attachments: [], photos: [], previews: [] })
+}
+function removeProblem(index: number) {
+  if (import.meta.client) problems.value[index]?.previews.forEach(preview => URL.revokeObjectURL(preview.url))
+  problems.value.splice(index, 1)
+}
+function chooseProblemPhotos(event: Event, problem: CleaningProblemDraft) {
+  if (import.meta.client) problem.previews.forEach(preview => URL.revokeObjectURL(preview.url))
+  problem.photos = Array.from((event.target as HTMLInputElement).files ?? [])
+  problem.previews = import.meta.client ? problem.photos.map(file => ({ file, url: URL.createObjectURL(file) })) : []
+}
+function clearProblemPhotoPreviews() {
+  if (import.meta.client) problems.value.forEach(problem => problem.previews.forEach(preview => URL.revokeObjectURL(preview.url)))
 }
 function submit() {
   validationError.value = ''
@@ -116,12 +140,19 @@ watch(validationState, (state) => {
   if (validationError.value && !validateProgress(state).length) validationError.value = ''
 }, { deep: true })
 
-onBeforeUnmount(clearPhotoPreviews)
+onBeforeUnmount(() => { clearPhotoPreviews(); clearProblemPhotoPreviews() })
 </script>
 
 <template>
   <UForm :key="validation.formKey.value" :state="validationState" :validate="validateProgress" :validate-on="validation.validateOn.value" novalidate class="work-progress-form" @error="onValidationError" @submit="submit">
     <UAlert v-if="validationError || error" color="error" variant="soft" :description="validationError || error" />
+    <section class="progress-section" :class="{ 'progress-section--attention': finishHint }">
+      <div class="progress-section__heading"><div><h2>{{ t('progress.checklist') }}</h2><p>{{ unfinished ? t('progress.remainingItems', { count: unfinished }) : t('progress.allDone') }}</p></div><UIcon :name="unfinished ? 'i-lucide-list-checks' : 'i-lucide-circle-check'" class="size-5" :class="unfinished ? 'text-[var(--color-muted)]' : 'text-[var(--color-success)]'" /></div>
+      <p v-if="finishHint" class="mb-3 text-sm font-medium text-amber-800">{{ finishHint }}</p>
+      <div v-if="checklist.length" class="space-y-1"><UFormField v-for="(item, index) in checklist" :key="item.label" :name="`checklist.${index}.checked`" :error="false"><UCheckbox v-model="item.checked" :label="item.label" :disabled="!editable" class="min-h-11 items-center" /></UFormField></div>
+      <p v-else class="text-sm text-[var(--color-muted)]">{{ t('progress.notConfiguredChecklist') }}</p>
+    </section>
+
     <section v-if="kind === 'cleaning'" class="progress-section">
       <div class="progress-section__heading"><div><h2>{{ t('progress.stock') }}</h2><p class="progress-section__mobile-description">{{ t('progress.stockDescription') }}</p></div><UIcon name="i-lucide-package" class="size-5 text-[var(--color-primary)]" /></div>
       <div v-if="inventoryReports.length" class="progress-stock-list space-y-3">
@@ -143,21 +174,29 @@ onBeforeUnmount(clearPhotoPreviews)
       <UButton v-if="inventoryEditable" type="button" color="neutral" variant="soft" icon="i-lucide-save" class="mt-3" :loading="busy" @click="emit('saveInventory', inventoryReports.map(item => ({ consumableId: item.consumable.id, usedQuantity: Number(item.usedQuantity) || 0, remainingQuantity: Number(item.remainingQuantity) || 0 })))">{{ t('progress.saveStock') }}</UButton>
     </section>
 
-    <section class="progress-section" :class="{ 'progress-section--attention': finishHint }">
-      <div class="progress-section__heading"><div><h2>{{ t('progress.checklist') }}</h2><p>{{ unfinished ? t('progress.remainingItems', { count: unfinished }) : t('progress.allDone') }}</p></div><UIcon :name="unfinished ? 'i-lucide-list-checks' : 'i-lucide-circle-check'" class="size-5" :class="unfinished ? 'text-[var(--color-muted)]' : 'text-[var(--color-success)]'" /></div>
-      <p v-if="finishHint" class="mb-3 text-sm font-medium text-amber-800">{{ finishHint }}</p>
-      <div v-if="checklist.length" class="space-y-1"><UFormField v-for="(item, index) in checklist" :key="item.label" :name="`checklist.${index}.checked`" :error="false"><UCheckbox v-model="item.checked" :label="item.label" :disabled="!editable" class="min-h-11 items-center" /></UFormField></div>
-      <p v-else class="text-sm text-[var(--color-muted)]">{{ t('progress.notConfiguredChecklist') }}</p>
-    </section>
-
     <section class="progress-section">
-      <div class="progress-section__heading"><div><h2>{{ t('progress.commentProblem') }}</h2><p>{{ t('progress.detailsHint') }}</p></div><UIcon name="i-lucide-message-square-text" class="size-5 text-[var(--color-primary)]" /></div>
+      <div class="progress-section__heading"><div><h2>{{ t('progress.commentProblem') }}</h2></div><UIcon name="i-lucide-message-square-text" class="size-5 text-[var(--color-primary)]" /></div>
       <UFormField name="comment" :label="t('progress.comment')" :error="false" class="w-full"><UTextarea v-model="comment" class="w-full" :disabled="!editable" :rows="4" :placeholder="t('progress.commentPlaceholder')" /></UFormField>
-      <UCheckbox v-model="hasProblem" :label="t('progress.problem')" :disabled="!editable" class="mt-4 min-h-11 items-center font-medium" />
-      <UFormField v-if="hasProblem" name="problemDescription" :label="t('progress.problemDescription')" :error="false" class="mt-3 w-full"><UTextarea v-model="problemDescription" class="w-full" :disabled="!editable" :rows="3" :placeholder="t('progress.problemPlaceholder')" /></UFormField>
+      <template v-if="kind === 'cleaning'">
+        <div class="mt-4 flex items-center justify-between gap-3"><h3 class="font-semibold">{{ t('progress.problems') }}</h3><UButton v-if="editable" type="button" color="neutral" variant="soft" icon="i-lucide-plus" class="min-h-11" @click="addProblem">{{ t('progress.addProblem') }}</UButton></div>
+        <div v-if="problems.length" class="mt-3 grid gap-3">
+          <article v-for="(problem, problemIndex) in problems" :key="problem.id" class="work-problem-card">
+            <div class="flex items-start gap-2"><UFormField :name="`problems.${problemIndex}.description`" :label="t('progress.problemDescription')" class="min-w-0 flex-1"><UTextarea v-model="problem.description" class="w-full" :disabled="!editable" :rows="3" :placeholder="t('progress.problemPlaceholder')" /></UFormField><UButton v-if="editable" type="button" color="error" variant="ghost" icon="i-lucide-trash-2" class="min-h-11 min-w-11" :aria-label="t('progress.removeProblem')" @click="removeProblem(problemIndex)" /></div>
+            <div v-if="problem.attachments.length || problem.previews.length" class="work-attachment-gallery mt-3">
+              <a v-for="attachment in problem.attachments" :key="attachment.id" :href="`/api/attachments/${attachment.id}/file`" target="_blank" rel="noreferrer" class="work-attachment-card"><img :src="`/api/attachments/${attachment.id}/file?variant=card`" :alt="attachment.fileName" class="work-attachment-card__image" /><span class="work-attachment-card__name">{{ attachment.fileName }}</span></a>
+              <figure v-for="preview in problem.previews" :key="preview.url" class="work-attachment-card work-attachment-card--preview"><img :src="preview.url" :alt="preview.file.name" class="work-attachment-card__image" /><figcaption class="work-attachment-card__name">{{ preview.file.name }}</figcaption></figure>
+            </div>
+            <UFormField :label="t('progress.problemPhotos')" class="mt-3"><UInput type="file" accept="image/*" multiple :disabled="!editable" @change="chooseProblemPhotos($event, problem)" /></UFormField>
+          </article>
+        </div>
+      </template>
+      <template v-else>
+        <UCheckbox v-model="hasProblem" :label="t('progress.problem')" :disabled="!editable" class="mt-4 min-h-11 items-center font-medium" />
+        <UFormField v-if="hasProblem" name="problemDescription" :label="t('progress.problemDescription')" :error="false" class="mt-3 w-full"><UTextarea v-model="problemDescription" class="w-full" :disabled="!editable" :rows="3" :placeholder="t('progress.problemPlaceholder')" /></UFormField>
+      </template>
     </section>
 
-    <section class="progress-section">
+    <section v-if="kind === 'task'" class="progress-section">
       <div class="progress-section__heading"><div><h2>{{ t('work.photos') }}</h2><p>{{ t('progress.photoHint') }}</p></div><UIcon name="i-lucide-camera" class="size-5 text-[var(--color-primary)]" /></div>
       <div v-if="attachments.length || photoPreviews.length" class="work-attachment-gallery">
         <a v-for="attachment in attachments" :key="attachment.id" :href="`/api/attachments/${attachment.id}/file`" target="_blank" rel="noreferrer" class="work-attachment-card">

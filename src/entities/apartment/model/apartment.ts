@@ -3,6 +3,7 @@ export interface Apartment {
   name: string
   building: string
   locationDetails: string
+  additionalChecklist: string[]
   status: string
   hotel: { id: string; name: string }
   tariffOverride?: { ownerTotalEur: number; cleanerPoolEur: number; laundryEur: number; serviceEur: number } | null

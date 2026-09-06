@@ -20,6 +20,7 @@ export type ApartmentFormManager = {
 export type ApartmentFormType = {
   id: string
   name: string
+  defaultChecklist: string[]
 }
 
 export function createApartmentFormState(initial: Partial<ApartmentFormState> = {}): ApartmentFormState {
@@ -35,6 +36,7 @@ export function createApartmentFormState(initial: Partial<ApartmentFormState> = 
     checkInTime: '15:00',
     checkOutTime: '11:00',
     instructions: '',
+    additionalChecklist: [],
     status: 'active',
     ...initial
   }

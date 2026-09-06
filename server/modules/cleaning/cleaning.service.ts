@@ -1,9 +1,10 @@
-import { and, eq, inArray, ne } from 'drizzle-orm'
+import { and, asc, eq, inArray, isNull, ne } from 'drizzle-orm'
 import { cleaningAssignmentInputSchema, cleaningInputSchema, cleaningRouteUpdateSchema, cleaningTariffOverrideSchema, cleaningUpdateSchema, completionInputSchema, workProgressInputSchema } from '@contracts/crm'
 import { requireRole, requireWorkSectionAccess, type Actor } from '../../infrastructure/auth/actor'
 import { writeAuditLog } from '../../infrastructure/audit/log'
 import { db } from '../../infrastructure/database/client'
-import { apartments, cleaningAssignments, cleanings, inventoryMovements, stays, users } from '../../infrastructure/database/schema'
+import { apartments, attachments, cleaningAssignments, cleanings, inventoryMovements, stays, users } from '../../infrastructure/database/schema'
+import { fileStorage } from '../../infrastructure/storage/local'
 import { administratorsForOrganization, notifyUsers } from '../../infrastructure/notification/publish'
 import { createFinancialEntry } from '../finance/finance.service'
 import { serializeApartment } from '../apartment/apartment-view'
@@ -11,6 +12,9 @@ import { deleteWorkRecord } from '../work/work-record.service'
 import { canBeWorkAssignee, cleaningTariffHasChanged } from '../work/work-policy'
 import { applyCleaningInventoryReports, saveCleaningInventoryDrafts } from '../inventory/inventory.service'
 import { calculateCleaningUrgency } from './cleaning-urgency'
+import { buildCleaningChecklist } from './checklist-template'
+import { requireAcceptedCleaningAssignment } from './cleaning-acceptance'
+import { cleaningProblemSummary, resolveCleaningProblems, syncCleaningProblems } from './cleaning-problem'
 
 export async function createCleaning(actor: Actor, input: unknown) {
   requireRole(actor, 'administrator')
@@ -27,7 +31,7 @@ export async function createCleaning(actor: Actor, input: unknown) {
   if (assignees.length !== data.cleanerIds.length || assignees.some(user => !canBeWorkAssignee(user.roles))) throw createError({ statusCode: 400, statusMessage: 'Исполнитель должен быть активной уборщицей или администратором' })
   const status = data.cleanerIds.length ? 'assigned' : 'unassigned'
   const isUrgent = data.urgencyOverride ?? await calculateCleaningUrgency(actor.organizationId, data.apartmentId, data.scheduledOn)
-  const checklist = data.checklist?.map(item => ({ ...item })) ?? apartment.type.defaultChecklist.map(label => ({ label, checked: false }))
+  const checklist = data.checklist?.map(item => ({ ...item })) ?? buildCleaningChecklist(apartment.type.defaultChecklist, apartment.additionalChecklist)
   const cleaning = await db.transaction(async tx => {
     const [created] = await tx.insert(cleanings).values({ organizationId: actor.organizationId, apartmentId: data.apartmentId, stayId: data.stayId ?? null, scheduledOn: data.scheduledOn, isUrgent, urgencyOverride: data.urgencyOverride ?? null, status, tariffSnapshot: { ownerTotalEur: data.ownerTotalEur, cleanerPoolEur: data.cleanerPoolEur, laundryEur: data.laundryEur, serviceEur: data.serviceEur }, checklist }).returning()
     if (!created) throw createError({ statusCode: 500, statusMessage: 'Не удалось создать уборку' })
@@ -47,21 +51,27 @@ export async function listCleanings(actor: Actor) {
   requireWorkSectionAccess(actor)
   const all = await db.query.cleanings.findMany({
     where: eq(cleanings.organizationId, actor.organizationId),
-    with: { apartment: { with: { hotel: true, managerAssignments: { with: { manager: { columns: { id: true, name: true } } } } } }, assignments: { with: { cleaner: true } }, stay: true },
+    with: { apartment: { with: { hotel: true, managerAssignments: { with: { manager: { columns: { id: true, name: true } } } } } }, assignments: { with: { cleaner: true } }, problems: true, stay: true },
     orderBy: (cleanings, { asc }) => [asc(cleanings.scheduledOn)]
   })
-  if (actor.roles.includes('administrator')) return all.map(cleaning => ({ ...cleaning, apartment: serializeApartment(cleaning.apartment) }))
+  const problemIds = all.flatMap(cleaning => cleaning.problems.map(problem => problem.id))
+  const problemAttachments = problemIds.length ? await db.select({ id: attachments.id, entityId: attachments.entityId, fileName: attachments.fileName }).from(attachments).where(and(eq(attachments.entityType, 'cleaning_problem'), inArray(attachments.entityId, problemIds))).orderBy(asc(attachments.createdAt), asc(attachments.id)) : []
+  const serializeCleaning = (cleaning: (typeof all)[number]) => ({ ...cleaning, problems: cleaning.problems.map(problem => ({ ...problem, attachments: problemAttachments.filter(attachment => attachment.entityId === problem.id) })), apartment: serializeApartment(cleaning.apartment) })
+  if (actor.roles.includes('administrator')) return all.map(serializeCleaning)
   return all.filter(cleaning => cleaning.assignments.some(item => item.cleanerId === actor.id)).map(cleaning => {
     const apartment = serializeApartment(cleaning.apartment)
     const safeStay = cleaning.stay ? (({ guestName: _guestName, guestPhone: _guestPhone, guestComment: _guestComment, cashAmountEur: _cashAmountEur, ...rest }) => rest)(cleaning.stay) : null
-    return { ...cleaning, apartment, stay: safeStay, tariffSnapshot: { cleanerPoolEur: cleaning.tariffSnapshot.cleanerPoolEur } }
+    return { ...serializeCleaning(cleaning), apartment, stay: safeStay, tariffSnapshot: { cleanerPoolEur: cleaning.tariffSnapshot.cleanerPoolEur } }
   })
 }
 
 export async function assignCleaners(actor: Actor, cleaningId: string, input: unknown) {
   requireRole(actor, 'administrator')
   const data = cleaningAssignmentInputSchema.parse(input)
-  const cleaning = await db.query.cleanings.findFirst({ where: and(eq(cleanings.id, cleaningId), eq(cleanings.organizationId, actor.organizationId)) })
+  const cleaning = await db.query.cleanings.findFirst({
+    where: and(eq(cleanings.id, cleaningId), eq(cleanings.organizationId, actor.organizationId)),
+    with: { assignments: true }
+  })
   if (!cleaning) throw createError({ statusCode: 404, statusMessage: 'Уборка не найдена' })
   const assignees = await db.select().from(users).where(and(
     inArray(users.id, data.cleanerIds),
@@ -79,51 +89,79 @@ export async function assignCleaners(actor: Actor, cleaningId: string, input: un
       positions.set(cleanerId, occupied.reduce((max, row) => Math.max(max, row.routePosition), -1) + 1)
     }
     await tx.delete(cleaningAssignments).where(eq(cleaningAssignments.cleaningId, cleaningId))
-    await tx.insert(cleaningAssignments).values(data.cleanerIds.map(cleanerId => ({ cleaningId, cleanerId, routePosition: positions.get(cleanerId) ?? 0 })))
+    await tx.insert(cleaningAssignments).values(data.cleanerIds.map(cleanerId => ({
+      cleaningId,
+      cleanerId,
+      routePosition: positions.get(cleanerId) ?? 0,
+      acceptedAt: cleaning.assignments.find(assignment => assignment.cleanerId === cleanerId)?.acceptedAt ?? null
+    })))
     await tx.update(cleanings).set({ status: 'assigned', scheduledOn: data.scheduledOn, updatedAt: new Date() }).where(eq(cleanings.id, cleaningId))
   })
   await notifyUsers({ organizationId: actor.organizationId, userIds: data.cleanerIds, type: 'work_assigned', title: 'Назначена уборка', body: 'Вам назначена уборка', href: `/cleanings/${cleaningId}` })
   return { ok: true }
 }
 
+export async function acceptCleaning(actor: Actor, cleaningId: string) {
+  requireRole(actor, 'cleaner', 'administrator')
+  const cleaning = await db.query.cleanings.findFirst({ where: and(eq(cleanings.id, cleaningId), eq(cleanings.organizationId, actor.organizationId)) })
+  if (!cleaning) throw createError({ statusCode: 404, statusMessage: 'Уборка не найдена' })
+  if (!['assigned', 'in_progress'].includes(cleaning.status)) throw createError({ statusCode: 409, statusMessage: 'Уборку нельзя принять в текущем статусе' })
+
+  const assignment = await db.query.cleaningAssignments.findFirst({ where: and(eq(cleaningAssignments.cleaningId, cleaningId), eq(cleaningAssignments.cleanerId, actor.id)) })
+  if (!assignment) throw createError({ statusCode: 403, statusMessage: 'Уборка не назначена вам' })
+
+  const acceptedAt = assignment.acceptedAt ?? new Date()
+  if (!assignment.acceptedAt) {
+    await db.update(cleaningAssignments)
+      .set({ acceptedAt })
+      .where(and(eq(cleaningAssignments.cleaningId, cleaningId), eq(cleaningAssignments.cleanerId, actor.id), isNull(cleaningAssignments.acceptedAt)))
+    await writeAuditLog({ organizationId: actor.organizationId, actorId: actor.id, action: 'cleaning.accepted', entityType: 'cleaning', entityId: cleaningId })
+  }
+  return { ok: true, acceptedAt }
+}
+
 export async function completeCleaning(actor: Actor, cleaningId: string, input: unknown) {
   requireRole(actor, 'cleaner', 'administrator')
   const data = completionInputSchema.parse(input)
-  const cleaning = await db.query.cleanings.findFirst({ where: and(eq(cleanings.id, cleaningId), eq(cleanings.organizationId, actor.organizationId)), with: { apartment: true } })
+  const cleaning = await db.query.cleanings.findFirst({ where: and(eq(cleanings.id, cleaningId), eq(cleanings.organizationId, actor.organizationId)), with: { apartment: true, problems: true } })
   if (!cleaning) throw createError({ statusCode: 404, statusMessage: 'Уборка не найдена' })
   if (!['assigned', 'in_progress'].includes(cleaning.status)) throw createError({ statusCode: 409, statusMessage: 'Уборку нельзя завершить в текущем статусе' })
   const completeChecklist = cleaning.checklist.every(required => data.checklist.some(item => item.label === required.label && item.checked))
   if (!completeChecklist || data.checklist.some(item => !item.checked)) throw createError({ statusCode: 400, statusMessage: 'Завершите обязательный чек-лист' })
-  if (!actor.roles.includes('administrator')) {
-    const assignment = await db.query.cleaningAssignments.findFirst({ where: and(eq(cleaningAssignments.cleaningId, cleaningId), eq(cleaningAssignments.cleanerId, actor.id)) })
-    if (!assignment) throw createError({ statusCode: 403, statusMessage: 'Уборка не назначена вам' })
-  }
+  await requireAcceptedCleaningAssignment(actor, cleaningId)
+  let removedStorageKeys: string[] = []
+  const problems = resolveCleaningProblems(input, data, cleaning.problems)
+  const problemDescription = cleaningProblemSummary(problems)
   const updated = await db.transaction(async tx => {
     await applyCleaningInventoryReports(tx, actor, cleaning, data.inventoryReports)
-    const [completed] = await tx.update(cleanings).set({ status: 'completed', checklist: data.checklist, comment: data.comment, hasProblem: data.hasProblem, problemDescription: data.problemDescription, completedAt: new Date(), updatedAt: new Date() }).where(eq(cleanings.id, cleaningId)).returning()
+    removedStorageKeys = await syncCleaningProblems(tx, actor, cleaningId, problems)
+    const [completed] = await tx.update(cleanings).set({ status: 'completed', checklist: data.checklist, comment: data.comment, hasProblem: problems.length > 0, problemDescription, completedAt: new Date(), updatedAt: new Date() }).where(eq(cleanings.id, cleaningId)).returning()
     await createFinancialEntry({ organizationId: actor.organizationId, apartmentId: cleaning.apartmentId, type: 'cleaning_charge', visibility: 'manager', amountEur: cleaning.tariffSnapshot.ownerTotalEur, occurredOn: new Date().toISOString().slice(0, 10), description: 'Уборка', sourceType: 'cleaning', sourceId: cleaningId, createdById: actor.id }, tx as unknown as typeof db)
     return completed
   })
-  await writeAuditLog({ organizationId: actor.organizationId, actorId: actor.id, action: 'cleaning.completed', entityType: 'cleaning', entityId: cleaningId, payload: { hasProblem: data.hasProblem } })
-  if (data.hasProblem) await notifyUsers({ organizationId: actor.organizationId, userIds: await administratorsForOrganization(actor.organizationId), type: 'problem', title: 'Проблема в уборке', body: data.problemDescription, href: `/cleanings/${cleaningId}` })
+  await Promise.allSettled(removedStorageKeys.map(storageKey => fileStorage.remove(storageKey)))
+  await writeAuditLog({ organizationId: actor.organizationId, actorId: actor.id, action: 'cleaning.completed', entityType: 'cleaning', entityId: cleaningId, payload: { problemCount: problems.length } })
+  if (problems.length) await notifyUsers({ organizationId: actor.organizationId, userIds: await administratorsForOrganization(actor.organizationId), type: 'problem', title: 'Проблема в уборке', body: problemDescription, href: `/cleanings/${cleaningId}` })
   return updated
 }
 
 export async function saveCleaningProgress(actor: Actor, cleaningId: string, input: unknown) {
   requireRole(actor, 'cleaner', 'administrator')
   const data = workProgressInputSchema.parse(input)
-  const cleaning = await db.query.cleanings.findFirst({ where: and(eq(cleanings.id, cleaningId), eq(cleanings.organizationId, actor.organizationId)), with: { apartment: true } })
+  const cleaning = await db.query.cleanings.findFirst({ where: and(eq(cleanings.id, cleaningId), eq(cleanings.organizationId, actor.organizationId)), with: { apartment: true, problems: true } })
   if (!cleaning) throw createError({ statusCode: 404, statusMessage: 'Уборка не найдена' })
   if (['completed', 'canceled'].includes(cleaning.status)) throw createError({ statusCode: 409, statusMessage: 'Завершенную или отмененную уборку нельзя изменить' })
-  if (!actor.roles.includes('administrator')) {
-    const assignment = await db.query.cleaningAssignments.findFirst({ where: and(eq(cleaningAssignments.cleaningId, cleaningId), eq(cleaningAssignments.cleanerId, actor.id)) })
-    if (!assignment) throw createError({ statusCode: 403, statusMessage: 'Уборка не назначена вам' })
-  }
+  await requireAcceptedCleaningAssignment(actor, cleaningId)
+  let removedStorageKeys: string[] = []
+  const problems = resolveCleaningProblems(input, data, cleaning.problems)
+  const problemDescription = cleaningProblemSummary(problems)
   const updated = await db.transaction(async tx => {
     if (data.inventoryReports) await saveCleaningInventoryDrafts(tx, actor, cleaning, data.inventoryReports)
-    const [saved] = await tx.update(cleanings).set({ checklist: data.checklist, comment: data.comment, hasProblem: data.hasProblem, problemDescription: data.problemDescription, updatedAt: new Date() }).where(eq(cleanings.id, cleaningId)).returning()
+    removedStorageKeys = await syncCleaningProblems(tx, actor, cleaningId, problems)
+    const [saved] = await tx.update(cleanings).set({ checklist: data.checklist, comment: data.comment, hasProblem: problems.length > 0, problemDescription, updatedAt: new Date() }).where(eq(cleanings.id, cleaningId)).returning()
     return saved
   })
+  await Promise.allSettled(removedStorageKeys.map(storageKey => fileStorage.remove(storageKey)))
   await writeAuditLog({ organizationId: actor.organizationId, actorId: actor.id, action: 'cleaning.progress_saved', entityType: 'cleaning', entityId: cleaningId })
   return updated
 }
@@ -132,10 +170,7 @@ export async function startCleaning(actor: Actor, cleaningId: string) {
   requireRole(actor, 'cleaner', 'administrator')
   const cleaning = await db.query.cleanings.findFirst({ where: and(eq(cleanings.id, cleaningId), eq(cleanings.organizationId, actor.organizationId)) })
   if (!cleaning) throw createError({ statusCode: 404, statusMessage: 'Уборка не найдена' })
-  if (!actor.roles.includes('administrator')) {
-    const assignment = await db.query.cleaningAssignments.findFirst({ where: and(eq(cleaningAssignments.cleaningId, cleaningId), eq(cleaningAssignments.cleanerId, actor.id)) })
-    if (!assignment) throw createError({ statusCode: 403, statusMessage: 'Уборка не назначена вам' })
-  }
+  await requireAcceptedCleaningAssignment(actor, cleaningId)
   if (!['assigned', 'in_progress'].includes(cleaning.status)) throw createError({ statusCode: 409, statusMessage: 'Уборку нельзя начать в текущем статусе' })
   return (await db.update(cleanings).set({ status: 'in_progress', updatedAt: new Date() }).where(eq(cleanings.id, cleaningId)).returning())[0]
 }
@@ -217,7 +252,12 @@ export async function updateCleaning(actor: Actor, cleaningId: string, input: un
       positions.set(cleanerId, occupied.reduce((max, row) => Math.max(max, row.routePosition), -1) + 1)
     }
     await tx.delete(cleaningAssignments).where(eq(cleaningAssignments.cleaningId, cleaningId))
-    if (cleanerIds.length) await tx.insert(cleaningAssignments).values(cleanerIds.map(cleanerId => ({ cleaningId, cleanerId, routePosition: positions.get(cleanerId) ?? 0 })))
+    if (cleanerIds.length) await tx.insert(cleaningAssignments).values(cleanerIds.map(cleanerId => ({
+      cleaningId,
+      cleanerId,
+      routePosition: positions.get(cleanerId) ?? 0,
+      acceptedAt: cleaning.assignments.find(assignment => assignment.cleanerId === cleanerId)?.acceptedAt ?? null
+    })))
     return (await tx.update(cleanings).set({ apartmentId: nextApartmentId, stayId: nextStayId ?? null, scheduledOn, isUrgent, urgencyOverride: nextUrgencyOverride, tariffSnapshot, checklist: checklist ?? cleaning.checklist, status, updatedAt: new Date() }).where(eq(cleanings.id, cleaningId)).returning())[0]
   })
   if (!updated) throw createError({ statusCode: 500, statusMessage: 'Не удалось обновить уборку' })

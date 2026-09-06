@@ -45,6 +45,18 @@ const missingReferences = computed(() => [
 ].filter((item): item is { label: string; to: string } => Boolean(item)))
 const canSubmit = computed(() => missingReferences.value.length === 0 && !pending.value)
 const submitLabel = computed(() => props.mode === 'edit' ? t('common.save') : t('apartments.create'))
+const inheritedChecklist = computed(() => props.apartmentTypes.find(type => type.id === form.apartmentTypeId)?.defaultChecklist ?? [])
+
+function addChecklistItem() {
+  form.additionalChecklist.push('')
+}
+
+function moveChecklistItem(index: number, direction: -1 | 1) {
+  const next = index + direction
+  if (next < 0 || next >= form.additionalChecklist.length) return
+  const [item] = form.additionalChecklist.splice(index, 1)
+  if (item !== undefined) form.additionalChecklist.splice(next, 0, item)
+}
 
 async function save(event: FormSubmitEvent<ApartmentInput>) {
   pending.value = true
@@ -134,6 +146,45 @@ async function save(event: FormSubmitEvent<ApartmentInput>) {
         >
           <UInput v-model="form.locationDetails" class="w-full" size="xl" placeholder="Например, 3 этаж, дверь 12, рядом с лифтом" autocomplete="off" />
         </UFormField>
+      </div>
+    </section>
+
+    <section class="apartment-form-section surface">
+      <div class="apartment-form-section__header">
+        <div class="apartment-form-section__icon"><UIcon name="i-lucide-list-checks" class="size-5" /></div>
+        <div>
+          <h2 class="text-lg font-semibold">{{ t('apartmentChecklist.title') }}</h2>
+          <p class="mt-1 text-sm text-[var(--color-muted)]">{{ t('apartmentChecklist.hint') }}</p>
+        </div>
+      </div>
+
+      <div class="mt-5">
+        <p class="text-sm font-semibold">{{ t('apartmentChecklist.inherited') }}</p>
+        <ul v-if="inheritedChecklist.length" class="mt-2 space-y-1 text-sm text-[var(--color-muted)]">
+          <li v-for="(item, index) in inheritedChecklist" :key="`${form.apartmentTypeId}-${index}`" class="flex items-start gap-2">
+            <span class="mt-1 text-[var(--color-primary)]">{{ index + 1 }}.</span><span>{{ item }}</span>
+          </li>
+        </ul>
+        <p v-else class="mt-2 text-sm text-[var(--color-muted)]">{{ t('apartmentChecklist.noInherited') }}</p>
+      </div>
+
+      <div class="mt-5 border-t border-[var(--color-line)] pt-4">
+        <div class="flex items-start justify-between gap-3">
+          <div><p class="text-sm font-semibold">{{ t('apartmentChecklist.additional') }}</p><p class="mt-1 text-sm text-[var(--color-muted)]">{{ t('apartmentChecklist.additionalHint') }}</p></div>
+          <UButton type="button" color="neutral" variant="ghost" size="sm" icon="i-lucide-plus" @click="addChecklistItem">{{ t('common.add') }}</UButton>
+        </div>
+        <div v-if="form.additionalChecklist.length" class="mt-3 space-y-2">
+          <div v-for="(item, index) in form.additionalChecklist" :key="index" class="checklist-edit-row">
+            <span class="grid size-8 shrink-0 place-items-center text-sm tabular-nums text-[var(--color-muted)]">{{ inheritedChecklist.length + index + 1 }}</span>
+            <UFormField :name="`additionalChecklist.${index}`" class="min-w-0 flex-1"><UInput v-model="form.additionalChecklist[index]" class="w-full" :placeholder="t('common.action')" /></UFormField>
+            <div class="checklist-edit-actions">
+              <UButton type="button" color="neutral" variant="ghost" size="sm" icon="i-lucide-chevron-up" :disabled="index === 0" :aria-label="t('common.action')" @click="moveChecklistItem(index, -1)" />
+              <UButton type="button" color="neutral" variant="ghost" size="sm" icon="i-lucide-chevron-down" :disabled="index === form.additionalChecklist.length - 1" :aria-label="t('common.action')" @click="moveChecklistItem(index, 1)" />
+              <UButton type="button" color="neutral" variant="ghost" size="sm" icon="i-lucide-x" :aria-label="t('common.removeItem')" @click="form.additionalChecklist.splice(index, 1)" />
+            </div>
+          </div>
+        </div>
+        <p v-else class="mt-3 text-sm text-[var(--color-muted)]">{{ t('apartmentChecklist.noAdditional') }}</p>
       </div>
     </section>
 

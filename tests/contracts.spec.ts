@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { apartmentInputSchema, apartmentTypeInputSchema, apartmentUpdateSchema, cleaningAssignmentInputSchema, cleaningInputSchema, cleaningRouteUpdateSchema, cleaningTariffOverrideSchema, cleaningUpdateSchema, completionInputSchema, consumableInputSchema, hotelInputSchema, hotelReverseGeocodeQuerySchema, isApartmentOwnerEligible, specialServiceInputSchema, stayInputSchema, stayListQuerySchema, taskInputSchema, workProgressInputSchema } from '../shared/contracts/crm'
+import { apartmentInputSchema, apartmentTypeInputSchema, apartmentUpdateSchema, buildCleaningChecklist, cleaningAssignmentInputSchema, cleaningInputSchema, cleaningRouteUpdateSchema, cleaningTariffOverrideSchema, cleaningUpdateSchema, completionInputSchema, consumableInputSchema, hotelInputSchema, hotelReverseGeocodeQuerySchema, isApartmentOwnerEligible, specialServiceInputSchema, stayInputSchema, stayListQuerySchema, taskInputSchema, workProgressInputSchema } from '../shared/contracts/crm'
 import { formatEuroInput, parseEuroInput } from '../src/shared/lib/money'
 import { apartmentCalendarColor } from '../src/shared/lib/calendar'
 import { calculateFifoUsage } from '../server/modules/inventory/fifo'
@@ -44,12 +44,24 @@ describe('CRM contracts', () => {
       checkOutTime: '11:00'
     }
     expect(apartmentInputSchema.parse(base).building).toBe('')
+    expect(apartmentInputSchema.parse(base).additionalChecklist).toEqual([])
     expect(apartmentInputSchema.parse({ ...base, managerIds: [] }).managerIds).toEqual([])
     expect(apartmentInputSchema.safeParse({ ...base, managerIds: [base.managerIds[0], base.managerIds[0]] }).success).toBe(false)
     expect(apartmentInputSchema.safeParse({ ...base, managerIds: ['not-a-uuid'] }).success).toBe(false)
     expect(apartmentUpdateSchema.parse({ name: 'Новое имя' }).managerIds).toBeUndefined()
     expect(apartmentInputSchema.parse({ ...base, building: '  B  ' }).building).toBe('B')
     expect(apartmentInputSchema.safeParse({ ...base, building: 'B'.repeat(101) }).success).toBe(false)
+    expect(apartmentInputSchema.parse({ ...base, additionalChecklist: ['  Проверить кодовый замок  '] }).additionalChecklist).toEqual(['Проверить кодовый замок'])
+    expect(apartmentInputSchema.safeParse({ ...base, additionalChecklist: [''] }).success).toBe(false)
+    expect(apartmentInputSchema.safeParse({ ...base, additionalChecklist: Array.from({ length: 101 }, (_, index) => `Пункт ${index}`) }).success).toBe(false)
+  })
+
+  it('builds a cleaning checklist from type and apartment items in order', () => {
+    expect(buildCleaningChecklist(['Сменить бельё'], ['Проверить кодовый замок', 'Полить цветы'])).toEqual([
+      { label: 'Сменить бельё', checked: false },
+      { label: 'Проверить кодовый замок', checked: false },
+      { label: 'Полить цветы', checked: false }
+    ])
   })
   it('requires check-out after check-in', () => {
     const base = { apartmentId: '00000000-0000-4000-8000-000000000001', adultCount: 1, childCount: 0 }
@@ -85,10 +97,13 @@ describe('CRM contracts', () => {
 
   it('requires a reason for tariff override and a description for a problem', () => {
     const tariff = { cleanerPoolEur: 5, laundryEur: 4, serviceEur: 3 }
+    const problemId = '00000000-0000-4000-8000-000000000001'
     expect(cleaningTariffOverrideSchema.safeParse({ ...tariff, reason: 'Праздничный тариф' }).success).toBe(true)
     expect(cleaningTariffOverrideSchema.safeParse({ ...tariff, reason: '' }).success).toBe(false)
     expect(completionInputSchema.safeParse({ checklist: [], hasProblem: true, problemDescription: '' }).success).toBe(false)
     expect(completionInputSchema.safeParse({ checklist: [], hasProblem: true, problemDescription: 'Протекает кран' }).success).toBe(true)
+    expect(completionInputSchema.safeParse({ checklist: [], problems: [{ id: problemId, description: '' }] }).success).toBe(false)
+    expect(completionInputSchema.safeParse({ checklist: [], problems: [{ id: problemId, description: 'Протекает кран' }] }).success).toBe(true)
   })
 
   it('validates combined cleaning updates', () => {
@@ -153,6 +168,8 @@ describe('CRM contracts', () => {
     expect(cleaningInputSchema.safeParse({ ...tariff, apartmentId, cleanerIds: [], scheduledOn: '2026-01-10T12:00:00Z' }).success).toBe(false)
     expect(cleaningInputSchema.parse({ ...tariff, apartmentId, cleanerIds: [], scheduledOn: '2026-01-10' }).checklist).toBeUndefined()
     expect(cleaningInputSchema.safeParse({ ...tariff, apartmentId, cleanerIds: [], scheduledOn: '2026-01-10', checklist: [{ label: 'Проверить окна', checked: false }] }).success).toBe(true)
+    expect(cleaningInputSchema.safeParse({ ...tariff, apartmentId, cleanerIds: [], scheduledOn: '2026-01-10', checklist: Array.from({ length: 200 }, (_, index) => ({ label: `Пункт ${index}`, checked: false })) }).success).toBe(true)
+    expect(cleaningInputSchema.safeParse({ ...tariff, apartmentId, cleanerIds: [], scheduledOn: '2026-01-10', checklist: Array.from({ length: 201 }, (_, index) => ({ label: `Пункт ${index}`, checked: false })) }).success).toBe(false)
     expect(cleaningInputSchema.parse({ ...tariff, apartmentId, cleanerIds: [], scheduledOn: '2026-01-10' }).urgencyOverride).toBeUndefined()
     expect(cleaningUpdateSchema.safeParse({ ...tariff, cleanerIds: [], scheduledOn: '2026-01-10', urgencyOverride: null }).success).toBe(true)
     expect(cleaningUpdateSchema.safeParse({ ...tariff, cleanerIds: [], scheduledOn: '2026-01-10', urgencyOverride: 'yes' }).success).toBe(false)

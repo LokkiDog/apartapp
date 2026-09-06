@@ -33,6 +33,15 @@ export function sortRoute(cleanings: Cleaning[], cleanerId?: string) {
   return [...cleanings].sort((left, right) => routePosition(left, cleanerId) - routePosition(right, cleanerId) || left.apartment.name.localeCompare(right.apartment.name))
 }
 
+export function unacceptedCleaningsForCleaner(cleanings: Cleaning[], cleanerId: string): Cleaning[] {
+  return cleanings
+    .filter((cleaning) => {
+      const assignment = cleaning.assignments.find((item) => item.cleanerId === cleanerId)
+      return ['assigned', 'in_progress'].includes(cleaning.status) && Boolean(assignment && !assignment.acceptedAt)
+    })
+    .sort((left, right) => left.scheduledOn.localeCompare(right.scheduledOn) || routePosition(left, cleanerId) - routePosition(right, cleanerId) || left.apartment.name.localeCompare(right.apartment.name))
+}
+
 export function buildCleaningPlan(cleanings: Cleaning[], today = localDate(), hideFinishedFromToday = false): CleaningPlan {
   const horizon = shiftDate(today, 14)
   const attention: Cleaning[] = []

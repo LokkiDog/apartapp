@@ -28,6 +28,7 @@ import {
   localDate,
   routesForDay,
   sortRoute,
+  unacceptedCleaningsForCleaner,
 } from "./model/work-planning";
 import { useI18n } from "vue-i18n";
 import { taskInputSchema } from "@contracts/crm";
@@ -203,6 +204,11 @@ const apartmentPlan = computed(() =>
     cleaningPlan.value.days.flatMap((day) => day.cleanings),
   ),
 );
+const pendingAcceptanceCleanings = computed(() =>
+  isAdministrator.value || !currentUser.value?.id
+    ? []
+    : unacceptedCleaningsForCleaner(cleanings.value ?? [], currentUser.value.id),
+);
 
 const statusLabels = computed<Record<string, string>>(() => ({
   unassigned: t("work.statusUnassigned"),
@@ -247,6 +253,18 @@ function isAssignedCleaner(cleaning: Cleaning) {
     (item) => item.cleaner.id === currentUser.value?.id,
   );
 }
+function currentCleaningAssignment(cleaning: Cleaning) {
+  return cleaning.assignments.find(item => item.cleanerId === currentUser.value?.id)
+}
+function canAcceptCleaning(cleaning: Cleaning) {
+  return isAssignedCleaner(cleaning) && ['assigned', 'in_progress'].includes(cleaning.status) && !currentCleaningAssignment(cleaning)?.acceptedAt
+}
+function shouldShowCleaningStatus(cleaning: Cleaning) {
+  return isAdministrator.value || !canAcceptCleaning(cleaning)
+}
+function awaitingCleaningAcceptance(cleaning: Cleaning) {
+  return isAdministrator.value && cleaning.status === 'assigned' && cleaning.assignments.length > 0 && !cleaning.assignments.some(item => item.acceptedAt)
+}
 function isFinished(work: Cleaning | Task) {
   return ["completed", "canceled"].includes(work.status);
 }
@@ -284,7 +302,20 @@ function cleaningSubtitle(cleaning: Cleaning) {
   return `${cleaning.apartment.hotel.name} · ${guestCountLabel(cleaning)}`;
 }
 function cleaningStatusLabel(cleaning: Cleaning) {
+  if (isAdministrator.value && cleaning.status === 'assigned') return awaitingCleaningAcceptance(cleaning) ? t('work.statusAwaitingAcceptance') : t('work.statusAccepted')
   return statusLabels.value[cleaning.status] ?? "";
+}
+async function acceptCleaning(cleaning: Cleaning) {
+  pending.value = true
+  error.value = ''
+  try {
+    await $fetch(`/api/cleanings/${cleaning.id}/accept`, { method: 'POST' })
+    await refreshCleanings()
+  } catch (cause: any) {
+    error.value = cause?.data?.statusMessage ?? t('common.error')
+  } finally {
+    pending.value = false
+  }
 }
 function activeCleaningCountLabel(count: number) {
   return `${count} ${t("workExtra.activeCleanings", count)}`;
@@ -738,6 +769,29 @@ function taskMenuItems(task: Task): DropdownMenuItem[] {
 
       <div class="work-cleanings">
         <section
+          v-if="pendingAcceptanceCleanings.length"
+          class="work-pending-acceptance overflow-hidden rounded-xl"
+        >
+          <div class="px-4 pb-1 pt-3">
+            <h2 class="text-sm font-semibold text-amber-950">{{ t('work.pendingAcceptanceTitle') }}</h2>
+          </div>
+          <div class="divide-y divide-yellow-400/70 px-4 pb-1">
+            <article
+              v-for="cleaning in pendingAcceptanceCleanings"
+              :key="`pending-acceptance-${cleaning.id}`"
+              class="work-cleaning-row flex items-center gap-2 py-2"
+              @click="openCleaningCard($event, cleaning)"
+            >
+              <div class="min-w-0 flex-1">
+                <p class="truncate font-medium">{{ cleaning.apartment.name }}</p>
+                <p class="truncate text-sm text-amber-900/75">{{ formatDate(cleaning.scheduledOn) }} · {{ cleaningSubtitle(cleaning) }}</p>
+              </div>
+              <UButton color="primary" variant="solid" size="xs" class="h-6 min-h-6 px-2" :loading="pending" @click.stop="acceptCleaning(cleaning)">{{ t('work.accept') }}</UButton>
+            </article>
+          </div>
+        </section>
+
+        <section
           v-if="cleaningPlan.attention.length"
           class="surface overflow-hidden"
         >
@@ -760,7 +814,7 @@ function taskMenuItems(task: Task): DropdownMenuItem[] {
               v-for="cleaning in cleaningPlan.attention"
               :key="`attention-${cleaning.id}`"
               class="work-cleaning-row flex items-center gap-3"
-              :class="{ 'work-cleaning-row--urgent': cleaning.isUrgent }"
+              :class="{ 'work-cleaning-row--urgent': cleaning.isUrgent, 'work-cleaning-row--awaiting-acceptance': awaitingCleaningAcceptance(cleaning) }"
               @click="openCleaningCard($event, cleaning)"
             >
               <div
@@ -845,7 +899,7 @@ function taskMenuItems(task: Task): DropdownMenuItem[] {
                   v-for="cleaning in route.cleanings"
                   :key="`${day.date}-${route.cleanerId}-${cleaning.id}`"
                   class="work-cleaning-row work-route-cleaning-row group items-center gap-3"
-                  :class="{ 'work-cleaning-row--urgent': cleaning.isUrgent }"
+                  :class="{ 'work-cleaning-row--urgent': cleaning.isUrgent, 'work-cleaning-row--awaiting-acceptance': awaitingCleaningAcceptance(cleaning) }"
                   :draggable="isAdministrator && !isFinished(cleaning)"
                   @dragstart="startDragging($event, cleaning.id)"
                   @dragover.prevent
@@ -902,9 +956,11 @@ function taskMenuItems(task: Task): DropdownMenuItem[] {
                     </p>
                   </div>
                   <StatusBadge
+                    v-if="shouldShowCleaningStatus(cleaning)"
                     :label="cleaningStatusLabel(cleaning)"
-                    :tone="statusTones[cleaning.status] ?? 'neutral'"
+                    :tone="awaitingCleaningAcceptance(cleaning) ? 'warning' : statusTones[cleaning.status] ?? 'neutral'"
                   />
+                  <UButton v-if="canAcceptCleaning(cleaning)" color="primary" variant="soft" size="xs" class="h-6 min-h-6 px-2" :loading="pending" @click.stop="acceptCleaning(cleaning)">{{ t('work.accept') }}</UButton>
                   <UDropdownMenu
                     v-if="cleaningMenuItems(cleaning).length"
                     :items="cleaningMenuItems(cleaning)"
@@ -1008,7 +1064,7 @@ function taskMenuItems(task: Task): DropdownMenuItem[] {
                   v-for="cleaning in day.cleanings"
                   :key="`${employee.cleanerId}-${day.date}-${cleaning.id}`"
                   class="work-cleaning-row work-route-cleaning-row group items-center gap-3"
-                  :class="{ 'work-cleaning-row--urgent': cleaning.isUrgent }"
+                  :class="{ 'work-cleaning-row--urgent': cleaning.isUrgent, 'work-cleaning-row--awaiting-acceptance': awaitingCleaningAcceptance(cleaning) }"
                   :draggable="isAdministrator && !isFinished(cleaning)"
                   @dragstart="startDragging($event, cleaning.id)"
                   @dragover.prevent
@@ -1064,9 +1120,11 @@ function taskMenuItems(task: Task): DropdownMenuItem[] {
                     </p>
                   </div>
                   <StatusBadge
+                    v-if="shouldShowCleaningStatus(cleaning)"
                     :label="cleaningStatusLabel(cleaning)"
-                    :tone="statusTones[cleaning.status] ?? 'neutral'"
+                    :tone="awaitingCleaningAcceptance(cleaning) ? 'warning' : statusTones[cleaning.status] ?? 'neutral'"
                   />
+                  <UButton v-if="canAcceptCleaning(cleaning)" color="primary" variant="soft" size="xs" class="h-6 min-h-6 px-2" :loading="pending" @click.stop="acceptCleaning(cleaning)">{{ t('work.accept') }}</UButton>
                   <UDropdownMenu
                     v-if="cleaningMenuItems(cleaning).length"
                     :items="cleaningMenuItems(cleaning)"
@@ -1178,7 +1236,7 @@ function taskMenuItems(task: Task): DropdownMenuItem[] {
                   @click="openCleaningCard($event, cleaning)"
                   :key="`${group.apartmentId}-${day.date}-${cleaning.id}`"
                   class="work-cleaning-row group flex items-center gap-3"
-                  :class="{ 'work-cleaning-row--urgent': cleaning.isUrgent }"
+                  :class="{ 'work-cleaning-row--urgent': cleaning.isUrgent, 'work-cleaning-row--awaiting-acceptance': awaitingCleaningAcceptance(cleaning) }"
                 >
                   <span
                     class="grid size-4 shrink-0 place-items-center rounded-lg bg-[var(--color-primary-soft)] text-xs font-semibold tabular-nums text-[var(--color-primary)]"
@@ -1210,9 +1268,11 @@ function taskMenuItems(task: Task): DropdownMenuItem[] {
                     </p>
                   </div>
                   <StatusBadge
+                    v-if="shouldShowCleaningStatus(cleaning)"
                     :label="cleaningStatusLabel(cleaning)"
-                    :tone="statusTones[cleaning.status] ?? 'neutral'"
+                    :tone="awaitingCleaningAcceptance(cleaning) ? 'warning' : statusTones[cleaning.status] ?? 'neutral'"
                   />
+                  <UButton v-if="canAcceptCleaning(cleaning)" color="primary" variant="soft" size="xs" class="h-6 min-h-6 px-2" :loading="pending" @click.stop="acceptCleaning(cleaning)">{{ t('work.accept') }}</UButton>
                   <UDropdownMenu
                     v-if="cleaningMenuItems(cleaning).length"
                     :items="cleaningMenuItems(cleaning)"
@@ -1263,7 +1323,7 @@ function taskMenuItems(task: Task): DropdownMenuItem[] {
               v-for="cleaning in cleaningPlan.later"
               :key="`later-${cleaning.id}`"
               class="work-cleaning-row flex items-center gap-3"
-              :class="{ 'work-cleaning-row--urgent': cleaning.isUrgent }"
+              :class="{ 'work-cleaning-row--urgent': cleaning.isUrgent, 'work-cleaning-row--awaiting-acceptance': awaitingCleaningAcceptance(cleaning) }"
               @click="openCleaningCard($event, cleaning)"
             >
               <span
@@ -1280,9 +1340,11 @@ function taskMenuItems(task: Task): DropdownMenuItem[] {
                 </p>
               </div>
               <StatusBadge
+                v-if="shouldShowCleaningStatus(cleaning)"
                 :label="cleaningStatusLabel(cleaning)"
-                :tone="statusTones[cleaning.status] ?? 'neutral'"
+                :tone="awaitingCleaningAcceptance(cleaning) ? 'warning' : statusTones[cleaning.status] ?? 'neutral'"
               />
+              <UButton v-if="canAcceptCleaning(cleaning)" color="primary" variant="soft" size="xs" class="h-6 min-h-6 px-2" :loading="pending" @click.stop="acceptCleaning(cleaning)">{{ t('work.accept') }}</UButton>
             </article>
           </div>
         </section>
@@ -1299,7 +1361,7 @@ function taskMenuItems(task: Task): DropdownMenuItem[] {
               v-for="cleaning in cleaningPlan.history"
               :key="`history-${cleaning.id}`"
               class="work-cleaning-row flex items-center gap-3"
-              :class="{ 'work-cleaning-row--urgent': cleaning.isUrgent }"
+              :class="{ 'work-cleaning-row--urgent': cleaning.isUrgent, 'work-cleaning-row--awaiting-acceptance': awaitingCleaningAcceptance(cleaning) }"
               @click="openCleaningCard($event, cleaning)"
             >
               <span
@@ -1316,9 +1378,11 @@ function taskMenuItems(task: Task): DropdownMenuItem[] {
                 </p>
               </div>
               <StatusBadge
+                v-if="shouldShowCleaningStatus(cleaning)"
                 :label="cleaningStatusLabel(cleaning)"
-                :tone="statusTones[cleaning.status] ?? 'neutral'"
+                :tone="awaitingCleaningAcceptance(cleaning) ? 'warning' : statusTones[cleaning.status] ?? 'neutral'"
               />
+              <UButton v-if="canAcceptCleaning(cleaning)" color="primary" variant="soft" size="xs" class="h-6 min-h-6 px-2" :loading="pending" @click.stop="acceptCleaning(cleaning)">{{ t('work.accept') }}</UButton>
             </article>
           </div>
           <p v-else class="px-5 py-6 text-sm text-[var(--color-muted)] sm:px-6">

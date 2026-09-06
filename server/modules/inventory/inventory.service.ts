@@ -6,6 +6,7 @@ import { writeAuditLog } from '../../infrastructure/audit/log'
 import { db } from '../../infrastructure/database/client'
 import { apartmentConsumables, apartments, cleaningAssignments, cleaningInventoryReports, cleanings, consumables, financialEntries, inventoryLots, inventoryMovements, tasks } from '../../infrastructure/database/schema'
 import { createFinancialEntry } from '../finance/finance.service'
+import { requireAcceptedCleaningAssignment } from '../cleaning/cleaning-acceptance'
 import { cleaningInventoryReportContext, resolveCompletionInventoryReports, shouldPreserveInventoryReportApproval, type CleaningInventoryReport } from './cleaning-inventory'
 import { calculateFifoUsage } from './fifo'
 
@@ -169,6 +170,7 @@ export async function inventoryForCleaning(actor: Actor, cleaningId: string) {
 
 export async function updateCleaningInventory(actor: Actor, cleaningId: string, input: unknown) {
   const cleaning = await cleaningAccess(actor, cleaningId)
+  await requireAcceptedCleaningAssignment(actor, cleaningId)
   const data = cleaningInventoryReportInputSchema.parse(input)
   if (cleaning.status === 'canceled') throw createError({ statusCode: 409, statusMessage: 'Отмененную уборку нельзя изменить' })
   const reports = await db.transaction(tx => ['completed', 'canceled'].includes(cleaning.status)
@@ -381,7 +383,9 @@ export async function useStock(actor: Actor, apartmentId: string, input: unknown
         where: and(eq(cleaningAssignments.cleaningId, data.sourceId), eq(cleaningAssignments.cleanerId, actor.id)),
         with: { cleaning: true }
       })
-      return assignment?.cleaning.apartmentId === apartmentId
+      if (!assignment || assignment.cleaning.apartmentId !== apartmentId) return false
+      await requireAcceptedCleaningAssignment(actor, data.sourceId)
+      return true
     }
     const task = await db.query.tasks.findFirst({ where: and(eq(tasks.id, data.sourceId), eq(tasks.organizationId, actor.organizationId)) })
     return task?.apartmentId === apartmentId && canAccessAssignedWork(actor, task.assigneeId)

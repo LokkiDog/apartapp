@@ -108,7 +108,7 @@ describe('CRUD form validation', () => {
 
 describe('CRUD form registry', () => {
   const forms = [
-    ['src/features/manage-apartment/ui/ApartmentForm.vue', ['name="hotelId"', 'name="apartmentTypeId"']],
+    ['src/features/manage-apartment/ui/ApartmentForm.vue', ['name="hotelId"', 'name="apartmentTypeId"', 'additionalChecklist.${index}', 'apartmentChecklist.inherited']],
     ['src/pages/hotels/HotelsPage.vue', ['id="hotel-form"', 'name="location"']],
     ['src/pages/calendar/CalendarPage.vue', ['id="stay-form"', 'name="checkInOn"']],
     ['src/features/manage-cleaning/ui/CleaningFormSlideover.vue', ['id="cleaning-form"', 'name="scheduledOn"']],

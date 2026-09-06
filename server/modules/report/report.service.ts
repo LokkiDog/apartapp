@@ -114,7 +114,7 @@ export async function globalReport(actor: Actor, query: ReportQuery): Promise<Gl
   const [cleaningRows, taskRows, stayRows, financeRows, userRows, stockSettings, lotBalances] = await Promise.all([
     db.query.cleanings.findMany({
       where: eq(cleanings.organizationId, actor.organizationId),
-      with: { assignments: { with: { cleaner: true } } }
+      with: { assignments: { with: { cleaner: true } }, problems: true }
     }),
     db.query.tasks.findMany({ where: eq(tasks.organizationId, actor.organizationId) }),
     db.query.stays.findMany({ where: eq(stays.organizationId, actor.organizationId) }),
@@ -268,7 +268,7 @@ export async function globalReport(actor: Actor, query: ReportQuery): Promise<Gl
   }
   finance.sort((a, b) => b.occurredOn.localeCompare(a.occurredOn) || a.apartmentName.localeCompare(b.apartmentName, 'ru'))
 
-  const problems = scopedCleanings.filter(item => item.hasProblem && dateInRange(dateInSofia(item.completedAt), query)).length
+  const problems = scopedCleanings.filter(item => dateInRange(dateInSofia(item.completedAt), query)).reduce((count, item) => count + item.problems.length, 0)
     + scopedTasks.filter(item => item.hasProblem && dateInRange(dateInSofia(item.completedAt), query)).length
   const scheduledCleanings = scopedCleanings.filter(item => item.status !== 'canceled' && dateInRange(item.scheduledOn, query)).length
 

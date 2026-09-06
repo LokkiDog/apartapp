@@ -4,7 +4,7 @@ import type { Actor } from '../../infrastructure/auth/actor'
 import { requireRole } from '../../infrastructure/auth/actor'
 import { writeAuditLog } from '../../infrastructure/audit/log'
 import { db } from '../../infrastructure/database/client'
-import { apartmentManagers, attachments, authTokens, cleaningAssignments, cleanings, financialEntries, inventoryLots, inventoryMovements, notifications, stays, stayServices, tasks, users } from '../../infrastructure/database/schema'
+import { apartmentManagers, attachments, authTokens, cleaningAssignments, cleaningProblems, cleanings, financialEntries, inventoryLots, inventoryMovements, notifications, stays, stayServices, tasks, users } from '../../infrastructure/database/schema'
 import { sendAccountLink } from '../../infrastructure/mail/send'
 import { fileStorage } from '../../infrastructure/storage/local'
 import { publishNotification } from '../../infrastructure/notification/realtime'
@@ -102,6 +102,8 @@ async function ensureUserCanBeRemoved(actor: Actor, userId: string) {
 async function deleteWorkRecords(tx: any, cleaningIds: string[], taskIds: string[]) {
   const attachmentConditions = [] as any[]
   if (cleaningIds.length) attachmentConditions.push(and(eq(attachments.entityType, 'cleaning'), inArray(attachments.entityId, cleaningIds)))
+  const problemRows = cleaningIds.length ? await tx.select({ id: cleaningProblems.id }).from(cleaningProblems).where(inArray(cleaningProblems.cleaningId, cleaningIds)) : []
+  if (problemRows.length) attachmentConditions.push(and(eq(attachments.entityType, 'cleaning_problem'), inArray(attachments.entityId, problemRows.map((row: { id: string }) => row.id))))
   if (taskIds.length) attachmentConditions.push(and(eq(attachments.entityType, 'task'), inArray(attachments.entityId, taskIds)))
   const files = attachmentConditions.length ? await tx.select({ storageKey: attachments.storageKey }).from(attachments).where(attachmentConditions.length === 1 ? attachmentConditions[0] : or(...attachmentConditions)) : []
   const movementConditions = [] as any[]

@@ -2,7 +2,7 @@ import { and, eq } from 'drizzle-orm'
 import sharp from 'sharp'
 import { canAccessAssignedWork, canManageApartment, requireActor } from '../../../infrastructure/auth/actor'
 import { db } from '../../../infrastructure/database/client'
-import { apartments, attachments, cleanings, tasks } from '../../../infrastructure/database/schema'
+import { apartments, attachments, cleaningProblems, tasks } from '../../../infrastructure/database/schema'
 import { CARD_PREVIEW_SUFFIX, fileStorage } from '../../../infrastructure/storage/local'
 
 async function getCardPreview(storageKey: string) {
@@ -29,8 +29,8 @@ export default defineEventHandler(async event => {
   if (!actor.roles.includes('administrator')) {
     const allowed = attachment.entityType === 'apartment'
       ? await canManageApartment(actor, attachment.entityId)
-      : attachment.entityType === 'cleaning'
-      ? await db.query.cleanings.findFirst({ where: and(eq(cleanings.id, attachment.entityId), eq(cleanings.organizationId, actor.organizationId)), with: { assignments: true } }).then(cleaning => Boolean(cleaning && cleaning.assignments.some(item => canAccessAssignedWork(actor, item.cleanerId))))
+      : attachment.entityType === 'cleaning_problem'
+      ? await db.query.cleaningProblems.findFirst({ where: and(eq(cleaningProblems.id, attachment.entityId), eq(cleaningProblems.organizationId, actor.organizationId)), with: { cleaning: { with: { assignments: true } } } }).then(problem => Boolean(problem && problem.cleaning.assignments.some(item => canAccessAssignedWork(actor, item.cleanerId))))
       : await db.query.tasks.findFirst({ where: and(eq(tasks.id, attachment.entityId), eq(tasks.organizationId, actor.organizationId)) }).then(task => Boolean(task && canAccessAssignedWork(actor, task.assigneeId)))
     if (!allowed) throw createError({ statusCode: 403, statusMessage: 'Нет доступа к файлу' })
   }

@@ -9,7 +9,7 @@ import {
 } from "#fsd/shared/lib";
 import { DateInput, MoneyInput } from "#fsd/shared/ui";
 import { useI18n } from "vue-i18n";
-import { cleaningInputSchema } from "@contracts/crm";
+import { buildCleaningChecklist, cleaningInputSchema } from "@contracts/crm";
 
 type ChecklistItem = { label: string; checked: boolean };
 type TeamOption = { label: string; value: string };
@@ -74,11 +74,6 @@ function validate(state: unknown) {
   }
   return errors;
 }
-const standardChecklist = computed(() => [
-  t("common.checklistLinen"),
-  t("common.checklistBathroom"),
-  t("common.checklistSupplies"),
-]);
 const tariffOpen = ref(false);
 const noAssigneeConfirmationOpen = ref(false);
 const tariffTotal = computed(() =>
@@ -153,10 +148,10 @@ const canChangeContext = computed(
 );
 function checklistFromApartment(apartmentId: string) {
   const apartment = props.apartments.find((item) => item.id === apartmentId);
-  const labels = apartment?.type?.defaultChecklist?.length
-    ? apartment.type.defaultChecklist
-    : standardChecklist.value;
-  return labels.map((label) => ({ label, checked: false }));
+  return buildCleaningChecklist(
+    apartment?.type?.defaultChecklist ?? [],
+    apartment?.additionalChecklist ?? [],
+  );
 }
 const checklistChanged = computed(() => {
   if (!form.apartmentId) return false;

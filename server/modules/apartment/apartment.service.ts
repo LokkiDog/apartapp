@@ -1,17 +1,24 @@
-import { and, asc, eq, inArray, or } from 'drizzle-orm'
+import { and, asc, eq, gte, inArray, or } from 'drizzle-orm'
 import Decimal from 'decimal.js'
 import { apartmentInputSchema, apartmentTypeInputSchema, apartmentUpdateSchema, isApartmentOwnerEligible } from '@contracts/crm'
 import { canManageApartment, managedApartmentIds, requireRole, type Actor } from '../../infrastructure/auth/actor'
 import { writeAuditLog } from '../../infrastructure/audit/log'
 import { db } from '../../infrastructure/database/client'
-import { apartmentConsumables, apartmentManagers, apartmentTypeConsumableWriteOffs, apartmentTypes, apartments, attachments, cleaningAssignments, cleanings, consumables, financialEntries, hotels, inventoryLots, inventoryMovements, stays, tasks, users, type CleaningTariff } from '../../infrastructure/database/schema'
+import { apartmentConsumables, apartmentManagers, apartmentTypeConsumableWriteOffs, apartmentTypes, apartments, attachments, cleaningAssignments, cleaningProblems, cleanings, consumables, financialEntries, hotels, inventoryLots, inventoryMovements, stays, tasks, users, type ChecklistItem, type CleaningTariff } from '../../infrastructure/database/schema'
 import { fileStorage } from '../../infrastructure/storage/local'
 import { serializeApartment } from './apartment-view'
+import { buildCleaningChecklist, isUntouchedChecklistTemplate, sofiaToday } from '../cleaning/checklist-template'
 
 function validateTariff(data: { ownerTotalEur: number, cleanerPoolEur: number, laundryEur: number, serviceEur: number }) {
   const components = new Decimal(data.cleanerPoolEur).plus(data.laundryEur).plus(data.serviceEur)
   if (!new Decimal(data.ownerTotalEur).equals(components)) {
     throw createError({ statusCode: 400, statusMessage: 'Сумма компонентов тарифа неверна' })
+  }
+}
+
+function validateCombinedChecklist(defaultChecklist: readonly string[], additionalChecklist: readonly string[]) {
+  if (defaultChecklist.length + additionalChecklist.length > 200) {
+    throw createError({ statusCode: 400, statusMessage: 'В итоговом чек-листе может быть не более 200 пунктов' })
   }
 }
 
@@ -59,12 +66,33 @@ export async function updateApartmentType(actor: Actor, apartmentTypeId: string,
   requireRole(actor, 'administrator')
   const data = apartmentTypeInputSchema.parse(input)
   const { autoWriteOffs, ...typeData } = data
+  const existing = await db.query.apartmentTypes.findFirst({
+    where: and(eq(apartmentTypes.id, apartmentTypeId), eq(apartmentTypes.organizationId, actor.organizationId))
+  })
+  if (!existing) throw createError({ statusCode: 404, statusMessage: 'Тип апартамента не найден' })
   const [updated] = await db.transaction(async tx => {
     const [saved] = await tx.update(apartmentTypes)
       .set({ ...typeData, updatedAt: new Date() })
       .where(and(eq(apartmentTypes.id, apartmentTypeId), eq(apartmentTypes.organizationId, actor.organizationId)))
       .returning()
-    if (saved) await replaceApartmentTypeWriteOffs(tx, actor.organizationId, apartmentTypeId, autoWriteOffs)
+    if (saved) {
+      await replaceApartmentTypeWriteOffs(tx, actor.organizationId, apartmentTypeId, autoWriteOffs)
+      if (JSON.stringify(existing.defaultChecklist) !== JSON.stringify(saved.defaultChecklist)) {
+        const linkedApartments = await tx.query.apartments.findMany({
+          where: and(eq(apartments.organizationId, actor.organizationId), eq(apartments.apartmentTypeId, apartmentTypeId))
+        })
+        await Promise.all(linkedApartments.map(async apartment => {
+          validateCombinedChecklist(saved.defaultChecklist, apartment.additionalChecklist)
+          await syncFutureTemplateCleanings(
+            tx,
+            actor.organizationId,
+            apartment.id,
+            buildCleaningChecklist(existing.defaultChecklist, apartment.additionalChecklist),
+            buildCleaningChecklist(saved.defaultChecklist, apartment.additionalChecklist)
+          )
+        }))
+      }
+    }
     return [saved]
   })
   if (!updated) throw createError({ statusCode: 404, statusMessage: 'Тип апартамента не найден' })
@@ -139,6 +167,7 @@ export async function createApartment(actor: Actor, input: unknown) {
   await validateManagers(actor, managerIds)
   const type = await db.query.apartmentTypes.findFirst({ where: and(eq(apartmentTypes.id, data.apartmentTypeId), eq(apartmentTypes.organizationId, actor.organizationId)) })
   if (!type) throw createError({ statusCode: 400, statusMessage: 'Тип апартамента не найден' })
+  validateCombinedChecklist(type.defaultChecklist, data.additionalChecklist)
   if (data.tariffOverride) validateTariff(data.tariffOverride)
   const apartment = await db.transaction(async tx => {
     const [created] = await tx.insert(apartments).values({ ...apartmentData, organizationId: actor.organizationId, tariffOverride: apartmentData.tariffOverride ?? null }).returning()
@@ -162,26 +191,60 @@ export async function updateApartment(actor: Actor, apartmentId: string, input: 
   requireRole(actor, 'administrator')
   const data = apartmentUpdateSchema.parse(input)
   const { managerIds, ...apartmentData } = data
-  const existing = await db.query.apartments.findFirst({ where: and(eq(apartments.id, apartmentId), eq(apartments.organizationId, actor.organizationId)) })
+  const existing = await db.query.apartments.findFirst({
+    where: and(eq(apartments.id, apartmentId), eq(apartments.organizationId, actor.organizationId)),
+    with: { type: true }
+  })
   if (!existing) throw createError({ statusCode: 404, statusMessage: 'Апартамент не найден' })
   if (data.hotelId && data.hotelId !== existing.hotelId) {
     const hotel = await db.query.hotels.findFirst({ where: and(eq(hotels.id, data.hotelId), eq(hotels.organizationId, actor.organizationId), eq(hotels.status, 'active')) })
     if (!hotel) throw createError({ statusCode: 400, statusMessage: 'Нельзя перенести апартамент в неактивный отель' })
   }
   if (managerIds !== undefined) await validateManagers(actor, managerIds)
-  if (data.apartmentTypeId) {
-    const type = await db.query.apartmentTypes.findFirst({ where: and(eq(apartmentTypes.id, data.apartmentTypeId), eq(apartmentTypes.organizationId, actor.organizationId)) })
-    if (!type) throw createError({ statusCode: 400, statusMessage: 'Тип апартамента не найден' })
-  }
+  const nextType = data.apartmentTypeId
+    ? await db.query.apartmentTypes.findFirst({ where: and(eq(apartmentTypes.id, data.apartmentTypeId), eq(apartmentTypes.organizationId, actor.organizationId)) })
+    : existing.type
+  if (!nextType) throw createError({ statusCode: 400, statusMessage: 'Тип апартамента не найден' })
+  validateCombinedChecklist(nextType.defaultChecklist, data.additionalChecklist ?? existing.additionalChecklist)
   if (data.tariffOverride) validateTariff(data.tariffOverride)
   const updated = await db.transaction(async tx => {
     const [changed] = await tx.update(apartments).set({ ...apartmentData, updatedAt: new Date() }).where(eq(apartments.id, apartmentId)).returning()
     if (managerIds !== undefined) await replaceApartmentManagers(tx, actor.organizationId, apartmentId, managerIds)
+    if (changed) {
+      const previousTemplate = buildCleaningChecklist(existing.type.defaultChecklist, existing.additionalChecklist)
+      const nextTemplate = buildCleaningChecklist(nextType.defaultChecklist, changed.additionalChecklist)
+      if (JSON.stringify(previousTemplate) !== JSON.stringify(nextTemplate)) {
+        await syncFutureTemplateCleanings(tx, actor.organizationId, apartmentId, previousTemplate, nextTemplate)
+      }
+    }
     return changed
   })
   if (!updated) throw createError({ statusCode: 500, statusMessage: 'Не удалось обновить апартамент' })
   await writeAuditLog({ organizationId: actor.organizationId, actorId: actor.id, action: data.hotelId !== existing.hotelId ? 'apartment.hotel_changed' : 'apartment.updated', entityType: 'apartment', entityId: apartmentId, payload: { before: { hotelId: existing.hotelId }, after: data } })
   return getApartment(actor, updated.id)
+}
+
+async function syncFutureTemplateCleanings(
+  tx: any,
+  organizationId: string,
+  apartmentId: string,
+  previousTemplate: ReturnType<typeof buildCleaningChecklist>,
+  nextTemplate: ReturnType<typeof buildCleaningChecklist>
+) {
+  const candidates = await tx.query.cleanings.findMany({
+    where: and(
+      eq(cleanings.organizationId, organizationId),
+      eq(cleanings.apartmentId, apartmentId),
+      inArray(cleanings.status, ['unassigned', 'assigned']),
+      gte(cleanings.scheduledOn, sofiaToday())
+    )
+  }) as Array<{ id: string, checklist: ChecklistItem[] }>
+  await Promise.all(candidates
+    .filter(cleaning => isUntouchedChecklistTemplate(cleaning.checklist, previousTemplate))
+    .map(cleaning => tx.update(cleanings)
+      .set({ checklist: nextTemplate.map(item => ({ ...item })), updatedAt: new Date() })
+      .where(and(eq(cleanings.id, cleaning.id), eq(cleanings.organizationId, organizationId))))
+  )
 }
 
 export async function archiveApartment(actor: Actor, apartmentId: string) {
@@ -201,6 +264,8 @@ export async function deleteApartmentRecords(tx: any, apartmentId: string) {
   ])
   const attachmentConditions = [and(eq(attachments.entityType, 'apartment'), eq(attachments.entityId, apartmentId))]
   if (cleaningRows.length) attachmentConditions.push(and(eq(attachments.entityType, 'cleaning'), inArray(attachments.entityId, cleaningRows.map((row: { id: string }) => row.id))))
+  const problemRows = cleaningRows.length ? await tx.select({ id: cleaningProblems.id }).from(cleaningProblems).where(inArray(cleaningProblems.cleaningId, cleaningRows.map((row: { id: string }) => row.id))) : []
+  if (problemRows.length) attachmentConditions.push(and(eq(attachments.entityType, 'cleaning_problem'), inArray(attachments.entityId, problemRows.map((row: { id: string }) => row.id))))
   if (taskRows.length) attachmentConditions.push(and(eq(attachments.entityType, 'task'), inArray(attachments.entityId, taskRows.map((row: { id: string }) => row.id))))
   const attachmentWhere = attachmentConditions.length === 1 ? attachmentConditions[0]! : or(...attachmentConditions)
   const files = await tx.select({ storageKey: attachments.storageKey }).from(attachments).where(attachmentWhere)

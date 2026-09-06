@@ -46,6 +46,11 @@ function withCalculatedTariff<Shape extends z.ZodRawShape>(shape: Shape) {
 }
 
 const checklistLabelsSchema = z.array(z.string().trim().min(1).max(200)).max(100)
+export type ChecklistItem = { label: string, checked: boolean }
+
+export function buildCleaningChecklist(defaultChecklist: readonly string[] = [], additionalChecklist: readonly string[] = []): ChecklistItem[] {
+  return [...defaultChecklist, ...additionalChecklist].map(label => ({ label, checked: false }))
+}
 const apartmentTypeAutoWriteOffSchema = z.object({ consumableId: z.uuid(), quantity: z.coerce.number().finite().positive().max(9_999_999.999) })
 export const apartmentTypeInputSchema = withCalculatedTariff({
   name: z.string().trim().min(1).max(100),
@@ -71,6 +76,7 @@ export const apartmentInputSchema = z.object({
   checkInTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Укажите время заезда'),
   checkOutTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Укажите время выезда'),
   instructions: z.string().max(5000, 'Инструкции не должны превышать 5000 символов').optional().default(''),
+  additionalChecklist: checklistLabelsSchema.default([]),
   status: apartmentStatusSchema.optional().default('active'),
   tariffOverride: apartmentTariffInputSchema.optional()
 })
@@ -125,7 +131,7 @@ export type StayListQuery = z.infer<typeof stayListQuerySchema>
 
 export const cleaningAssignmentInputSchema = z.object({ cleanerIds: z.array(z.uuid()).min(1), scheduledOn: z.iso.date() })
 export const cleaningTariffOverrideSchema = withCalculatedTariff({ reason: z.string().trim().min(3).max(1000) })
-const cleaningChecklistSchema = z.array(z.object({ label: z.string().trim().min(1).max(200), checked: z.boolean() })).max(100)
+const cleaningChecklistSchema = z.array(z.object({ label: z.string().trim().min(1).max(200), checked: z.boolean() })).max(200)
 export const cleaningInputSchema = withCalculatedTariff({
   apartmentId: z.uuid(),
   stayId: z.uuid().nullable().optional(),
@@ -156,11 +162,21 @@ export const cleaningRouteUpdateSchema = z.object({
   }
 })
 
+export const cleaningProblemInputSchema = z.object({
+  id: z.uuid(),
+  description: z.string().trim().min(1, 'Опишите проблему').max(2000)
+})
+const cleaningProblemsInputSchema = z.array(cleaningProblemInputSchema).max(50).refine(
+  problems => new Set(problems.map(problem => problem.id)).size === problems.length,
+  { message: 'Проблемы не должны повторяться' }
+)
+
 export const completionInputSchema = z.object({
   checklist: z.array(z.object({ label: z.string().min(1), checked: z.boolean() })),
   comment: z.string().max(2000).default(''),
   hasProblem: z.boolean().default(false),
   problemDescription: z.string().max(2000).default(''),
+  problems: cleaningProblemsInputSchema.default([]),
   inventoryReports: z.array(z.object({
     consumableId: z.uuid(),
     usedQuantity: z.coerce.number().finite().nonnegative().max(9_999_999.999),
@@ -177,6 +193,7 @@ export const workProgressInputSchema = z.object({
   comment: z.string().max(2000).default(''),
   hasProblem: z.boolean().default(false),
   problemDescription: z.string().max(2000).default(''),
+  problems: cleaningProblemsInputSchema.default([]),
   inventoryReports: z.array(z.object({
     consumableId: z.uuid(),
     usedQuantity: z.coerce.number().finite().nonnegative().max(9_999_999.999),

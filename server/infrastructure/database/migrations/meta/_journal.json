@@ -190,6 +190,27 @@
       "when": 1788540634000,
       "tag": "0026_user_vika",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1788699600000,
+      "tag": "0027_apartment_additional_checklist",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1788786000000,
+      "tag": "0028_cleaning_assignment_acceptance",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1788872400000,
+      "tag": "0029_cleaning_problems",
+      "breakpoints": true
     }
   ]
 }

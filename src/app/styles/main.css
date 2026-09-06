@@ -2421,6 +2421,9 @@ img {
   display: grid;
   gap: 1rem;
 }
+.work-pending-acceptance {
+  background-color: color-mix(in srgb, #fef3c7 96%, transparent);
+}
 .work-group-header {
   background-color: #f1f3f2;
 }
@@ -2523,11 +2526,16 @@ img {
 .work-task-row__desktop-subtitle {
   display: none;
 }
+.work-cleaning-row--awaiting-acceptance {
+  background-color: color-mix(in srgb, #fef3c7 96%, transparent);
+  box-shadow: inset 3px 0 0 #d97706;
+}
 .work-cleaning-row--urgent {
-  background-color: color-mix(in srgb, #fef3c7 82%, transparent);
+  background-color: var(--calendar-arrival-bg);
+  box-shadow: none;
 }
 .work-cleaning-row__urgent-label {
-  color: #b45309;
+  color: var(--calendar-arrival-ink);
   font-weight: 700;
 }
 .work-route-order-controls {
@@ -4020,6 +4028,12 @@ html[dir="rtl"] .dashboard-page-header__actions {
   gap: 0.75rem;
   margin-bottom: 1rem;
 }
+.work-problem-card {
+  min-width: 0;
+  border-radius: 1rem;
+  background: var(--color-surface-muted);
+  padding: 1rem;
+}
 .work-attachment-card {
   display: block;
   min-width: 0;
@@ -4097,6 +4111,17 @@ html[dir="rtl"] .dashboard-page-header__actions {
   flex-wrap: wrap;
   gap: 0.5rem;
 }
+.work-directions-action {
+  display: flex;
+  grid-column: 1 / -1;
+  width: 100%;
+}
+.work-directions-action__button {
+  width: 100%;
+  min-height: 24px;
+  justify-content: center;
+  padding: 0px;
+}
 .detail-label {
   margin-bottom: 0.25rem;
   color: var(--color-muted);
@@ -4106,6 +4131,13 @@ html[dir="rtl"] .dashboard-page-header__actions {
   letter-spacing: 0.04em;
 }
 @media (min-width: 640px) {
+  .work-directions-action {
+    justify-content: flex-start;
+  }
+  .work-directions-action__button {
+    width: auto;
+    min-height: 0;
+  }
   .progress-section {
     padding: 1.5rem;
   }
