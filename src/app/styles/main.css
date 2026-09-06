@@ -1896,6 +1896,7 @@ img {
   margin: 0.3rem;
 }
 .calendar-event-marker {
+  position: relative;
   display: grid;
   min-width: 0;
   grid-auto-columns: minmax(0, 1fr);
@@ -1940,6 +1941,14 @@ img {
 }
 .calendar-event-marker--combined .calendar-event-marker__segment--arrival {
   padding-left: 0.55rem;
+}
+.calendar-event-marker--combined .calendar-event-marker__segment--departure .stay-cleaning-marker {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 2;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
 }
 .calendar-event-marker__segment:hover {
   filter: saturate(1.08) brightness(1.04);

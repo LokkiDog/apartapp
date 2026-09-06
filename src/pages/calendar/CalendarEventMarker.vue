@@ -40,6 +40,8 @@ const arrivalStyle = { backgroundColor: 'var(--calendar-arrival-bg)', color: 'va
       :show-financial-details="showFinancialDetails"
       :can-edit="canEdit"
       :can-manage-cleaning="canManageCleaning"
+      :show-cleaning-marker="true"
+      :show-service-icons="false"
       @edit="emit('edit', $event)"
     />
     <StayCalendarPopover
@@ -53,6 +55,8 @@ const arrivalStyle = { backgroundColor: 'var(--calendar-arrival-bg)', color: 'va
       :show-financial-details="showFinancialDetails"
       :can-edit="canEdit"
       :can-manage-cleaning="canManageCleaning"
+      :show-cleaning-marker="false"
+      :show-service-icons="true"
       @edit="emit('edit', $event)"
     />
   </div>
