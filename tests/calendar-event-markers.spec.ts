@@ -51,6 +51,10 @@ describe('calendar arrival and departure markers', () => {
     expect(marker.match(/<StayCalendarPopover/g)).toHaveLength(2)
     expect(marker).toContain("context=\"departure\"")
     expect(marker).toContain("context=\"arrival\"")
+    expect(marker).toContain(':left-label="marker.departureStay.apartment.name"')
+    expect(marker).toContain(':left-label="marker.arrivalStay.apartment.name"')
+    expect(marker).not.toContain('calendar.${kind}')
+    expect(marker).not.toContain('showApartmentName')
     expect(marker).toContain("backgroundColor: 'var(--calendar-arrival-bg)'")
     expect(marker).toContain("backgroundColor: 'var(--calendar-departure-bg)'")
     expect(styles).toContain('.calendar-event-marker--combined')
@@ -61,5 +65,27 @@ describe('calendar arrival and departure markers', () => {
     expect(styles).toContain('flex-shrink: 0')
     expect(styles).toMatch(/\.stay-cleaning-marker\.stay-cleaning-indicator--missing\s*\{[^}]*background: #fff7e8;[^}]*opacity: 1;/s)
     expect(popover.indexOf('class="stay-cleaning-marker"')).toBeLessThan(popover.indexOf('<StayServiceIcons :services="stay.services" />'))
+  })
+
+  it('restores and persists the selected calendar event mode', () => {
+    const page = readFileSync('src/pages/calendar/CalendarPage.vue', 'utf8')
+
+    expect(page).toContain("const eventsOnlyStorageKey = 'aparts.calendar.events-only'")
+    expect(page).toContain('const storedEventsOnly = localStorage.getItem(eventsOnlyStorageKey)')
+    expect(page).toContain("eventsOnly.value = storedEventsOnly === 'true'")
+    expect(page).toContain('localStorage.setItem(eventsOnlyStorageKey, String(value))')
+  })
+
+  it('expands month event markers by default and lets each day collapse or expand', () => {
+    const page = readFileSync('src/pages/calendar/CalendarPage.vue', 'utf8')
+    const styles = readFileSync('src/app/styles/main.css', 'utf8')
+
+    expect(page).toContain('const collapsedMonthMarkerDays = ref(new Set<string>())')
+    expect(page).toContain('function isMonthMarkerDayExpanded(day: string) { return !collapsedMonthMarkerDays.value.has(day) }')
+    expect(page).toContain('v-show="isMonthMarkerDayExpanded(day) || markerIndex < 3"')
+    expect(page).toContain(':aria-expanded="isMonthMarkerDayExpanded(day)"')
+    expect(page).toContain('@click="toggleMonthMarkerDay(day)"')
+    expect(page).toContain("isMonthMarkerDayExpanded(day) ? t('common.hide')")
+    expect(styles).toMatch(/\.calendar-marker-more\s*\{[^}]*min-height: 44px;[^}]*cursor: pointer;/s)
   })
 })

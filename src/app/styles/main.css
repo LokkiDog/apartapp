@@ -1090,6 +1090,39 @@ img {
   align-items: center;
   gap: 0.75rem;
 }
+.calendar-events-legend {
+  display: flex;
+  width: 100%;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.85rem;
+  padding-top: 0.25rem;
+  color: var(--color-muted);
+  font-size: 0.75rem;
+  font-weight: 650;
+  white-space: nowrap;
+}
+.calendar-events-legend__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.calendar-events-legend__swatch {
+  width: 16px;
+  height: 10px;
+  flex: 0 0 16px;
+  border-radius: 3px;
+  box-shadow: inset 0 0 0 1px currentColor;
+}
+.calendar-events-legend__swatch--arrival {
+  background: var(--calendar-arrival-bg);
+  color: var(--calendar-arrival-ink);
+}
+.calendar-events-legend__swatch--departure {
+  background: var(--calendar-departure-bg);
+  color: var(--calendar-departure-ink);
+}
 .calendar-controls__scope {
   width: 100%;
 }
@@ -2126,7 +2159,8 @@ img {
   overflow-x: auto;
 }
 .calendar-month-content {
-  min-width: 700px;
+  width: 150%;
+  min-width: 1050px;
 }
 .calendar-month-heading,
 .calendar-month-week {
@@ -2186,10 +2220,20 @@ img {
 }
 .calendar-marker-more {
   display: block;
-  padding-left: 0.25rem;
+  width: 100%;
+  min-height: 44px;
+  padding: 0 0.25rem;
+  border: 0;
+  background: transparent;
   color: var(--color-muted);
   font-size: 0.65rem;
   font-weight: 650;
+  text-align: start;
+  cursor: pointer;
+}
+.calendar-marker-more:hover,
+.calendar-marker-more:focus-visible {
+  color: var(--color-text);
 }
 .calendar-month-week-row {
   border-bottom: 1px solid var(--color-line);

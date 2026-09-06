@@ -48,6 +48,7 @@ const formatLocale = computed(() => locale.value === 'he' ? 'he-IL' : locale.val
 const propertyScope = reactive<PropertyScopeValue>({ scope: 'all', hotelId: 'all', apartmentIds: [] })
 const bookingViewStorageKey = 'aparts.calendar.booking-view'
 const calendarPeriodStorageKey = 'aparts.calendar.period'
+const eventsOnlyStorageKey = 'aparts.calendar.events-only'
 const legacyCalendarViewStorageKey = 'aparts.calendar.view'
 const agendaStatusStorageKey = 'aparts.calendar.agenda-statuses'
 const allAgendaStatuses: StayAgendaStatus[] = ['arrival', 'departure', 'staying']
@@ -60,6 +61,8 @@ const bookingView = ref<BookingView>('dates')
 const calendarPeriod = ref<CalendarPeriod>('month')
 const eventsOnly = ref(false)
 const onlyVika = ref(false)
+const calendarBoardRef = ref<HTMLElement | null>(null)
+const calendarMonthRef = ref<HTMLElement | null>(null)
 const selectedAgendaStatuses = ref<StayAgendaStatus[]>([...allAgendaStatuses])
 const cursor = ref(todayKey())
 const open = ref(false)
@@ -73,6 +76,9 @@ const pending = ref(false)
 const historyDays = ref(0)
 const historyLoading = ref(false)
 const expandedMonthWeeks = ref(new Set<string>())
+const collapsedMonthMarkerDays = ref(new Set<string>())
+let lastTodayScrollContainer: HTMLElement | null = null
+let lastTodayScrollKey = ''
 const form = reactive<StayForm>(emptyStayForm())
 const validation = useSubmitFormValidation()
 const validate = createFormValidator(stayInputSchema, t, { pathMap: { checkOutOn: 'checkInOn' } })
@@ -149,6 +155,7 @@ const heading = computed(() => calendarPeriod.value === 'month'
 onMounted(() => {
   const storedView = localStorage.getItem(bookingViewStorageKey)
   const storedPeriod = localStorage.getItem(calendarPeriodStorageKey)
+  const storedEventsOnly = localStorage.getItem(eventsOnlyStorageKey)
   if (storedView === 'dates' || storedView === 'apartments' || storedView === 'calendar') bookingView.value = storedView
   else {
     const migrated = migrateCalendarView(localStorage.getItem(legacyCalendarViewStorageKey))
@@ -156,6 +163,7 @@ onMounted(() => {
     calendarPeriod.value = migrated.calendarPeriod
   }
   if (storedPeriod === 'month' || storedPeriod === 'week' || storedPeriod === 'day') calendarPeriod.value = storedPeriod
+  if (storedEventsOnly === 'true' || storedEventsOnly === 'false') eventsOnly.value = storedEventsOnly === 'true'
   const storedStatuses = localStorage.getItem(agendaStatusStorageKey)
   if (storedStatuses) {
     try {
@@ -173,9 +181,17 @@ watch(calendarPeriod, value => {
   if (import.meta.client) localStorage.setItem(calendarPeriodStorageKey, value)
 })
 
+watch(eventsOnly, value => {
+  if (import.meta.client) localStorage.setItem(eventsOnlyStorageKey, String(value))
+})
+
 watch(selectedAgendaStatuses, value => {
   if (import.meta.client) localStorage.setItem(agendaStatusStorageKey, JSON.stringify(value))
 })
+
+watch([bookingView, calendarPeriod, cursor, eventsOnly, status], () => {
+  void scrollCalendarToToday()
+}, { flush: 'post' })
 
 watch(visibleApartments, value => {
   if (form.apartmentId && !value.some(apartment => apartment.id === form.apartmentId)) form.apartmentId = ''
@@ -189,6 +205,26 @@ function addDays(value: string, amount: number) { const date = dateFromKey(value
 function daysBetween(from: string, to: string) { const days: string[] = []; for (let day = from; day < to; day = addDays(day, 1)) days.push(day); return days }
 function isToday(day: string) { return day === todayKey() }
 function isCurrentMonth(day: string) { const current = dateFromKey(cursor.value); const date = dateFromKey(day); return current.getUTCMonth() === date.getUTCMonth() && current.getUTCFullYear() === date.getUTCFullYear() }
+async function scrollCalendarToToday() {
+  if (!import.meta.client || bookingView.value !== 'calendar' || calendarPeriod.value === 'day' || !window.matchMedia('(max-width: 639px)').matches) return
+  await nextTick()
+
+  const container = calendarPeriod.value === 'month' ? calendarMonthRef.value : calendarBoardRef.value
+  const target = container?.querySelector<HTMLElement>('.calendar-day-heading--today, .calendar-month-day--today, .calendar-month-date-cell--today')
+  if (!container || !target) return
+
+  const scrollKey = `${calendarPeriod.value}:${cursor.value}:${eventsOnly.value}`
+  if (lastTodayScrollContainer === container && lastTodayScrollKey === scrollKey) return
+
+  const containerRect = container.getBoundingClientRect()
+  const targetRect = target.getBoundingClientRect()
+  const stickyApartmentWidth = calendarPeriod.value === 'week' ? Math.min(164, container.clientWidth) : 0
+  const visibleCenter = stickyApartmentWidth + (container.clientWidth - stickyApartmentWidth) / 2
+  const targetCenter = targetRect.left - containerRect.left + container.scrollLeft + targetRect.width / 2
+  container.scrollTo({ left: Math.max(0, targetCenter - visibleCenter), behavior: 'auto' })
+  lastTodayScrollContainer = container
+  lastTodayScrollKey = scrollKey
+}
 function weekday(day: string, short = false) { return new Intl.DateTimeFormat(formatLocale.value, { weekday: short ? 'short' : 'long', timeZone: 'Europe/Sofia' }).format(dateFromKey(day)) }
 function dayNumber(day: string) { return dateFromKey(day).getUTCDate() }
 function staysForApartmentWeek(apartmentId: string) { return calendarStays.value.filter(stay => stay.apartmentId === apartmentId && stay.checkInOn < range.value.to && stay.checkOutOn >= range.value.from) }
@@ -237,6 +273,13 @@ function toggleMonthWeek(weekKey: string) {
   if (next.has(weekKey)) next.delete(weekKey)
   else next.add(weekKey)
   expandedMonthWeeks.value = next
+}
+function isMonthMarkerDayExpanded(day: string) { return !collapsedMonthMarkerDays.value.has(day) }
+function toggleMonthMarkerDay(day: string) {
+  const next = new Set(collapsedMonthMarkerDays.value)
+  if (next.has(day)) next.delete(day)
+  else next.add(day)
+  collapsedMonthMarkerDays.value = next
 }
 function monthWeekStyle(laneCount: number, expanded: boolean, hasToggle: boolean) {
   return {
@@ -452,7 +495,7 @@ async function saveStay() {
     <UButton v-if="scopeReady && bookingView === 'apartments' && visibleApartments.length" color="neutral" variant="soft" block :loading="historyLoading" icon="i-lucide-history" class="min-h-11 active:scale-[0.96] transition-transform" @click="loadMoreHistory">{{ historyDays ? t('calendarHistoryExtra.loadMorePast') : t('calendarHistoryExtra.pastTitle') }}</UButton>
     <EmptyState v-if="bookingView === 'apartments' && !visibleApartments.length" icon="i-lucide-building-2" :title="t('scope.apartmentsLabel')" :description="t('scope.loadErrorDescription')" />
 
-    <div v-else-if="bookingView === 'calendar' && calendarPeriod !== 'month' && visibleApartments.length" class="calendar-board surface">
+    <div v-else-if="bookingView === 'calendar' && calendarPeriod !== 'month' && visibleApartments.length" ref="calendarBoardRef" class="calendar-board surface">
       <div class="calendar-week-grid" :class="{ 'calendar-week-grid--day': calendarPeriod === 'day' }">
         <div class="calendar-corner">{{ t('calendar.apartment') }}</div>
         <div class="calendar-week-headings"><div v-for="day in calendarDays" :key="day" class="calendar-day-heading" :class="{ 'calendar-day-heading--today': isToday(day) }"><span>{{ weekday(day, true) }}</span><strong>{{ dayNumber(day) }}</strong></div></div>
@@ -500,7 +543,7 @@ async function saveStay() {
     </div>
     <EmptyState v-else-if="bookingView === 'calendar' && calendarPeriod !== 'month'" icon="i-lucide-building-2" :title="t('scope.apartmentsLabel')" :description="t('scope.loadErrorDescription')" />
 
-    <div v-else-if="bookingView === 'calendar' && calendarPeriod === 'month'" class="calendar-month surface">
+    <div v-else-if="bookingView === 'calendar' && calendarPeriod === 'month'" ref="calendarMonthRef" class="calendar-month surface">
       <div class="calendar-month-content">
         <div class="calendar-month-heading"><span v-for="day in monthWeekdayHeadings" :key="day">{{ weekday(day, true) }}</span></div>
 
@@ -510,18 +553,26 @@ async function saveStay() {
               <span class="calendar-month-date">{{ dayNumber(day) }}</span>
               <div class="mt-2 space-y-1">
                 <CalendarEventMarker
-                  v-for="marker in monthMarkerEntries(day).slice(0, 3)"
+                  v-for="(marker, markerIndex) in monthMarkerEntries(day)"
+                  v-show="isMonthMarkerDayExpanded(day) || markerIndex < 3"
                   :key="`${marker.apartmentId}-${day}`"
                   :marker="marker"
                   class="calendar-month-event"
-                  show-apartment-name
                   :show-guest-details="showGuestDetails"
                   :show-financial-details="showFinancialDetails"
                   :can-edit="canEditStays"
                   :can-manage-cleaning="user?.roles.includes('administrator')"
                   @edit="openEdit"
                 />
-                <span v-if="monthMarkerEntries(day).length > 3" class="calendar-marker-more">{{ t('common.more') }} {{ monthMarkerEntries(day).length - 3 }}</span>
+                <button
+                  v-if="monthMarkerEntries(day).length > 3"
+                  type="button"
+                  class="calendar-marker-more active:scale-[0.96] transition-transform"
+                  :aria-expanded="isMonthMarkerDayExpanded(day)"
+                  @click="toggleMonthMarkerDay(day)"
+                >
+                  {{ isMonthMarkerDayExpanded(day) ? t('common.hide') : `${t('common.more')} ${monthMarkerEntries(day).length - 3}` }}
+                </button>
               </div>
             </div>
           </div>
@@ -573,6 +624,11 @@ async function saveStay() {
           </section>
         </template>
       </div>
+    </div>
+
+    <div v-if="bookingView === 'calendar' && eventsOnly" class="calendar-events-legend" role="list" :aria-label="t('calendar.bookingsAndDepartures')">
+      <span class="calendar-events-legend__item" role="listitem"><span class="calendar-events-legend__swatch calendar-events-legend__swatch--arrival" aria-hidden="true" />{{ t('calendar.arrivals') }}</span>
+      <span class="calendar-events-legend__item" role="listitem"><span class="calendar-events-legend__swatch calendar-events-legend__swatch--departure" aria-hidden="true" />{{ t('calendar.departures') }}</span>
     </div>
 
     <StayDetailsSlideover v-model:open="detailsOpen" :stay="selectedStay" :can-edit="canEditStays" :can-manage-cleaning="Boolean(user?.roles.includes('administrator'))" :show-service-prices="showFinancialDetails" @edit="openEdit" />
