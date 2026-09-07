@@ -40,7 +40,10 @@ type WorkToDelete = { kind: WorkKind; id: string; label: string };
 const currentUser = useCurrentUser();
 const notificationState = useNotificationState();
 const { t } = useI18n();
-const tab = ref<"cleanings" | "tasks">("cleanings");
+const route = useRoute();
+const tab = ref<"cleanings" | "tasks">(
+  route.query.tab === "tasks" ? "tasks" : "cleanings",
+);
 const planningMode = ref<"days" | "cleaners" | "apartments">("days");
 const hideFinishedFromToday = ref(false);
 const historyOpen = ref(false);
@@ -142,7 +145,6 @@ const usageForm = reactive({ consumableId: "", quantity: 1, note: "" });
 const deleteOpen = ref(false);
 const cleaningProblemDeleteOpen = ref(false);
 const workToDelete = ref<WorkToDelete | null>(null);
-const route = useRoute();
 async function openCleaningFromQuery() {
   if (!isAdministrator.value) return;
   const stayId =
@@ -1571,6 +1573,8 @@ function taskMenuItems(task: Task): DropdownMenuItem[] {
             ><MoneyInput v-model="taskForm.ownerCostEur" /></UFormField
           ><UFormField name="dueOn" :label="t('workExtra.dueDate')"
             ><DateInput v-model="taskForm.dueOn" /></UFormField
+          ><UFormField name="checklist" :label="t('progress.checklist')" class="w-full"
+            ><div class="space-y-2"><div v-for="(item, index) in taskForm.checklist" :key="index" class="flex gap-2"><UInput v-model="item.label" class="min-w-0 flex-1" /><UButton type="button" color="error" variant="ghost" icon="i-lucide-trash-2" class="min-h-11 min-w-11" @click="taskForm.checklist.splice(index, 1)" /></div><UButton type="button" color="neutral" variant="soft" @click="taskForm.checklist.push({ label: '', checked: false })">Добавить пункт</UButton></div></UFormField
           ><UAlert
             v-if="error"
             color="error"

@@ -10,6 +10,7 @@ export const problemInputSchema = z.object({
 })
 export const problemUpdateSchema = problemInputSchema.pick({ description: true })
 export const problemResolveSchema = z.object({ resolutionComment: z.string().trim().max(2000).default('') })
+export const problemResolveWithTaskSchema = problemResolveSchema.extend({ taskDisposition: z.enum(['cancel', 'delete']).optional() })
 export const problemListQuerySchema = z.object({
   status: z.enum(['open', 'resolved', 'all']).default('open'),
   apartmentId: z.uuid({ error: 'Некорректный апартамент' }).optional()
@@ -18,6 +19,15 @@ export const problemExpenseSchema = z.object({
   occurredOn: z.iso.date(),
   amountEur: amountSchema,
   description: z.string().trim().min(1, 'Введите описание').max(200)
+})
+export const problemTaskInputSchema = z.object({
+  assigneeId: z.uuid({ error: 'Выберите исполнителя' }),
+  title: z.string().trim().min(1).max(200),
+  description: z.string().max(5000).default(''),
+  priority: z.enum(['low', 'normal', 'high', 'urgent']).default('normal'),
+  dueOn: z.iso.date().nullable().optional(),
+  ownerCostEur: amountSchema.optional().default(0),
+  checklist: z.array(z.object({ label: z.string().trim().min(1).max(200), checked: z.boolean() })).max(200).default([])
 })
 export type ProblemInput = z.infer<typeof problemInputSchema>
 export type ProblemListQuery = z.infer<typeof problemListQuerySchema>

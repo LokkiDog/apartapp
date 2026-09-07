@@ -1,5 +1,5 @@
 export type NotificationRealtimeMessage =
-  | { type: 'notification.created'; notification: { id: string; type: string; title: string; body: string; href: string; readAt: string | null; createdAt: string } }
+  | { type: 'notification.created'; notification: { id: string; type: string; title: string; body: string; href: string | null; readAt: string | null; createdAt: string } }
   | { type: 'notification.read'; id: string; readAt: string }
   | { type: 'notifications.read-all'; readAt: string }
   | { type: 'notifications.heartbeat' }

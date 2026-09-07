@@ -18,7 +18,7 @@ export async function notifyUsers(input: {
   type: 'stay_changed' | 'work_assigned' | 'work_rescheduled' | 'work_canceled' | 'problem' | 'manager_expense_report_published' | 'cleaning_changed'
   title: LocalizedCopy
   body: LocalizedCopy
-  href: string
+  href: string | null
 }) {
   if (!input.userIds.length) return
   const recipients = await db.select({ id: users.id, locale: users.locale }).from(users).where(and(

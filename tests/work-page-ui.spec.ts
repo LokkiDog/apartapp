@@ -14,6 +14,13 @@ function localeValue(locale: Record<string, unknown>, path: string) {
 }
 
 describe('work page UI contracts', () => {
+  it('opens the tasks tab from the dashboard tasks metric', () => {
+    const dashboard = readFileSync('src/pages/dashboard/DashboardPage.vue', 'utf8')
+    const work = readFileSync('src/pages/work/WorkPage.vue', 'utf8')
+    expect(dashboard).toContain('to="/work?tab=tasks"')
+    expect(work).toContain('route.query.tab === "tasks" ? "tasks" : "cleanings"')
+  })
+
   it('defines every literal translation key in all supported locales', () => {
     const locales = ['ru', 'en', 'he'].map(locale => JSON.parse(readFileSync(`i18n/locales/${locale}.json`, 'utf8')) as Record<string, unknown>)
     const keys = new Set<string>()

@@ -2,6 +2,7 @@ export type Task = {
   id: string
   apartmentId: string
   assigneeId: string | null
+  problemId?: string | null
   title: string
   description: string
   priority: string

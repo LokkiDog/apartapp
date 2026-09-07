@@ -8,7 +8,7 @@ export type NotificationItem = {
   type: NotificationType
   title: string
   body: string
-  href: string
+  href: string | null
   readAt: string | null
   createdAt: string
 }

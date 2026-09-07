@@ -16,14 +16,16 @@ const { t, locale } = useI18n()
 const isAdministrator = computed(() => Boolean(currentUser.value?.roles.includes('administrator')))
 const isWorkerView = computed(() => Boolean(currentUser.value?.roles.includes('cleaner') && !isAdministrator.value))
 const canViewWork = computed(() => canAccessWorkSection(currentUser.value))
-const [{ data: stays, status: staysStatus }, { data: cleanings, refresh: refreshCleanings }, { data: tasks }] = await Promise.all([
+const [{ data: stays, status: staysStatus }, { data: cleanings, refresh: refreshCleanings }, { data: tasks }, { data: problemSummary, refresh: refreshProblemSummary }] = await Promise.all([
   useAsyncData('dashboard-stays', () => $fetch<Stay[]>('/api/stays'), { server: false, default: () => [], watch: [currentUser] }),
   useAsyncData('dashboard-cleanings', () => canViewWork.value ? $fetch<Cleaning[]>('/api/cleanings') : Promise.resolve([]), { server: false, default: () => [], watch: [currentUser, canViewWork] }),
-  useAsyncData('dashboard-tasks', () => canViewWork.value ? $fetch<Task[]>('/api/tasks') : Promise.resolve([]), { server: false, default: () => [], watch: [currentUser, canViewWork] })
+  useAsyncData('dashboard-tasks', () => canViewWork.value ? $fetch<Task[]>('/api/tasks') : Promise.resolve([]), { server: false, default: () => [], watch: [currentUser, canViewWork] }),
+  useAsyncData('dashboard-problems', () => isAdministrator.value ? $fetch<{ openCount: number, items: Array<{ id: string, description: string, apartment: { name: string, hotel: { name: string } } }> }>('/api/problems/dashboard') : Promise.resolve({ openCount: 0, items: [] }), { server: false, default: () => ({ openCount: 0, items: [] }), watch: [currentUser, isAdministrator] })
 ])
 watch(notificationState.cleaningRevision, () => {
   if (currentUser.value && canViewWork.value) void refreshCleanings()
 })
+watch(notificationState.revision, () => { if (isAdministrator.value) void refreshProblemSummary() })
 const dashboardMonth = ref(currentDashboardMonth())
 const monthLabel = computed(() => {
   const label = dashboardMonthLabel(dashboardMonth.value, locale.value === 'he' ? 'he-IL' : locale.value === 'en' ? 'en-US' : 'ru-RU')
@@ -38,15 +40,10 @@ const upcoming = computed(() => (stays.value ?? []).filter(stay => stayInDashboa
 }).slice(0, 5))
 const openCleanings = computed(() => sortDashboardRecords((cleanings.value ?? []).filter(item => activeCleaning(item.status) && dateInDashboardMonth(item.scheduledOn, dashboardMonth.value))))
 const openTasks = computed(() => sortDashboardRecords((tasks.value ?? []).filter(item => activeTask(item.status) && dateInDashboardMonth(item.dueOn, dashboardMonth.value))))
-const problems = computed(() => sortDashboardRecords([
-  ...(cleanings.value ?? []).filter(item => problemDashboardRecord(item, dashboardMonth.value)),
-  ...(tasks.value ?? []).filter(item => problemDashboardRecord(item, dashboardMonth.value))
-]))
 const undatedWork = computed(() => sortDashboardRecords([
   ...(tasks.value ?? []).filter(item => (activeTask(item.status) || item.hasProblem) && undatedDashboardRecord(item))
 ]))
-function problemCount(item: Cleaning | Task) { return 'problems' in item ? item.problems.length : item.hasProblem ? 1 : 0 }
-const dashboardProblemCount = computed(() => problems.value.reduce((count, item) => count + problemCount(item), 0) + undatedWork.value.reduce((count, item) => count + problemCount(item), 0))
+const dashboardProblemCount = computed(() => problemSummary.value.openCount)
 const cleanerPool = computed(() => Number(openCleanings.value.reduce((sum, item) => sum.plus(item.tariffSnapshot.cleanerPoolEur ?? 0), new Decimal(0)).toDecimalPlaces(2)))
 const statusLabel = computed<Record<string, string>>(() => ({ unassigned: t('work.statusUnassigned'), assigned: t('work.statusAssigned'), in_progress: t('work.statusProgress'), open: t('work.statusOpen') }))
 
@@ -83,8 +80,8 @@ function dashboardWorkHref(work: Cleaning | Task) { return 'title' in work ? `/t
     <div v-else class="grid" :class="isWorkerView ? 'dashboard-worker-metrics' : 'grid-cols-2 gap-3 lg:grid-cols-4'">
       <NuxtLink v-if="!isWorkerView" to="/calendar" class="dashboard-metric-link"><MetricTile :label="t('dashboard.bookings')" :value="upcoming.length" icon="i-lucide-log-in" /></NuxtLink>
       <NuxtLink v-if="canViewWork" to="/work" class="dashboard-metric-link"><MetricTile :label="t('dashboard.cleanings')" :value="openCleanings.length" icon="i-lucide-broom" /></NuxtLink>
-      <NuxtLink v-if="canViewWork" to="/work" class="dashboard-metric-link"><MetricTile :label="t('dashboard.tasks')" :value="openTasks.length" icon="i-lucide-clipboard-check" /></NuxtLink>
-      <NuxtLink v-if="isAdministrator" to="/work" class="dashboard-metric-link"><MetricTile :label="t('dashboard.problems')" :value="dashboardProblemCount" icon="i-lucide-triangle-alert" :tone="dashboardProblemCount ? 'danger' : 'neutral'" /></NuxtLink>
+      <NuxtLink v-if="canViewWork" to="/work?tab=tasks" class="dashboard-metric-link"><MetricTile :label="t('dashboard.tasks')" :value="openTasks.length" icon="i-lucide-clipboard-check" /></NuxtLink>
+      <NuxtLink v-if="isAdministrator" to="/problems" class="dashboard-metric-link"><MetricTile :label="t('dashboard.problems')" :value="dashboardProblemCount" icon="i-lucide-triangle-alert" :tone="dashboardProblemCount ? 'danger' : 'neutral'" /></NuxtLink>
       <MetricTile v-if="isWorkerView" :label="t('dashboard.pool')" :value="formatEuro(cleanerPool)" icon="i-lucide-wallet" />
     </div>
 
@@ -98,7 +95,7 @@ function dashboardWorkHref(work: Cleaning | Task) { return 'title' in work ? `/t
 
       <section v-if="canViewWork" class="surface mt-4">
         <div class="flex min-h-16 items-center justify-between px-5 sm:px-6"><h2 class="font-semibold">{{ t('dashboard.attention') }}</h2><UButton to="/work" color="neutral" variant="ghost">{{ t('dashboard.toWork') }}</UButton></div>
-        <div v-if="problems.length || undatedWork.length" class="divide-y divide-[var(--color-line)] px-5 sm:px-6"><NuxtLink v-for="problem in problems.slice(0, 4)" :key="problem.id" :to="dashboardWorkHref(problem)" class="dashboard-list-row"><div class="flex items-start gap-3"><UIcon name="i-lucide-circle-alert" class="mt-0.5 size-5 shrink-0 text-red-600" /><div><p class="font-semibold">{{ problem.apartment.name }}</p><p class="mt-1 text-sm text-red-700">{{ problem.problemDescription || t('dashboard.workProblem') }}</p></div></div></NuxtLink><NuxtLink v-for="work in undatedWork.slice(0, 4)" :key="`undated-${work.id}`" :to="dashboardWorkHref(work)" class="dashboard-list-row"><div class="flex items-start gap-3"><UIcon name="i-lucide-calendar-off" class="mt-0.5 size-5 shrink-0 text-amber-600" /><div><p class="font-semibold">{{ work.apartment.name }}</p><p class="mt-1 text-sm text-amber-700">{{ work.hasProblem ? (work.problemDescription || t('dashboard.workProblem')) : t('dashboard.assignDate') }}</p></div></div></NuxtLink></div>
+        <div v-if="problemSummary.items.length || undatedWork.length" class="divide-y divide-[var(--color-line)] px-5 sm:px-6"><NuxtLink v-for="problem in problemSummary.items" :key="problem.id" :to="`/problems?problemId=${encodeURIComponent(problem.id)}`" class="dashboard-list-row"><div class="flex items-start gap-3"><UIcon name="i-lucide-circle-alert" class="mt-0.5 size-5 shrink-0 text-red-600" /><div><p class="font-semibold">{{ problem.apartment.name }}</p><p class="mt-1 text-sm text-red-700">{{ problem.description }}</p></div></div></NuxtLink><NuxtLink v-for="work in undatedWork.slice(0, 4)" :key="`undated-${work.id}`" :to="dashboardWorkHref(work)" class="dashboard-list-row"><div class="flex items-start gap-3"><UIcon name="i-lucide-calendar-off" class="mt-0.5 size-5 shrink-0 text-amber-600" /><div><p class="font-semibold">{{ work.apartment.name }}</p><p class="mt-1 text-sm text-amber-700">{{ work.hasProblem ? (work.problemDescription || t('dashboard.workProblem')) : t('dashboard.assignDate') }}</p></div></div></NuxtLink></div>
         <EmptyState v-else icon="i-lucide-circle-check" :title="t('dashboard.calm')" :description="t('dashboard.calmDescription')" />
       </section>
     </div>

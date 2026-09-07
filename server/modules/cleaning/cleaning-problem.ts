@@ -1,7 +1,8 @@
 import { and, eq, inArray } from 'drizzle-orm'
 import { randomUUID } from 'node:crypto'
 import type { Actor } from '../../infrastructure/auth/actor'
-import { attachments, cleaningProblems, financialEntries } from '../../infrastructure/database/schema'
+import { attachments, cleaningProblems, financialEntries, tasks } from '../../infrastructure/database/schema'
+import { administratorsForOrganization, notifyUsers } from '../../infrastructure/notification/publish'
 
 type ProblemInput = { id: string; description: string }
 
@@ -36,14 +37,25 @@ export async function syncCleaningProblems(tx: any, actor: Actor, cleaningId: st
   if (existing.some((problem: { id: string, resolvedAt: Date | null }) => removedIds.includes(problem.id) && problem.resolvedAt)) {
     throw createError({ statusCode: 409, statusMessage: 'Решённую проблему нельзя удалить из уборки' })
   }
-  const expense = await tx.select({ id: financialEntries.id }).from(financialEntries).where(inArray(financialEntries.problemId, removedIds)).limit(1)
-  if (expense.length) throw createError({ statusCode: 409, statusMessage: 'Проблему с расходами можно удалить только в разделе «Проблемы»' })
+  const [expense, solutionTask] = await Promise.all([
+    tx.select({ problemId: financialEntries.problemId }).from(financialEntries).where(inArray(financialEntries.problemId, removedIds)),
+    tx.select({ problemId: tasks.problemId }).from(tasks).where(inArray(tasks.problemId, removedIds))
+  ])
+  const dependentIds = new Set([...expense.map((item: { problemId: string | null }) => item.problemId), ...solutionTask.map((item: { problemId: string | null }) => item.problemId)].filter(Boolean) as string[])
+  if (dependentIds.size) {
+    const requested = existing.filter((problem: { id: string, description: string }) => dependentIds.has(problem.id))
+    await tx.update(cleaningProblems).set({ deletionRequestedAt: new Date(), deletionRequestedById: actor.id, updatedAt: new Date() }).where(inArray(cleaningProblems.id, [...dependentIds]))
+    const administrators = await administratorsForOrganization(actor.organizationId)
+    await Promise.all(requested.map((problem: { id: string, description: string }) => notifyUsers({ organizationId: actor.organizationId, userIds: administrators, type: 'problem', title: 'Запрошено удаление проблемы', body: problem.description, href: `/problems?problemId=${problem.id}` })))
+  }
+  const removableIds = removedIds.filter((id: string) => !dependentIds.has(id))
+  if (!removableIds.length) return [] as string[]
   const removedAttachments = await tx.select({ storageKey: attachments.storageKey }).from(attachments).where(and(
     eq(attachments.entityType, 'cleaning_problem'),
-    inArray(attachments.entityId, removedIds)
+    inArray(attachments.entityId, removableIds)
   ))
-  await tx.delete(attachments).where(and(eq(attachments.entityType, 'cleaning_problem'), inArray(attachments.entityId, removedIds)))
-  await tx.delete(cleaningProblems).where(inArray(cleaningProblems.id, removedIds))
+  await tx.delete(attachments).where(and(eq(attachments.entityType, 'cleaning_problem'), inArray(attachments.entityId, removableIds)))
+  await tx.delete(cleaningProblems).where(inArray(cleaningProblems.id, removableIds))
   return removedAttachments.map((attachment: { storageKey: string }) => attachment.storageKey)
 }
 

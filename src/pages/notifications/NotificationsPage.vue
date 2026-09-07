@@ -92,7 +92,7 @@ async function read(item: Notification) {
       await $fetch(`/api/notifications/${item.id}/read`, { method: 'POST' })
       markLocallyRead([item.id])
     }
-    await navigateTo(item.href)
+    if (item.href) await navigateTo(item.href)
   } catch (cause: any) {
     actionError.value = errorMessage(cause)
   } finally {

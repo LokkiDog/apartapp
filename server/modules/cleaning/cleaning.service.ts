@@ -157,7 +157,10 @@ export async function completeCleaning(actor: Actor, cleaningId: string, input: 
   })
   await Promise.allSettled(removedStorageKeys.map(storageKey => fileStorage.remove(storageKey)))
   await writeAuditLog({ organizationId: actor.organizationId, actorId: actor.id, action: 'cleaning.completed', entityType: 'cleaning', entityId: cleaningId, payload: { problemCount: problems.length } })
-  if (problems.length) await notifyUsers({ organizationId: actor.organizationId, userIds: await administratorsForOrganization(actor.organizationId), type: 'problem', title: 'Проблема в уборке', body: problemDescription, href: `/cleanings/${cleaningId}` })
+  if (problems.length) {
+    const administrators = await administratorsForOrganization(actor.organizationId)
+    await Promise.all(problems.map(problem => notifyUsers({ organizationId: actor.organizationId, userIds: administrators, type: 'problem', title: 'Проблема в уборке', body: problem.description, href: `/problems?problemId=${problem.id}` })))
+  }
   const afterEvent = await cleaningEventSnapshot(cleaningId)
   if (beforeEvent && afterEvent) await publishCleaningChange({ actor, before: beforeEvent, after: afterEvent, reason: 'completed' })
   return updated
