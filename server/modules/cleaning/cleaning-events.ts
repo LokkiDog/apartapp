@@ -59,6 +59,7 @@ async function audience(input: { actor: Actor; before?: CleaningEventSnapshot; a
   const candidates = await db.select({ id: users.id, roles: users.roles }).from(users).where(and(eq(users.organizationId, input.actor.organizationId), eq(users.status, 'active')))
   const activeIds = new Set(candidates.map(user => user.id))
   const administratorIds = candidates.filter(user => user.roles.includes('administrator')).map(user => user.id)
+  const specialistIds = candidates.filter(user => user.roles.includes('specialist')).map(user => user.id)
   const managerRows = apartmentIds.length
     ? await db.select({ userId: apartmentManagers.userId }).from(apartmentManagers).where(and(eq(apartmentManagers.organizationId, input.actor.organizationId), inArray(apartmentManagers.apartmentId, apartmentIds)))
     : []
@@ -71,6 +72,7 @@ async function audience(input: { actor: Actor; before?: CleaningEventSnapshot; a
     realtimeUserIds: unique([
       input.actor.id,
       ...administratorIds,
+      ...specialistIds,
       ...previousCleanerIds,
       ...currentCleanerIds,
       ...managerRows.map(row => row.userId).filter(id => activeIds.has(id))

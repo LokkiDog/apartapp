@@ -4,6 +4,10 @@ type Tariff = { ownerTotalEur: number; cleanerPoolEur: number; laundryEur: numbe
 type UsageMovement = { apartmentId: string; consumableId: string; quantity: string; totalCostEur: number }
 
 export function canBeWorkAssignee(roles: string[]) {
+  return roles.includes('cleaner') || roles.includes('administrator') || roles.includes('specialist')
+}
+
+export function canBeCleaningAssignee(roles: string[]) {
   return roles.includes('cleaner') || roles.includes('administrator')
 }
 

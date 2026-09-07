@@ -23,6 +23,7 @@ const currentUser = useCurrentUser()
 const cleaningRealtime = useCleaningRealtimeState()
 const id = String(route.params.id)
 const isAdministrator = computed(() => Boolean(currentUser.value?.roles.includes('administrator')))
+const isSpecialist = computed(() => Boolean(currentUser.value?.roles.includes('specialist')))
 const workRequest = await useAsyncData(`work-detail-${props.kind}-${id}`, () => currentUser.value ? $fetch<Cleaning | Task>(`/api/${props.kind}s/${id}`) : Promise.resolve(null), { server: false, default: () => null, watch: [currentUser] })
 const work = workRequest.data as Ref<Cleaning | Task | null>
 const { status, refresh, error: workLoadError } = workRequest
@@ -44,7 +45,11 @@ const coordinatesCopyError = ref('')
 let coordinatesCopyTimer: number | null = null
 const cameFromInventory = computed(() => props.kind === 'cleaning' && route.query.from === 'inventory')
 const focusConsumableId = computed(() => typeof route.query.focusConsumableId === 'string' ? route.query.focusConsumableId : '')
-const backHref = computed(() => cameFromInventory.value ? '/inventory' : '/work')
+const backHref = computed(() => cameFromInventory.value
+  ? '/inventory'
+  : props.kind === 'task' && isSpecialist.value
+    ? '/tasks'
+    : '/work')
 const backLabel = computed(() => cameFromInventory.value ? t('inventoryDiscrepancy.back') : t('work.back'))
 
 const cleaning = computed(() => props.kind === 'cleaning' ? work.value as Cleaning | null : null)
@@ -62,15 +67,16 @@ const currentCleaningAssignment = computed(() => cleaning.value?.assignments.fin
 const assignedToCurrent = computed(() => props.kind === 'cleaning'
   ? Boolean(currentCleaningAssignment.value)
   : task.value?.assigneeId === currentUser.value?.id)
-const canAcceptCleaning = computed(() => Boolean(cleaning.value && ['assigned', 'in_progress'].includes(cleaning.value.status) && currentCleaningAssignment.value && !currentCleaningAssignment.value.acceptedAt))
+const canAcceptCleaning = computed(() => Boolean(cleaning.value && !isSpecialist.value && ['assigned', 'in_progress'].includes(cleaning.value.status) && currentCleaningAssignment.value && !currentCleaningAssignment.value.acceptedAt))
 const showCleaningAcceptance = computed(() => canAcceptCleaning.value)
-const canStartCleaning = computed(() => Boolean(cleaning.value && cleaning.value.status === 'assigned' && (isAdministrator.value || Boolean(currentCleaningAssignment.value?.acceptedAt))))
+const canStartCleaning = computed(() => Boolean(cleaning.value && !isSpecialist.value && cleaning.value.status === 'assigned' && (isAdministrator.value || Boolean(currentCleaningAssignment.value?.acceptedAt))))
 const canProgress = computed(() => Boolean(work.value && (props.kind === 'cleaning'
-  ? work.value.status === 'in_progress' && (isAdministrator.value || Boolean(currentCleaningAssignment.value?.acceptedAt))
+  ? !isSpecialist.value && work.value.status === 'in_progress' && (isAdministrator.value || Boolean(currentCleaningAssignment.value?.acceptedAt))
   : !['completed', 'canceled'].includes(work.value.status) && (isAdministrator.value || assignedToCurrent.value))))
 const canComplete = computed(() => canProgress.value)
 const inventoryEditable = computed(() => Boolean(isAdministrator.value && cleaning.value?.status === 'completed'))
 const canManage = computed(() => isAdministrator.value)
+const canUpdateLinen = computed(() => Boolean(cleaning.value && (isAdministrator.value || isSpecialist.value || assignedToCurrent.value)))
 const statusLabels = computed<Record<string, string>>(() => ({ unassigned: t('work.statusUnassigned'), assigned: t('work.statusAssigned'), in_progress: t('work.statusProgress'), completed: t('work.statusCompleted'), canceled: t('work.statusCanceled'), open: t('work.statusOpen') }))
 const statusTones: Record<string, 'neutral' | 'success' | 'warning' | 'danger' | 'info'> = { unassigned: 'warning', assigned: 'info', in_progress: 'warning', completed: 'success', canceled: 'neutral', open: 'info' }
 
@@ -85,7 +91,7 @@ watch(cleaningRealtime.revision, async () => {
 })
 
 watch([cleaning, status], async () => {
-  if (cleaning.value && (!['completed', 'canceled'].includes(cleaning.value.status) || isAdministrator.value)) {
+  if (cleaning.value && !isSpecialist.value && (!['completed', 'canceled'].includes(cleaning.value.status) || isAdministrator.value)) {
     try { inventoryReports.value = await $fetch<InventoryItem[]>(`/api/cleanings/${id}/inventory`); inventoryLoaded.value = true } catch { inventoryReports.value = []; inventoryLoaded.value = false }
   }
 }, { immediate: true })
@@ -194,6 +200,16 @@ async function startAssignedCleaning() {
     error.value = cause?.data?.statusMessage ?? t('common.error')
   } finally { startPending.value = false }
 }
+async function updateLinen(collected: boolean) {
+  if (!cleaning.value) return
+  pending.value = true; error.value = ''
+  try {
+    await $fetch(`/api/cleanings/${id}/linen`, { method: 'PATCH', body: { collected } })
+    await refresh()
+  } catch (cause: any) {
+    error.value = cause?.data?.statusMessage ?? t('common.error')
+  } finally { pending.value = false }
+}
 
 async function copyHotelCoordinates() {
   coordinatesCopyError.value = ''
@@ -254,15 +270,20 @@ function requestComplete() {
           <p class="detail-label">{{ t('apartments.instructions') }}</p>
           <p class="mt-1 whitespace-pre-line break-words text-sm leading-5 text-[var(--color-muted)]">{{ cleaning.apartment.instructions }}</p>
         </div>
-        <div v-if="props.kind === 'cleaning' && cleaning?.tariffSnapshot.ownerTotalEur !== undefined"><p class="detail-label">{{ t('work.cost') }}</p><p class="font-semibold tabular-nums">{{ formatEuro(cleaning.tariffSnapshot.ownerTotalEur) }}</p></div>
-        <div v-if="props.kind === 'cleaning' && cleaning?.tariffSnapshot.cleanerPoolEur !== undefined"><p class="detail-label">{{ t('work.payout') }}</p><p class="font-semibold tabular-nums">{{ formatEuro(cleaning.tariffSnapshot.cleanerPoolEur) }}</p></div>
+        <div v-if="props.kind === 'cleaning' && cleaning?.tariffSnapshot?.ownerTotalEur !== undefined"><p class="detail-label">{{ t('work.cost') }}</p><p class="font-semibold tabular-nums">{{ formatEuro(cleaning.tariffSnapshot.ownerTotalEur) }}</p></div>
+        <div v-if="props.kind === 'cleaning' && cleaning?.tariffSnapshot?.cleanerPoolEur !== undefined"><p class="detail-label">{{ t('work.payout') }}</p><p class="font-semibold tabular-nums">{{ formatEuro(cleaning.tariffSnapshot.cleanerPoolEur) }}</p></div>
         <div v-if="props.kind === 'cleaning' && hotelLocation" class="work-directions-action col-span-full"><UButton color="primary" variant="link" class="work-directions-action__button" @click="directionsOpen = true">{{ t('directions.title') }}</UButton></div>
       </section>
       <div v-if="showCleaningAcceptance || canStartCleaning" class="work-detail-mobile-cleaning-action sm:hidden">
         <UButton v-if="showCleaningAcceptance" class="min-h-11 w-full justify-center" color="warning" :loading="acceptancePending" @click="acceptAssignedCleaning">{{ t('work.acceptCleaning') }}</UButton>
         <UButton v-else class="min-h-11 w-full justify-center" icon="i-lucide-play" :loading="startPending" @click="startAssignedCleaning">{{ t('work.startCleaning') }}</UButton>
       </div>
-      <WorkProgressForm :key="`${work.id}-${attachments.length}`" :kind="props.kind" :checklist="work.checklist" :comment="work.comment" :has-problem="work.hasProblem" :problem-description="work.problemDescription" :problems="cleaning?.problems ?? []" :inventory-reports="inventoryReports" :attachments="attachments" :focus-consumable-id="focusConsumableId" :editable="canProgress" :inventory-editable="inventoryEditable" :can-approve-inventory-discrepancy="inventoryEditable" :can-complete="canComplete" :busy="pending" :error="error" :finish-hint="finishHint" @save="payload => saveProgress(payload)" @complete="payload => saveProgress(payload, true)" @save-inventory="saveInventoryOnly" @approve-inventory-discrepancy="requestInventoryDiscrepancyApproval">
+      <WorkProgressForm :key="`${work.id}-${attachments.length}`" :kind="props.kind" :checklist="work.checklist" :comment="work.comment" :has-problem="work.hasProblem" :problem-description="work.problemDescription" :problems="cleaning?.problems ?? []" :inventory-reports="inventoryReports" :attachments="attachments" :focus-consumable-id="focusConsumableId" :editable="canProgress" :inventory-editable="inventoryEditable" :can-approve-inventory-discrepancy="inventoryEditable" :show-checklist="!isSpecialist" :show-inventory="props.kind !== 'cleaning' || !isSpecialist" :show-comment-problems="props.kind !== 'cleaning' || !isSpecialist" :can-complete="canComplete" :busy="pending" :error="error" :finish-hint="finishHint" @save="payload => saveProgress(payload)" @complete="payload => saveProgress(payload, true)" @save-inventory="saveInventoryOnly" @approve-inventory-discrepancy="requestInventoryDiscrepancyApproval">
+        <template v-if="props.kind === 'cleaning' && canUpdateLinen" #after-checklist>
+          <section class="progress-section">
+            <UCheckbox :model-value="cleaning?.linenCollected" :label="t('work.linenCollected')" class="min-h-11 items-center font-medium" @update:model-value="updateLinen($event === true)" />
+          </section>
+        </template>
         <template v-if="props.kind === 'cleaning' && canManage" #actions-left>
           <UButton color="error" variant="soft" icon="i-lucide-trash-2" :aria-label="t('work.deleteCleaning')" @click="deleteOpen = true" />
           <UButton :to="`/work?cleaningId=${encodeURIComponent(id)}`" color="neutral" variant="soft" icon="i-lucide-pencil" :aria-label="t('work.editCleaning')" />

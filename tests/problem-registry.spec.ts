@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { problemExpenseSchema, problemInputSchema, problemListQuerySchema, problemResolveSchema } from '../shared/contracts/problem'
+import { problemExpenseSchema, problemInputSchema, problemListQuerySchema, problemResolveSchema, problemTaskInputSchema } from '../shared/contracts/problem'
 import { createManagerExpenseCategoryVisibility, managerExpenseReportLines, managerExpenseReportTotal } from '../src/pages/statement/model/manager-expense-report'
 
 const apartmentId = '00000000-0000-4000-8000-000000000001'
@@ -12,6 +12,8 @@ describe('problem registry contracts', () => {
     expect(problemResolveSchema.parse({}).resolutionComment).toBe('')
     expect(problemExpenseSchema.parse({ occurredOn: '2026-09-07', amountEur: '12.345', description: 'Part' }).amountEur).toBe(12.35)
     expect(problemExpenseSchema.safeParse({ occurredOn: '2026-09-07', amountEur: 0, description: 'Part' }).success).toBe(false)
+    expect(problemTaskInputSchema.parse({ assigneeId: apartmentId, title: 'Repair' }).ownerCostEur).toBe(0)
+    expect(problemTaskInputSchema.safeParse({ assigneeId: apartmentId, title: 'Repair', ownerCostEur: -1 }).success).toBe(false)
     expect(problemListQuerySchema.parse({}).status).toBe('open')
   })
 

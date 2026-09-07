@@ -4,7 +4,7 @@ import { specialServiceIconNames } from '../config/special-service-icons'
 
 export const moneyEurSchema = z.number().finite().nonnegative().max(9_999_999_999.99).transform(value => Number(new Decimal(value).toDecimalPlaces(2, Decimal.ROUND_HALF_UP)))
 
-export const userRoleSchema = z.enum(['administrator', 'manager', 'cleaner'])
+export const userRoleSchema = z.enum(['administrator', 'manager', 'cleaner', 'specialist'])
 export function isApartmentOwnerEligible(roles: readonly string[]) {
   return roles.includes('manager') || roles.includes('administrator')
 }
@@ -76,6 +76,7 @@ export const apartmentInputSchema = z.object({
   checkInTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Укажите время заезда'),
   checkOutTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Укажите время выезда'),
   instructions: z.string().max(5000, 'Инструкции не должны превышать 5000 символов').optional().default(''),
+  automaticLinenCollection: z.boolean().optional().default(false),
   additionalChecklist: checklistLabelsSchema.default([]),
   status: apartmentStatusSchema.optional().default('active'),
   tariffOverride: apartmentTariffInputSchema.optional()
@@ -151,6 +152,10 @@ export const cleaningUpdateSchema = withCalculatedTariff({
   checklist: cleaningChecklistSchema.optional(),
   reason: z.string().trim().max(1000).default('')
 })
+
+export const cleaningLinenUpdateSchema = z.object({
+  collected: z.boolean()
+}).strict()
 
 export const cleaningRouteUpdateSchema = z.object({
   cleanerId: z.uuid(),

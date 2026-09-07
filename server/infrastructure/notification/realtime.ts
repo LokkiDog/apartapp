@@ -3,7 +3,7 @@ export type NotificationRealtimeMessage =
   | { type: 'notification.read'; id: string; readAt: string }
   | { type: 'notifications.read-all'; readAt: string }
   | { type: 'notifications.heartbeat' }
-  | { type: 'cleaning.changed'; cleaningId: string; reason: 'created' | 'updated' | 'accepted' | 'started' | 'progress' | 'inventory' | 'tariff' | 'route' | 'completed' | 'deleted'; occurredAt: string }
+  | { type: 'cleaning.changed'; cleaningId: string; reason: 'created' | 'updated' | 'accepted' | 'started' | 'progress' | 'inventory' | 'tariff' | 'route' | 'completed' | 'deleted' | 'linen'; occurredAt: string }
   | { type: 'session.revoked'; reason: 'archived' }
 
 type NotificationPeer = { id: string; send: (data: NotificationRealtimeMessage) => void }

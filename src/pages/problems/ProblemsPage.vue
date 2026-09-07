@@ -79,8 +79,9 @@ watch(problems, async rows => {
 }, { immediate: true })
 const taskAssigneeOptions = computed(() => {
   const cleaners = (team.value ?? []).filter(member => member.roles.includes('cleaner')).map(member => ({ label: member.name, value: member.id }))
+  const specialists = (team.value ?? []).filter(member => member.roles.includes('specialist') && !member.roles.includes('cleaner') && !member.roles.includes('administrator')).map(member => ({ label: member.name, value: member.id }))
   const admins = (team.value ?? []).filter(member => member.roles.includes('administrator') && !member.roles.includes('cleaner')).map(member => ({ label: member.name, value: member.id }))
-  return [...(cleaners.length ? [[{ type: 'label', label: t('common.cleaners'), value: '__cleaners__' }, ...cleaners]] : []), ...(admins.length ? [[{ type: 'label', label: t('common.administrators'), value: '__admins__' }, ...admins]] : [])]
+  return [...(cleaners.length ? [[{ type: 'label', label: t('common.cleaners'), value: '__cleaners__' }, ...cleaners]] : []), ...(specialists.length ? [[{ type: 'label', label: t('roles.specialist'), value: '__specialists__' }, ...specialists]] : []), ...(admins.length ? [[{ type: 'label', label: t('common.administrators'), value: '__admins__' }, ...admins]] : [])]
 })
 
 function openCreate() {

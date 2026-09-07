@@ -20,7 +20,7 @@ async function issueToken(userId: string, type: 'invitation' | 'password_reset')
   return token
 }
 
-export async function inviteUser(input: { organizationId: string; name: string; email: string; roles: Array<'administrator' | 'manager' | 'cleaner'>; locale?: 'ru' | 'en' | 'he' }) {
+export async function inviteUser(input: { organizationId: string; name: string; email: string; roles: Array<'administrator' | 'manager' | 'cleaner' | 'specialist'>; locale?: 'ru' | 'en' | 'he' }) {
   const email = input.email.toLowerCase()
   const existing = await db.query.users.findFirst({ where: and(eq(users.organizationId, input.organizationId), eq(users.email, email)) })
   if (existing) throw createError({ statusCode: 409, statusMessage: 'Пользователь с этим email уже существует' })

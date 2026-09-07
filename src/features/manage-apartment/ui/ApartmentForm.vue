@@ -258,6 +258,7 @@ async function save(event: FormSubmitEvent<ApartmentInput>) {
           placeholder="Например: ключи находятся в локбоксе у входа…"
         />
       </UFormField>
+      <UCheckbox v-model="form.automaticLinenCollection" :label="t('apartments.automaticLinenCollection')" class="mt-5 min-h-11" />
     </section>
 
     <UAlert v-if="error" color="error" variant="soft" icon="i-lucide-circle-alert" :title="t('apartments.saveError')" :description="error" />

@@ -2,8 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { canBeWorkAssignee, canChangeTaskApartment, cleaningTariffHasChanged, restoredInventoryLot } from '../server/modules/work/work-policy'
 
 describe('work server policies', () => {
-  it('allows active cleaners and administrators to be work assignees', () => {
+  it('allows active cleaners, specialists and administrators to be work assignees', () => {
     expect(canBeWorkAssignee(['cleaner'])).toBe(true)
+    expect(canBeWorkAssignee(['specialist'])).toBe(true)
     expect(canBeWorkAssignee(['administrator'])).toBe(true)
     expect(canBeWorkAssignee(['administrator', 'manager'])).toBe(true)
     expect(canBeWorkAssignee(['manager'])).toBe(false)

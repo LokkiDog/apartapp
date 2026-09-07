@@ -75,7 +75,7 @@ export async function createProblemTask(actor: Actor, problemId: string, input: 
   const active = await db.query.tasks.findFirst({ where: and(eq(tasks.problemId, problemId), inArray(tasks.status, ['open', 'in_progress'])) })
   if (active) throw createError({ statusCode: 409, statusMessage: 'Для проблемы уже назначена активная задача' })
   const assignee = await db.query.users.findFirst({ where: and(eq(users.id, data.assigneeId), eq(users.organizationId, actor.organizationId), eq(users.status, 'active')) })
-  if (!assignee || !canBeWorkAssignee(assignee.roles)) throw createError({ statusCode: 400, statusMessage: 'Исполнитель должен быть активной уборщицей или администратором' })
+  if (!assignee || !canBeWorkAssignee(assignee.roles)) throw createError({ statusCode: 400, statusMessage: 'Исполнитель должен быть активным исполнителем, специалистом или администратором' })
   const [task] = await db.insert(tasks).values({ ...data, organizationId: actor.organizationId, apartmentId: problem.apartmentId, problemId, createdById: actor.id }).returning()
   if (!task) throw createError({ statusCode: 500, statusMessage: 'Не удалось создать задачу' })
   await notifyUsers({ organizationId: actor.organizationId, userIds: [data.assigneeId], type: 'work_assigned', title: 'Назначена задача', body: task.title, href: `/tasks/${task.id}` })

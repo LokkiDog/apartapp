@@ -42,7 +42,7 @@ export function unacceptedCleaningsForCleaner(cleanings: Cleaning[], cleanerId: 
     .sort((left, right) => left.scheduledOn.localeCompare(right.scheduledOn) || routePosition(left, cleanerId) - routePosition(right, cleanerId) || left.apartment.name.localeCompare(right.apartment.name))
 }
 
-export function buildCleaningPlan(cleanings: Cleaning[], today = localDate(), hideFinishedFromToday = false): CleaningPlan {
+export function buildCleaningPlan(cleanings: Cleaning[], today = localDate(), hideFinishedFromToday = false, keepPastUncollectedLinen = false): CleaningPlan {
   const horizon = shiftDate(today, 14)
   const attention: Cleaning[] = []
   const days = new Map<string, Cleaning[]>()
@@ -50,7 +50,8 @@ export function buildCleaningPlan(cleanings: Cleaning[], today = localDate(), hi
   const history: Cleaning[] = []
   for (const cleaning of cleanings) {
     const finished = ['completed', 'canceled'].includes(cleaning.status)
-    if (finished && cleaning.scheduledOn < today) {
+    const hasPendingLinen = keepPastUncollectedLinen && cleaning.status === 'completed' && !cleaning.linenCollected
+    if (finished && cleaning.scheduledOn < today && !hasPendingLinen) {
       history.push(cleaning)
       continue
     }

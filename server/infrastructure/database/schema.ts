@@ -21,7 +21,7 @@ const timestamps = {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
 }
 
-export const userRoleEnum = pgEnum('user_role', ['administrator', 'manager', 'cleaner'])
+export const userRoleEnum = pgEnum('user_role', ['administrator', 'manager', 'cleaner', 'specialist'])
 export const appLocaleEnum = pgEnum('app_locale', ['ru', 'en', 'he'])
 export const userStatusEnum = pgEnum('user_status', ['invited', 'active', 'blocked', 'archived'])
 export const hotelStatusEnum = pgEnum('hotel_status', ['active', 'archived'])
@@ -102,6 +102,7 @@ export const apartments = pgTable('apartments', {
   checkInTime: text('check_in_time').notNull(),
   checkOutTime: text('check_out_time').notNull(),
   instructions: text('instructions').notNull().default(''),
+  automaticLinenCollection: boolean('automatic_linen_collection').notNull().default(false),
   additionalChecklist: jsonb('additional_checklist').$type<string[]>().notNull().default(sql`'[]'::jsonb`),
   status: apartmentStatusEnum('status').notNull().default('active'),
   tariffOverride: jsonb('tariff_override').$type<CleaningTariff | null>(),
@@ -178,6 +179,7 @@ export const cleanings = pgTable('cleanings', {
   problemDescription: text('problem_description').notNull().default(''),
   startedAt: timestamp('started_at', { withTimezone: true }),
   completedAt: timestamp('completed_at', { withTimezone: true }),
+  linenCollected: boolean('linen_collected').notNull().default(false),
   ...timestamps
 }, table => [index('cleaning_report_date_idx').on(table.organizationId, table.scheduledOn)])
 

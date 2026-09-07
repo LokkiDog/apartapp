@@ -50,7 +50,7 @@ export function isAdministrator(actor: Actor) {
 }
 
 export function canAccessWorkSection(actor: Actor) {
-  return isAdministrator(actor) || actor.roles.includes('cleaner')
+  return isAdministrator(actor) || actor.roles.includes('cleaner') || actor.roles.includes('specialist')
 }
 
 export function requireWorkSectionAccess(actor: Actor) {
@@ -60,7 +60,7 @@ export function requireWorkSectionAccess(actor: Actor) {
 }
 
 export function canAccessAssignedWork(actor: Actor, assigneeId: string | null) {
-  return isAdministrator(actor) || (actor.roles.includes('cleaner') && assigneeId === actor.id)
+  return isAdministrator(actor) || ((actor.roles.includes('cleaner') || actor.roles.includes('specialist')) && assigneeId === actor.id)
 }
 
 export async function canManageApartment(actor: Actor, apartmentId: string) {

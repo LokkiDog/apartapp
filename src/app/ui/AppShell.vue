@@ -19,6 +19,12 @@ const userSession = useUserSession();
 const moreOpen = ref(false);
 const logoutPending = ref(false);
 const mobileNavigationReady = ref(false);
+const isSpecialistNavigation = computed(() =>
+  Boolean(
+    user.value?.roles.includes("specialist") &&
+      !user.value.roles.includes("administrator"),
+  ),
+);
 const { isLoading: isPageLoading } = useLoadingIndicator({
   throttle: 120,
   hideDelay: 100,
@@ -33,6 +39,10 @@ const work = computed<NavItem[]>(() => [
   { to: "/", label: t("nav.home"), icon: "i-lucide-layout-dashboard" },
   { to: "/calendar", label: t("nav.bookings"), icon: "i-lucide-calendar-days" },
   { to: "/work", label: t("nav.cleanings"), icon: "i-lucide-broom" },
+]);
+const specialistWork = computed<NavItem[]>(() => [
+  { to: "/work", label: t("nav.cleanings"), icon: "i-lucide-broom" },
+  { to: "/tasks", label: t("work.tasks"), icon: "i-lucide-clipboard-check" },
 ]);
 const expenses = computed<NavItem>(() => ({
   to: "/expenses",
@@ -105,6 +115,8 @@ const groups = computed(() => {
     ];
   if (usesManagerOnlyNavigation(user.value))
     return [{ label: "", items: managerPrimary.value }];
+  if (isSpecialistNavigation.value)
+    return [{ label: t("nav.work"), items: specialistWork.value }];
   if (user.value?.roles.includes("manager"))
     return [
       {
@@ -131,6 +143,7 @@ const groups = computed(() => {
 const allItems = computed(() => groups.value.flatMap((group) => group.items));
 const mobilePrimary = computed(() => {
   if (usesManagerOnlyNavigation(user.value)) return allItems.value;
+  if (isSpecialistNavigation.value) return specialistWork.value;
   const preferred = ["/", "/calendar", "/work", "/expenses"];
   return preferred
     .map((path) => allItems.value.find((item) => item.to === path))
@@ -142,16 +155,24 @@ const mobileMore = computed(() =>
   ),
 );
 const homeHref = computed(() =>
-  usesManagerOnlyNavigation(user.value) ? "/calendar" : "/",
+  usesManagerOnlyNavigation(user.value)
+    ? "/calendar"
+    : isSpecialistNavigation.value
+      ? "/work"
+      : "/",
 );
 const roleLabel = computed(() =>
   user.value?.roles.includes("administrator")
     ? t("roles.administrator")
     : user.value?.roles.includes("manager")
       ? t("roles.manager")
-      : t("roles.cleaner"),
+      : user.value?.roles.includes("specialist")
+        ? t("roles.specialist")
+        : t("roles.cleaner"),
 );
 function active(to: string) {
+  if (to === "/work")
+    return route.path === "/work" || route.path.startsWith("/cleanings/");
   return to === "/" ? route.path === "/" : route.path.startsWith(to);
 }
 const unreadBadge = computed(() =>
@@ -224,6 +245,17 @@ async function logout() {
         >
         <div class="app-topbar__actions">
           <LanguageSwitcher />
+          <UButton
+            v-if="isSpecialistNavigation"
+            class="topbar-action"
+            color="neutral"
+            variant="ghost"
+            icon="i-lucide-log-out"
+            :aria-label="$t('common.logout')"
+            :loading="logoutPending"
+            :disabled="logoutPending"
+            @click="logout"
+          />
           <div class="relative shrink-0">
             <UButton
               to="/notifications"
@@ -281,7 +313,7 @@ async function logout() {
         }}</span>
       </NuxtLink>
       <button
-        v-if="mobileMore.length || user"
+        v-if="!isSpecialistNavigation && (mobileMore.length || user)"
         type="button"
         class="mobile-nav__item"
         :class="{

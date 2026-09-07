@@ -3,6 +3,8 @@ import { z } from 'zod'
 
 const amountSchema = z.coerce.number().finite('Укажите сумму').positive('Сумма должна быть больше нуля').max(9_999_999_999.99)
   .transform(value => Number(new Decimal(value).toDecimalPlaces(2, Decimal.ROUND_HALF_UP)))
+const taskCostSchema = z.coerce.number().finite('Укажите сумму').nonnegative('Сумма не может быть отрицательной').max(9_999_999_999.99)
+  .transform(value => Number(new Decimal(value).toDecimalPlaces(2, Decimal.ROUND_HALF_UP)))
 
 export const problemInputSchema = z.object({
   apartmentId: z.uuid({ error: 'Выберите апартамент' }),
@@ -26,7 +28,7 @@ export const problemTaskInputSchema = z.object({
   description: z.string().max(5000).default(''),
   priority: z.enum(['low', 'normal', 'high', 'urgent']).default('normal'),
   dueOn: z.iso.date().nullable().optional(),
-  ownerCostEur: amountSchema.optional().default(0),
+  ownerCostEur: taskCostSchema.optional().default(0),
   checklist: z.array(z.object({ label: z.string().trim().min(1).max(200), checked: z.boolean() })).max(200).default([])
 })
 export type ProblemInput = z.infer<typeof problemInputSchema>

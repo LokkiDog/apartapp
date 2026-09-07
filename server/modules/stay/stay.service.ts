@@ -26,6 +26,7 @@ async function serviceSnapshots(serviceIds: string[], organizationId: string) {
 }
 
 export async function listStays(actor: Actor, query: StayListQuery = {}) {
+  requireRole(actor, 'administrator', 'manager')
   const criteria = [eq(stays.organizationId, actor.organizationId)]
   if (query.onlyVika) {
     requireRole(actor, 'administrator')

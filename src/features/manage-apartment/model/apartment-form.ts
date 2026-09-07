@@ -36,6 +36,7 @@ export function createApartmentFormState(initial: Partial<ApartmentFormState> = 
     checkInTime: '15:00',
     checkOutTime: '11:00',
     instructions: '',
+    automaticLinenCollection: false,
     additionalChecklist: [],
     status: 'active',
     ...initial

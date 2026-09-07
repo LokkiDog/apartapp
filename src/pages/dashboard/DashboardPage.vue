@@ -14,10 +14,12 @@ const currentUser = useCurrentUser()
 const notificationState = useNotificationState()
 const { t, locale } = useI18n()
 const isAdministrator = computed(() => Boolean(currentUser.value?.roles.includes('administrator')))
-const isWorkerView = computed(() => Boolean(currentUser.value?.roles.includes('cleaner') && !isAdministrator.value))
+const isSpecialist = computed(() => Boolean(currentUser.value?.roles.includes('specialist') && !isAdministrator.value))
+const isWorkerView = computed(() => Boolean(currentUser.value?.roles.includes('cleaner') && !isAdministrator.value) || isSpecialist.value)
+const isCleanerView = computed(() => Boolean(currentUser.value?.roles.includes('cleaner') && !isAdministrator.value))
 const canViewWork = computed(() => canAccessWorkSection(currentUser.value))
 const [{ data: stays, status: staysStatus }, { data: cleanings, refresh: refreshCleanings }, { data: tasks }, { data: problemSummary, refresh: refreshProblemSummary }] = await Promise.all([
-  useAsyncData('dashboard-stays', () => $fetch<Stay[]>('/api/stays'), { server: false, default: () => [], watch: [currentUser] }),
+  useAsyncData('dashboard-stays', () => isWorkerView.value ? Promise.resolve([]) : $fetch<Stay[]>('/api/stays'), { server: false, default: () => [], watch: [currentUser, isWorkerView] }),
   useAsyncData('dashboard-cleanings', () => canViewWork.value ? $fetch<Cleaning[]>('/api/cleanings') : Promise.resolve([]), { server: false, default: () => [], watch: [currentUser, canViewWork] }),
   useAsyncData('dashboard-tasks', () => canViewWork.value ? $fetch<Task[]>('/api/tasks') : Promise.resolve([]), { server: false, default: () => [], watch: [currentUser, canViewWork] }),
   useAsyncData('dashboard-problems', () => isAdministrator.value ? $fetch<{ openCount: number, items: Array<{ id: string, description: string, apartment: { name: string, hotel: { name: string } } }> }>('/api/problems/dashboard') : Promise.resolve({ openCount: 0, items: [] }), { server: false, default: () => ({ openCount: 0, items: [] }), watch: [currentUser, isAdministrator] })
@@ -75,14 +77,14 @@ function dashboardWorkHref(work: Cleaning | Task) { return 'title' in work ? `/t
     </div>
 
     <div v-if="staysStatus === 'pending'" class="grid" :class="isWorkerView ? 'dashboard-worker-metrics' : 'grid-cols-2 gap-3 lg:grid-cols-4'">
-      <USkeleton v-for="item in isWorkerView ? 3 : 4" :key="item" class="h-28 rounded-2xl" />
+      <USkeleton v-for="item in isCleanerView ? 3 : isWorkerView ? 2 : 4" :key="item" class="h-28 rounded-2xl" />
     </div>
     <div v-else class="grid" :class="isWorkerView ? 'dashboard-worker-metrics' : 'grid-cols-2 gap-3 lg:grid-cols-4'">
       <NuxtLink v-if="!isWorkerView" to="/calendar" class="dashboard-metric-link"><MetricTile :label="t('dashboard.bookings')" :value="upcoming.length" icon="i-lucide-log-in" /></NuxtLink>
       <NuxtLink v-if="canViewWork" to="/work" class="dashboard-metric-link"><MetricTile :label="t('dashboard.cleanings')" :value="openCleanings.length" icon="i-lucide-broom" /></NuxtLink>
       <NuxtLink v-if="canViewWork" to="/work?tab=tasks" class="dashboard-metric-link"><MetricTile :label="t('dashboard.tasks')" :value="openTasks.length" icon="i-lucide-clipboard-check" /></NuxtLink>
       <NuxtLink v-if="isAdministrator" to="/problems" class="dashboard-metric-link"><MetricTile :label="t('dashboard.problems')" :value="dashboardProblemCount" icon="i-lucide-triangle-alert" :tone="dashboardProblemCount ? 'danger' : 'neutral'" /></NuxtLink>
-      <MetricTile v-if="isWorkerView" :label="t('dashboard.pool')" :value="formatEuro(cleanerPool)" icon="i-lucide-wallet" />
+      <MetricTile v-if="isCleanerView" :label="t('dashboard.pool')" :value="formatEuro(cleanerPool)" icon="i-lucide-wallet" />
     </div>
 
     <div class="grid gap-5" :class="{ 'xl:grid-cols-[1.25fr_.75fr]': canViewWork }">

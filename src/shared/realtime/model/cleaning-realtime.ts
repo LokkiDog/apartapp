@@ -1,4 +1,4 @@
-export type CleaningChangeReason = 'created' | 'updated' | 'accepted' | 'started' | 'progress' | 'inventory' | 'tariff' | 'route' | 'completed' | 'deleted'
+export type CleaningChangeReason = 'created' | 'updated' | 'accepted' | 'started' | 'progress' | 'inventory' | 'tariff' | 'route' | 'completed' | 'deleted' | 'linen'
 export type CleaningChangeMessage = { type: 'cleaning.changed'; cleaningId: string; reason: CleaningChangeReason; occurredAt: string }
 
 export function useCleaningRealtimeState() {

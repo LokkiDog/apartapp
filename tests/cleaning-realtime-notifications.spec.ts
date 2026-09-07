@@ -79,7 +79,7 @@ describe('cleaning realtime notifications', () => {
     const attachments = readFileSync('server/api/attachments/index.post.ts', 'utf8')
     const events = readFileSync('server/modules/cleaning/cleaning-events.ts', 'utf8')
 
-    for (const reason of ['created', 'updated', 'accepted', 'started', 'progress', 'tariff', 'route', 'completed', 'deleted']) {
+    for (const reason of ['created', 'updated', 'accepted', 'started', 'progress', 'tariff', 'route', 'completed', 'deleted', 'linen']) {
       expect(service).toContain(`'${reason}'`)
     }
     expect(inventory).toContain("publishCleaningChangeForId(actor, cleaningId, 'inventory')")
@@ -95,6 +95,8 @@ describe('cleaning realtime notifications', () => {
     expect(events).toContain("eq(users.organizationId, input.actor.organizationId)")
     expect(events).toContain("eq(apartmentManagers.organizationId, input.actor.organizationId)")
     expect(events).toContain("eq(users.status, 'active')")
+    expect(events).toContain("candidates.filter(user => user.roles.includes('specialist'))")
+    expect(events).toContain('...specialistIds')
     expect(events).toContain('...managerRows.map(row => row.userId)')
     expect(events).not.toContain("input.reason === 'progress') set(participants")
     expect(events).not.toContain("input.reason === 'inventory') set(participants")
@@ -112,9 +114,12 @@ describe('cleaning realtime notifications', () => {
 
     expect(state).toContain("message.type === 'cleaning.changed'")
     expect(state).toContain('cleaningRealtime.apply(message)')
+    expect(cleaningRealtime).toContain("| 'linen'")
     expect(cleaningRealtime).toContain('revision.value += 1')
     expect(plugin).toContain('notifications.reconcileCleaningData()')
     expect(work).toContain('watch(notificationState.cleaningRevision')
+    expect(work).toContain('watch(notificationState.revision')
+    expect(work).toContain('void refreshTasks()')
     expect(detail).toContain('watch(cleaningRealtime.revision')
     expect(detail).toContain("change?.reason === 'deleted'")
     expect(calendar).toContain('watch(notificationState.cleaningRevision')

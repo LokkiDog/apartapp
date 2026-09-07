@@ -25,11 +25,14 @@ const props = withDefaults(defineProps<{
   editable?: boolean
   canComplete?: boolean
   inventoryEditable?: boolean
+  showChecklist?: boolean
+  showInventory?: boolean
+  showCommentProblems?: boolean
   canApproveInventoryDiscrepancy?: boolean
   busy?: boolean
   error?: string
   finishHint?: string
-}>(), { comment: '', hasProblem: false, problemDescription: '', problems: () => [], inventoryReports: () => [], attachments: () => [], focusConsumableId: '', editable: false, canComplete: false, inventoryEditable: false, canApproveInventoryDiscrepancy: false, busy: false, error: '', finishHint: '' })
+}>(), { comment: '', hasProblem: false, problemDescription: '', problems: () => [], inventoryReports: () => [], attachments: () => [], focusConsumableId: '', editable: false, canComplete: false, inventoryEditable: false, canApproveInventoryDiscrepancy: false, showChecklist: true, showInventory: true, showCommentProblems: true, busy: false, error: '', finishHint: '' })
 
 const emit = defineEmits<{ save: [payload: ProgressPayload]; complete: [payload: ProgressPayload]; saveInventory: [reports: NonNullable<ProgressPayload['inventoryReports']>]; approveInventoryDiscrepancy: [item: InventoryItem] }>()
 const checklist = ref<ChecklistItem[]>([])
@@ -145,14 +148,16 @@ onBeforeUnmount(() => { clearPhotoPreviews(); clearProblemPhotoPreviews() })
 <template>
   <UForm :key="validation.formKey.value" :state="validationState" :validate="validateProgress" :validate-on="validation.validateOn.value" novalidate class="work-progress-form" @error="onValidationError" @submit="submit">
     <UAlert v-if="validationError || error" color="error" variant="soft" :description="validationError || error" />
-    <section class="progress-section" :class="{ 'progress-section--attention': finishHint }">
+    <section v-if="showChecklist" class="progress-section" :class="{ 'progress-section--attention': finishHint }">
       <div class="progress-section__heading"><div><h2>{{ t('progress.checklist') }}</h2><p>{{ unfinished ? t('progress.remainingItems', { count: unfinished }) : t('progress.allDone') }}</p></div><UIcon :name="unfinished ? 'i-lucide-list-checks' : 'i-lucide-circle-check'" class="size-5" :class="unfinished ? 'text-[var(--color-muted)]' : 'text-[var(--color-success)]'" /></div>
       <p v-if="finishHint" class="mb-3 text-sm font-medium text-amber-800">{{ finishHint }}</p>
       <div v-if="checklist.length" class="space-y-1"><UFormField v-for="(item, index) in checklist" :key="item.label" :name="`checklist.${index}.checked`" :error="false"><UCheckbox v-model="item.checked" :label="item.label" :disabled="!editable" class="min-h-11 items-center" /></UFormField></div>
       <p v-else class="text-sm text-[var(--color-muted)]">{{ t('progress.notConfiguredChecklist') }}</p>
     </section>
 
-    <section v-if="kind === 'cleaning'" class="progress-section">
+    <slot name="after-checklist" />
+
+    <section v-if="kind === 'cleaning' && showInventory" class="progress-section">
       <div class="progress-section__heading"><div><h2>{{ t('progress.stock') }}</h2><p class="progress-section__mobile-description">{{ t('progress.stockDescription') }}</p></div><UIcon name="i-lucide-package" class="size-5 text-[var(--color-primary)]" /></div>
       <div v-if="inventoryReports.length" class="progress-stock-list space-y-3">
         <div v-for="(item, index) in inventoryReports" :id="`progress-stock-${item.consumable.id}`" :key="item.consumable.id" class="progress-stock-row" :class="{ 'progress-stock-row--focused': focusConsumableId === item.consumable.id }" :tabindex="focusConsumableId === item.consumable.id ? -1 : undefined">
@@ -175,7 +180,7 @@ onBeforeUnmount(() => { clearPhotoPreviews(); clearProblemPhotoPreviews() })
       <UButton v-if="inventoryEditable" type="button" color="neutral" variant="soft" icon="i-lucide-save" class="mt-3" :loading="busy" @click="emit('saveInventory', inventoryReports.map(item => ({ consumableId: item.consumable.id, usedQuantity: Number(item.usedQuantity) || 0, remainingQuantity: Number(item.remainingQuantity) || 0 })))">{{ t('progress.saveStock') }}</UButton>
     </section>
 
-    <section class="progress-section">
+    <section v-if="showCommentProblems" class="progress-section">
       <div class="progress-section__heading"><div><h2>{{ t('progress.commentProblem') }}</h2></div><UIcon name="i-lucide-message-square-text" class="size-5 text-[var(--color-primary)]" /></div>
       <UFormField name="comment" :label="t('progress.comment')" :error="false" class="w-full"><UTextarea v-model="comment" class="w-full" :disabled="!editable" :rows="4" :placeholder="t('progress.commentPlaceholder')" /></UFormField>
       <template v-if="kind === 'cleaning'">

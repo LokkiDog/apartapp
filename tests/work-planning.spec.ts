@@ -7,6 +7,7 @@ function cleaning(id: string, scheduledOn: string, status = 'assigned', assignme
     id,
     status,
     scheduledOn,
+    linenCollected: false,
     checklist: [],
     hasProblem: false,
     problemDescription: '',
@@ -43,6 +44,17 @@ describe('cleaning planning', () => {
     expect(plan.history.map(item => item.id)).toEqual(['past-canceled'])
     expect(plan.days.flatMap(day => day.cleanings).map(item => item.id)).toEqual(['past-active', 'today-done', 'future-done'])
     expect(plan.attention.map(item => item.id)).toEqual(['future-unassigned-done'])
+  })
+
+  it('keeps past completed cleanings with pending linen in the specialist plan', () => {
+    const pendingLinen = cleaning('pending-linen', '2026-08-05', 'completed')
+    const collectedLinen = cleaning('collected-linen', '2026-08-06', 'completed')
+    collectedLinen.linenCollected = true
+
+    const plan = buildCleaningPlan([pendingLinen, collectedLinen], '2026-08-11', false, true)
+
+    expect(plan.days.flatMap(day => day.cleanings).map(item => item.id)).toEqual(['pending-linen'])
+    expect(plan.history.map(item => item.id)).toEqual(['collected-linen'])
   })
 
   it('hides current and future finished work without changing past history', () => {

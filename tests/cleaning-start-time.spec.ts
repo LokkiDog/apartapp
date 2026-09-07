@@ -10,7 +10,7 @@ describe('cleaning start and completion time', () => {
   it('stores the first start time while moving the cleaning to in progress', () => {
     expect(schema).toContain("startedAt: timestamp('started_at', { withTimezone: true })")
     expect(migration).toContain('ADD COLUMN "started_at" timestamp with time zone')
-    expect(service).toContain(".set({ status: 'in_progress', startedAt, updatedAt: startedAt })")
+    expect(service).toContain(".set({ status: 'in_progress', startedAt, linenCollected: cleaning.apartment.automaticLinenCollection ? true : cleaning.linenCollected, updatedAt: startedAt })")
     expect(service).toContain("eq(cleanings.status, 'assigned')")
   })
 

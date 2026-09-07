@@ -4,6 +4,7 @@ export interface Apartment {
   building: string
   locationDetails: string
   additionalChecklist: string[]
+  automaticLinenCollection: boolean
   status: string
   hotel: { id: string; name: string }
   tariffOverride?: { ownerTotalEur: number; cleanerPoolEur: number; laundryEur: number; serviceEur: number } | null
