@@ -3639,11 +3639,16 @@ html[dir="rtl"] .dashboard-page-header__actions {
   .work-finished-filter-button,
   .work-history-button {
     min-width: 0;
-    justify-content: center;
     padding-inline: 0.375rem;
     font-size: 0.75rem;
     letter-spacing: -0.015em;
     white-space: nowrap;
+  }
+  .work-finished-filter-button {
+    justify-content: flex-start;
+  }
+  .work-history-button {
+    justify-content: flex-end;
   }
   .work-finished-filter-button [data-slot="leadingIcon"],
   .work-history-button [data-slot="leadingIcon"] {

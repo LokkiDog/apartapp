@@ -152,12 +152,14 @@ async function removeProblem() {
     <div class="surface grid gap-3 p-4 sm:grid-cols-2 sm:p-5"><UFormField :label="t('problems.status')"><USelect v-model="statusFilter" :items="statusOptions" class="w-full" /></UFormField><UFormField :label="t('expenses.apartment')"><USelect v-model="apartmentId" :items="apartmentOptions" class="w-full" /></UFormField></div>
     <div v-if="status === 'pending'" class="grid gap-2"><USkeleton v-for="item in 4" :key="item" class="h-14 rounded-2xl" /></div>
     <div v-else-if="problems.length" class="grid gap-2">
-      <button v-for="problem in problems" :key="problem.id" type="button" class="surface flex min-h-14 items-center gap-3 px-4 py-3 text-left transition-[background-color] duration-150 hover:bg-[var(--color-surface-muted)] focus-visible:outline-2 focus-visible:outline-[var(--color-primary)]" @click="openDetail(problem)">
-        <p class="mr-auto min-w-0 truncate text-left font-semibold">{{ capitalizeProblemDescription(problem.description) }}</p>
-        <p class="hidden min-w-0 max-w-64 truncate text-sm text-[var(--color-muted)] sm:block">{{ problem.apartment.hotel.name }} · {{ problem.apartment.name }}</p>
-        <StatusBadge :label="problem.resolvedAt ? t('problems.resolved') : t('problems.open')" :tone="problem.resolvedAt ? 'success' : 'danger'" />
-        <span class="hidden shrink-0 text-xs text-[var(--color-muted)] lg:inline">{{ formatDateTime(problem.resolvedAt ?? problem.createdAt) }}</span>
-        <strong class="shrink-0 tabular-nums">{{ formatEuro(problem.totalExpenseEur) }}</strong>
+      <button v-for="problem in problems" :key="problem.id" type="button" class="surface flex min-h-14 items-center justify-between gap-3 px-4 py-3 text-left transition-[background-color] duration-150 hover:bg-[var(--color-surface-muted)] focus-visible:outline-2 focus-visible:outline-[var(--color-primary)]" @click="openDetail(problem)">
+        <p class="min-w-0 truncate text-left font-semibold">{{ capitalizeProblemDescription(problem.description) }}</p>
+        <div class="flex shrink-0 items-center justify-end gap-3">
+          <p class="hidden min-w-0 max-w-64 truncate text-sm text-[var(--color-muted)] sm:block">{{ problem.apartment.hotel.name }} · {{ problem.apartment.name }}</p>
+          <StatusBadge :label="problem.resolvedAt ? t('problems.resolved') : t('problems.open')" :tone="problem.resolvedAt ? 'success' : 'danger'" />
+          <span class="hidden shrink-0 text-xs text-[var(--color-muted)] lg:inline">{{ formatDateTime(problem.resolvedAt ?? problem.createdAt) }}</span>
+          <strong class="shrink-0 tabular-nums">{{ formatEuro(problem.totalExpenseEur) }}</strong>
+        </div>
       </button>
     </div>
     <EmptyState v-else icon="i-lucide-circle-alert" :title="t('problems.emptyTitle')" :description="t('problems.emptyDescription')"><template #actions><UButton @click="openCreate">{{ t('problems.add') }}</UButton></template></EmptyState>
