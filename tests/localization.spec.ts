@@ -21,6 +21,7 @@ describe('localization contracts', () => {
   it('localizes system notification copy while preserving user text', () => {
     expect(localizedNotificationTitle('problem', 'en', 'Проблема в уборке')).toBe('Work problem')
     expect(localizedNotificationBody('problem', 'he', 'Требуется проверить полотенца')).toBe('Требуется проверить полотенца')
+    expect(localizedNotificationTitle('cleaning_changed', 'en', 'Cleaning completed')).toBe('Cleaning completed')
   })
 
   it('keeps all locale catalogs structurally identical', () => {

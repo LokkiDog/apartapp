@@ -10,6 +10,7 @@ import {
   useSubmitFormValidation,
 } from "#fsd/shared/lib";
 import { useCurrentUser } from "#fsd/shared/auth";
+import { useNotificationState } from "#fsd/features/manage-notifications";
 import {
   DateInput,
   DeleteConfirmModal,
@@ -37,6 +38,7 @@ type WorkKind = "cleaning" | "task";
 type WorkToDelete = { kind: WorkKind; id: string; label: string };
 
 const currentUser = useCurrentUser();
+const notificationState = useNotificationState();
 const { t } = useI18n();
 const tab = ref<"cleanings" | "tasks">("cleanings");
 const planningMode = ref<"days" | "cleaners" | "apartments">("days");
@@ -87,6 +89,10 @@ const { data: team } = await useAsyncData(
   { server: false, default: () => [], watch: [currentUser] },
 );
 
+watch(notificationState.cleaningRevision, () => {
+  if (currentUser.value) void refreshCleanings();
+});
+
 const isAdministrator = computed(() =>
   Boolean(currentUser.value?.roles.includes("administrator")),
 );
@@ -134,6 +140,7 @@ const stockItems = ref<
 const usageForm = reactive({ consumableId: "", quantity: 1, note: "" });
 
 const deleteOpen = ref(false);
+const cleaningProblemDeleteOpen = ref(false);
 const workToDelete = ref<WorkToDelete | null>(null);
 const route = useRoute();
 async function openCleaningFromQuery() {
@@ -581,19 +588,20 @@ function askToDelete(kind: WorkKind, work: Cleaning | Task) {
   deleteOpen.value = true;
 }
 
-async function removeWork() {
+async function removeWork(problemDisposition?: 'preserve' | 'delete') {
   if (!workToDelete.value) return;
   const target = workToDelete.value;
   pending.value = true;
   error.value = "";
   try {
-    await $fetch(`/api/${target.kind}s/${target.id}`, { method: "DELETE" });
+    await $fetch(`/api/${target.kind}s/${target.id}`, { method: "DELETE", ...(target.kind === 'cleaning' ? { body: { problemDisposition } } : {}) });
     const kind = target.kind;
     deleteOpen.value = false;
     workToDelete.value = null;
     if (kind === "cleaning") await refreshCleanings();
     else await refreshTasks();
   } catch (cause: any) {
+    if (target.kind === 'cleaning' && cause?.statusCode === 409 && cause?.data?.data?.problemCount) { deleteOpen.value = false; cleaningProblemDeleteOpen.value = true; return }
     error.value = cause?.data?.statusMessage ?? t("common.error");
   } finally {
     pending.value = false;
@@ -1654,5 +1662,6 @@ function taskMenuItems(task: Task): DropdownMenuItem[] {
       :error="error"
       @confirm="removeWork"
     />
+    <UModal v-model:open="cleaningProblemDeleteOpen" :title="t('problems.cleaningDeleteTitle')"><template #body><div class="space-y-5"><p>{{ t('problems.cleaningDeleteDescription') }}</p><div class="grid gap-2"><UButton color="neutral" variant="outline" :loading="pending" @click="removeWork('preserve')">{{ t('problems.deleteCleaningKeep') }}</UButton><UButton color="error" :loading="pending" @click="removeWork('delete')">{{ t('problems.deleteCleaningWith') }}</UButton><UButton color="neutral" variant="ghost" @click="cleaningProblemDeleteOpen = false">{{ t('common.cancel') }}</UButton></div></div></template></UModal>
   </section>
 </template>

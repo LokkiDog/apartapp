@@ -3,10 +3,11 @@ import type { Cleaning } from '#fsd/entities/cleaning'
 import { HotelLocationMap } from '#fsd/entities/hotel'
 import type { Task } from '#fsd/entities/task'
 import { useCurrentUser } from '#fsd/shared/auth'
-import { formatDate, formatEuro } from '#fsd/shared/lib'
+import { formatDate, formatDateTime, formatEuro } from '#fsd/shared/lib'
 import { useI18n } from 'vue-i18n'
 import { ConfirmActionModal, DeleteConfirmModal, PageHeader, StatusBadge } from '#fsd/shared/ui'
 import { WorkProgressForm } from '#fsd/features/work-progress'
+import { useCleaningRealtimeState } from '#fsd/shared/realtime'
 
 type WorkKind = 'cleaning' | 'task'
 type InventoryReportSource = { id: string; reportedBy: { id: string; name: string }; reportedAt: string; appliedAt: string | null; approvedAt: string | null; approvedBy: { id: string; name: string } | null; usedQuantity: number; remainingQuantity: number; discrepancyQuantity: number; startingQuantity: number; expectedRemainingQuantity: number }
@@ -19,11 +20,12 @@ const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const currentUser = useCurrentUser()
+const cleaningRealtime = useCleaningRealtimeState()
 const id = String(route.params.id)
 const isAdministrator = computed(() => Boolean(currentUser.value?.roles.includes('administrator')))
 const workRequest = await useAsyncData(`work-detail-${props.kind}-${id}`, () => currentUser.value ? $fetch<Cleaning | Task>(`/api/${props.kind}s/${id}`) : Promise.resolve(null), { server: false, default: () => null, watch: [currentUser] })
 const work = workRequest.data as Ref<Cleaning | Task | null>
-const { status, refresh } = workRequest
+const { status, refresh, error: workLoadError } = workRequest
 const inventoryReports = ref<InventoryItem[]>([])
 const inventoryLoaded = ref(false)
 const attachments = ref<WorkAttachment[]>([])
@@ -31,16 +33,15 @@ const error = ref('')
 const finishHint = ref('')
 const pending = ref(false)
 const acceptancePending = ref(false)
+const startPending = ref(false)
 const approvalPending = ref(false), approvalError = ref(''), approvalOpen = ref(false)
 const inventoryItemToApprove = ref<InventoryItem | null>(null)
 const deleteOpen = ref(false)
-const stockOpen = ref(false)
+const cleaningProblemDeleteOpen = ref(false)
 const directionsOpen = ref(false)
 const coordinatesCopied = ref(false)
 const coordinatesCopyError = ref('')
 let coordinatesCopyTimer: number | null = null
-const stockItems = ref<Array<{ consumable: { id: string; name: string; unit: string }; quantity: number }>>([])
-const usageForm = reactive({ consumableId: '', quantity: 1, note: '' })
 const cameFromInventory = computed(() => props.kind === 'cleaning' && route.query.from === 'inventory')
 const focusConsumableId = computed(() => typeof route.query.focusConsumableId === 'string' ? route.query.focusConsumableId : '')
 const backHref = computed(() => cameFromInventory.value ? '/inventory' : '/work')
@@ -63,13 +64,25 @@ const assignedToCurrent = computed(() => props.kind === 'cleaning'
   : task.value?.assigneeId === currentUser.value?.id)
 const canAcceptCleaning = computed(() => Boolean(cleaning.value && ['assigned', 'in_progress'].includes(cleaning.value.status) && currentCleaningAssignment.value && !currentCleaningAssignment.value.acceptedAt))
 const showCleaningAcceptance = computed(() => canAcceptCleaning.value)
-const canProgress = computed(() => Boolean(work.value && !['completed', 'canceled'].includes(work.value.status) && (isAdministrator.value || (props.kind === 'cleaning' ? Boolean(currentCleaningAssignment.value?.acceptedAt) : assignedToCurrent.value))))
+const canStartCleaning = computed(() => Boolean(cleaning.value && cleaning.value.status === 'assigned' && (isAdministrator.value || Boolean(currentCleaningAssignment.value?.acceptedAt))))
+const canProgress = computed(() => Boolean(work.value && (props.kind === 'cleaning'
+  ? work.value.status === 'in_progress' && (isAdministrator.value || Boolean(currentCleaningAssignment.value?.acceptedAt))
+  : !['completed', 'canceled'].includes(work.value.status) && (isAdministrator.value || assignedToCurrent.value))))
 const canComplete = computed(() => canProgress.value)
 const inventoryEditable = computed(() => Boolean(isAdministrator.value && cleaning.value?.status === 'completed'))
-const canStock = computed(() => Boolean(work.value && (isAdministrator.value || (props.kind === 'cleaning' ? Boolean(currentCleaningAssignment.value?.acceptedAt) : assignedToCurrent.value))))
 const canManage = computed(() => isAdministrator.value)
 const statusLabels = computed<Record<string, string>>(() => ({ unassigned: t('work.statusUnassigned'), assigned: t('work.statusAssigned'), in_progress: t('work.statusProgress'), completed: t('work.statusCompleted'), canceled: t('work.statusCanceled'), open: t('work.statusOpen') }))
 const statusTones: Record<string, 'neutral' | 'success' | 'warning' | 'danger' | 'info'> = { unassigned: 'warning', assigned: 'info', in_progress: 'warning', completed: 'success', canceled: 'neutral', open: 'info' }
+
+watch(cleaningRealtime.revision, async () => {
+  if (props.kind !== 'cleaning') return
+  const change = cleaningRealtime.lastChange.value
+  if (change && change.cleaningId !== id) return
+  if (change?.reason === 'deleted') { await navigateTo('/work'); return }
+  await refresh()
+  const statusCode = (workLoadError.value as { statusCode?: number; status?: number } | null)?.statusCode ?? (workLoadError.value as { status?: number } | null)?.status
+  if (statusCode === 403 || statusCode === 404) await navigateTo('/work')
+})
 
 watch([cleaning, status], async () => {
   if (cleaning.value && (!['completed', 'canceled'].includes(cleaning.value.status) || isAdministrator.value)) {
@@ -171,6 +184,16 @@ async function acceptAssignedCleaning() {
     error.value = cause?.data?.statusMessage ?? t('common.error')
   } finally { acceptancePending.value = false }
 }
+async function startAssignedCleaning() {
+  if (!cleaning.value) return
+  startPending.value = true; error.value = ''
+  try {
+    await $fetch(`/api/cleanings/${id}/start`, { method: 'POST' })
+    await refresh()
+  } catch (cause: any) {
+    error.value = cause?.data?.statusMessage ?? t('common.error')
+  } finally { startPending.value = false }
+}
 
 async function copyHotelCoordinates() {
   coordinatesCopyError.value = ''
@@ -186,22 +209,13 @@ async function copyHotelCoordinates() {
   }
 }
 
-async function quickStock() {
-  if (!work.value) return
-  stockItems.value = await $fetch<Array<{ consumable: { id: string; name: string; unit: string }; quantity: number }>>(`/api/inventory/${work.value.apartmentId}`)
-  Object.assign(usageForm, { consumableId: '', quantity: 1, note: '' }); stockOpen.value = true
-}
-async function recordUsage() {
-  if (!work.value) return
+async function removeWork(problemDisposition?: 'preserve' | 'delete') {
   pending.value = true; error.value = ''
-  try { await $fetch('/api/inventory/use', { method: 'POST', body: { apartmentId: work.value.apartmentId, sourceType: props.kind, sourceId: id, ...usageForm } }); stockOpen.value = false; await refresh() }
-  catch (cause: any) { error.value = cause?.data?.statusMessage ?? t('work.writeOffError') }
-  finally { pending.value = false }
-}
-async function removeWork() {
-  pending.value = true; error.value = ''
-  try { await $fetch(`/api/${props.kind}s/${id}`, { method: 'DELETE' }); await router.push('/work') }
-  catch (cause: any) { error.value = cause?.data?.statusMessage ?? t('work.deleteError') }
+  try { await $fetch(`/api/${props.kind}s/${id}`, { method: 'DELETE', ...(props.kind === 'cleaning' ? { body: { problemDisposition } } : {}) }); await router.push('/work') }
+  catch (cause: any) {
+    if (props.kind === 'cleaning' && (cause?.statusCode === 409 || cause?.status === 409) && cause?.data?.data?.problemCount) { deleteOpen.value = false; cleaningProblemDeleteOpen.value = true; return }
+    error.value = cause?.data?.statusMessage ?? t('work.deleteError')
+  }
   finally { pending.value = false }
 }
 async function cancelTask() {
@@ -224,12 +238,18 @@ function requestComplete() {
     <div v-if="status === 'pending'" class="grid gap-4"><USkeleton class="h-36 rounded-2xl" /><USkeleton class="h-64 rounded-2xl" /></div>
     <template v-else-if="work">
       <PageHeader class="work-detail-header" :title="title()">
-        <template #actions><StatusBadge :label="statusLabels[work.status] ?? ''" :tone="statusTones[work.status] ?? 'neutral'" /></template>
+        <template #actions>
+          <StatusBadge :label="statusLabels[work.status] ?? ''" :tone="statusTones[work.status] ?? 'neutral'" />
+          <UButton v-if="showCleaningAcceptance" class="hidden sm:inline-flex" color="warning" :loading="acceptancePending" @click="acceptAssignedCleaning">{{ t('work.acceptCleaning') }}</UButton>
+          <UButton v-else-if="canStartCleaning" class="hidden sm:inline-flex" icon="i-lucide-play" :loading="startPending" @click="startAssignedCleaning">{{ t('work.startCleaning') }}</UButton>
+        </template>
       </PageHeader>
       <section class="work-detail-summary surface grid grid-cols-2 gap-x-4 gap-y-5 p-5 sm:grid-cols-3 sm:p-6">
         <div><p class="detail-label">{{ t('work.date') }}</p><p class="font-semibold">{{ 'scheduledOn' in work ? formatDate(work.scheduledOn) : task?.dueOn ? formatDate(task.dueOn) : t('work.noDeadline') }}</p></div>
         <div><p class="detail-label">{{ t('work.assignee') }}</p><p class="font-semibold">{{ props.kind === 'cleaning' ? cleanerNames() : task?.assignee?.name ?? t('work.notAssigned') }}</p></div>
         <div><p class="detail-label">{{ t('work.apartment') }}</p><p class="font-semibold">{{ work.apartment.name }}</p></div>
+        <div v-if="props.kind === 'cleaning' && cleaning?.startedAt"><p class="detail-label">{{ t('work.startedAt') }}</p><p class="font-semibold">{{ formatDateTime(cleaning.startedAt) }}</p></div>
+        <div v-if="props.kind === 'cleaning' && cleaning?.completedAt"><p class="detail-label">{{ t('work.completedAt') }}</p><p class="font-semibold">{{ formatDateTime(cleaning.completedAt) }}</p></div>
         <div v-if="props.kind === 'cleaning' && cleaning?.apartment.instructions.trim()" class="col-span-2 sm:col-span-3">
           <p class="detail-label">{{ t('apartments.instructions') }}</p>
           <p class="mt-1 whitespace-pre-line break-words text-sm leading-5 text-[var(--color-muted)]">{{ cleaning.apartment.instructions }}</p>
@@ -238,11 +258,11 @@ function requestComplete() {
         <div v-if="props.kind === 'cleaning' && cleaning?.tariffSnapshot.cleanerPoolEur !== undefined"><p class="detail-label">{{ t('work.payout') }}</p><p class="font-semibold tabular-nums">{{ formatEuro(cleaning.tariffSnapshot.cleanerPoolEur) }}</p></div>
         <div v-if="props.kind === 'cleaning' && hotelLocation" class="work-directions-action col-span-full"><UButton color="primary" variant="link" class="work-directions-action__button" @click="directionsOpen = true">{{ t('directions.title') }}</UButton></div>
       </section>
-      <section v-if="showCleaningAcceptance" class="surface flex flex-wrap items-center justify-between gap-3 border-s-4 border-amber-600 bg-amber-50/80 p-4">
-        <div><p class="font-semibold">{{ t('work.statusAwaitingAcceptance') }}</p><p class="mt-1 text-sm text-[var(--color-muted)]">{{ t('work.acceptCleaningHint') }}</p></div>
-        <UButton color="warning" :loading="acceptancePending" @click="acceptAssignedCleaning">{{ t('work.acceptCleaning') }}</UButton>
-      </section>
-      <WorkProgressForm :key="`${work.id}-${attachments.length}`" :kind="props.kind" :checklist="work.checklist" :comment="work.comment" :has-problem="work.hasProblem" :problem-description="work.problemDescription" :problems="cleaning?.problems ?? []" :inventory-reports="inventoryReports" :attachments="attachments" :focus-consumable-id="focusConsumableId" :editable="canProgress" :inventory-editable="inventoryEditable" :can-approve-inventory-discrepancy="inventoryEditable" :can-complete="canComplete" :can-stock="canStock" :busy="pending" :error="error" :finish-hint="finishHint" @save="payload => saveProgress(payload)" @complete="payload => saveProgress(payload, true)" @save-inventory="saveInventoryOnly" @approve-inventory-discrepancy="requestInventoryDiscrepancyApproval" @stock="quickStock">
+      <div v-if="showCleaningAcceptance || canStartCleaning" class="work-detail-mobile-cleaning-action sm:hidden">
+        <UButton v-if="showCleaningAcceptance" class="min-h-11 w-full justify-center" color="warning" :loading="acceptancePending" @click="acceptAssignedCleaning">{{ t('work.acceptCleaning') }}</UButton>
+        <UButton v-else class="min-h-11 w-full justify-center" icon="i-lucide-play" :loading="startPending" @click="startAssignedCleaning">{{ t('work.startCleaning') }}</UButton>
+      </div>
+      <WorkProgressForm :key="`${work.id}-${attachments.length}`" :kind="props.kind" :checklist="work.checklist" :comment="work.comment" :has-problem="work.hasProblem" :problem-description="work.problemDescription" :problems="cleaning?.problems ?? []" :inventory-reports="inventoryReports" :attachments="attachments" :focus-consumable-id="focusConsumableId" :editable="canProgress" :inventory-editable="inventoryEditable" :can-approve-inventory-discrepancy="inventoryEditable" :can-complete="canComplete" :busy="pending" :error="error" :finish-hint="finishHint" @save="payload => saveProgress(payload)" @complete="payload => saveProgress(payload, true)" @save-inventory="saveInventoryOnly" @approve-inventory-discrepancy="requestInventoryDiscrepancyApproval">
         <template v-if="props.kind === 'cleaning' && canManage" #actions-left>
           <UButton color="error" variant="soft" icon="i-lucide-trash-2" :aria-label="t('work.deleteCleaning')" @click="deleteOpen = true" />
           <UButton :to="`/work?cleaningId=${encodeURIComponent(id)}`" color="neutral" variant="soft" icon="i-lucide-pencil" :aria-label="t('work.editCleaning')" />
@@ -270,8 +290,8 @@ function requestComplete() {
         </div>
       </template>
     </UModal>
-    <USlideover v-model:open="stockOpen" :title="t('work.stockTitle')"><template #body><form id="work-stock-form" class="form-grid" @submit.prevent="recordUsage"><UFormField :label="t('work.consumable')"><USelect v-model="usageForm.consumableId" :items="stockItems.map(item => ({ label: `${item.consumable.name} · ${t('work.stockRemaining', { quantity: item.quantity, unit: item.consumable.unit })}`, value: item.consumable.id }))" required /></UFormField><UFormField :label="t('work.quantity')"><UInput v-model.number="usageForm.quantity" type="number" min=".001" step=".001" required /></UFormField><UFormField :label="t('work.comment')"><UInput v-model="usageForm.note" /></UFormField></form></template><template #footer><div class="form-actions form-actions--footer"><UButton type="button" color="neutral" variant="ghost" @click="stockOpen = false">{{ t('work.cancel') }}</UButton><UButton type="submit" form="work-stock-form" :loading="pending">{{ t('work.writeOff') }}</UButton></div></template></USlideover>
     <ConfirmActionModal v-model:open="approvalOpen" :title="t('inventoryApproval.title')" :description="t('inventoryApproval.description', { name: inventoryItemToApprove?.consumable.name ?? '', quantity: inventoryItemToApprove?.report?.remainingQuantity ?? '', unit: inventoryItemToApprove?.consumable.unit ?? '' })" :confirm-label="t('inventoryApproval.confirm')" :loading="approvalPending" :error="approvalError" @confirm="approveInventoryDiscrepancy" />
     <DeleteConfirmModal v-model:open="deleteOpen" :title="t('work.deleteWorkTitle', { kind: props.kind === 'cleaning' ? t('work.deleteCleaning').toLocaleLowerCase() : t('work.deleteTask').toLocaleLowerCase() })" :description="t('work.deleteWorkDescription')" :loading="pending" :error="error" @confirm="removeWork" />
+    <UModal v-model:open="cleaningProblemDeleteOpen" :title="t('problems.cleaningDeleteTitle')"><template #body><div class="space-y-5"><p>{{ t('problems.cleaningDeleteDescription') }}</p><div class="grid gap-2"><UButton color="neutral" variant="outline" :loading="pending" @click="removeWork('preserve')">{{ t('problems.deleteCleaningKeep') }}</UButton><UButton color="error" :loading="pending" @click="removeWork('delete')">{{ t('problems.deleteCleaningWith') }}</UButton><UButton color="neutral" variant="ghost" @click="cleaningProblemDeleteOpen = false">{{ t('common.cancel') }}</UButton></div></div></template></UModal>
   </section>
 </template>

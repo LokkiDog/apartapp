@@ -5,12 +5,19 @@ import { notifications, pushSubscriptions, users } from '../database/schema'
 import { localizedNotificationBody, localizedNotificationTitle } from './localize'
 import { publishNotification } from './realtime'
 
+type AppLocale = 'ru' | 'en' | 'he'
+type LocalizedCopy = string | Record<AppLocale, string>
+
+function copyForLocale(copy: LocalizedCopy, locale: AppLocale) {
+  return typeof copy === 'string' ? copy : copy[locale]
+}
+
 export async function notifyUsers(input: {
   organizationId: string
   userIds: string[]
-  type: 'stay_changed' | 'work_assigned' | 'work_rescheduled' | 'work_canceled' | 'problem' | 'manager_expense_report_published'
-  title: string
-  body: string
+  type: 'stay_changed' | 'work_assigned' | 'work_rescheduled' | 'work_canceled' | 'problem' | 'manager_expense_report_published' | 'cleaning_changed'
+  title: LocalizedCopy
+  body: LocalizedCopy
   href: string
 }) {
   if (!input.userIds.length) return
@@ -22,7 +29,14 @@ export async function notifyUsers(input: {
   if (!recipients.length) return
 
   const recipientLocales = new Map(recipients.map(recipient => [recipient.id, recipient.locale]))
-  const created = await db.insert(notifications).values(recipients.map(recipient => ({ ...input, userId: recipient.id }))).returning()
+  const created = await db.insert(notifications).values(recipients.map(recipient => ({
+    organizationId: input.organizationId,
+    userId: recipient.id,
+    type: input.type,
+    title: copyForLocale(input.title, recipient.locale),
+    body: copyForLocale(input.body, recipient.locale),
+    href: input.href
+  }))).returning()
   for (const notification of created) {
     const locale = recipientLocales.get(notification.userId) ?? 'ru'
     publishNotification(notification.userId, {

@@ -1,7 +1,7 @@
 type AppLocale = 'ru' | 'en' | 'he'
-type NotificationType = 'stay_changed' | 'work_assigned' | 'work_rescheduled' | 'work_canceled' | 'problem' | 'manager_expense_report_published'
+type NotificationType = 'stay_changed' | 'work_assigned' | 'work_rescheduled' | 'work_canceled' | 'problem' | 'manager_expense_report_published' | 'cleaning_changed'
 
-const titles: Record<NotificationType, Record<AppLocale, string>> = {
+const titles: Partial<Record<NotificationType, Record<AppLocale, string>>> = {
   stay_changed: { ru: 'Изменение заезда', en: 'Booking updated', he: 'הזמנה עודכנה' },
   work_assigned: { ru: 'Назначена работа', en: 'Work assigned', he: 'עבודה הוקצתה' },
   work_rescheduled: { ru: 'Работа перенесена', en: 'Work rescheduled', he: 'מועד העבודה שונה' },

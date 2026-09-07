@@ -69,6 +69,7 @@ export default defineNuxtPlugin(() => {
       attempts = 0
       void notifications.refreshUnreadCount()
       notifications.revision.value += 1
+      notifications.reconcileCleaningData()
     })
     socket.addEventListener('message', event => {
       try {

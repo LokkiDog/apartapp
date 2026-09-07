@@ -26,10 +26,10 @@ export function categoryVisibilityFromReport(report?: {
   }
 }
 
-export function enabledManagerExpenseLines<T extends { category: ManagerExpenseCategory }>(lines: T[], visibility: ManagerExpenseCategoryVisibility): T[] {
-  return lines.filter(line => visibility[line.category])
+export function enabledManagerExpenseLines<T extends { category: ManagerExpenseCategory, included?: boolean }>(lines: T[], visibility: ManagerExpenseCategoryVisibility): T[] {
+  return lines.filter(line => visibility[line.category] && line.included !== false)
 }
 
-export function managerExpenseTotal(lines: Array<{ category: ManagerExpenseCategory, amountEur: number }>, visibility: ManagerExpenseCategoryVisibility): number {
+export function managerExpenseTotal(lines: Array<{ category: ManagerExpenseCategory, amountEur: number, included?: boolean }>, visibility: ManagerExpenseCategoryVisibility): number {
   return Number(enabledManagerExpenseLines(lines, visibility).reduce((sum, line) => sum.plus(line.amountEur), new Decimal(0)).toDecimalPlaces(2))
 }

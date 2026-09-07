@@ -39,6 +39,11 @@ const expenses = computed<NavItem>(() => ({
   label: t("nav.expenses"),
   icon: "i-lucide-receipt-euro",
 }));
+const problems = computed<NavItem>(() => ({
+  to: "/problems",
+  label: t("nav.problems"),
+  icon: "i-lucide-triangle-alert",
+}));
 const objects = computed<NavItem[]>(() => [
   {
     to: "/apartments",
@@ -93,7 +98,7 @@ const settings = computed<NavItem[]>(() => [
 const groups = computed(() => {
   if (user.value?.roles.includes("administrator"))
     return [
-      { label: t("nav.work"), items: [...work.value, expenses.value] },
+      { label: t("nav.work"), items: [...work.value, problems.value, expenses.value] },
       { label: t("nav.objects"), items: objects.value },
       { label: t("nav.reports"), items: reports.value },
       { label: t("nav.settings"), items: settings.value },

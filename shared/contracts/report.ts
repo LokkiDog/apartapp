@@ -53,9 +53,11 @@ const managerExpenseAmountSchema = z.coerce.number().finite().min(-9_999_999_999
 
 export const managerExpenseReportLineSchema = z.object({
   category: managerExpenseCategorySchema,
-  description: z.string().trim().min(1, 'Введите название').max(200),
+  description: z.string().trim().min(1, 'Введите название').max(2000),
   occurredOn: z.iso.date().nullable().optional(),
-  amountEur: managerExpenseAmountSchema
+  amountEur: managerExpenseAmountSchema,
+  included: z.boolean().default(true),
+  problemId: z.uuid().nullable().optional()
 })
 
 export const managerExpenseReportSaveSchema = z.object({

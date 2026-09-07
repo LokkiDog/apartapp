@@ -6,19 +6,24 @@ import type { Task } from '#fsd/entities/task'
 import { formatDate, formatEuro } from '#fsd/shared/lib'
 import { canAccessWorkSection, useCurrentUser } from '#fsd/shared/auth'
 import { EmptyState, MetricTile, StatusBadge } from '#fsd/shared/ui'
+import { useNotificationState } from '#fsd/features/manage-notifications'
 import { activeCleaning, activeTask, currentDashboardMonth, dashboardMonthLabel, dateInDashboardMonth, isDashboardMonth, problemDashboardRecord, shiftDashboardMonth, sortDashboardRecords, stayInDashboardMonth, undatedDashboardRecord } from './model/dashboard-month'
 import { useI18n } from 'vue-i18n'
 
 const currentUser = useCurrentUser()
+const notificationState = useNotificationState()
 const { t, locale } = useI18n()
 const isAdministrator = computed(() => Boolean(currentUser.value?.roles.includes('administrator')))
 const isWorkerView = computed(() => Boolean(currentUser.value?.roles.includes('cleaner') && !isAdministrator.value))
 const canViewWork = computed(() => canAccessWorkSection(currentUser.value))
-const [{ data: stays, status: staysStatus }, { data: cleanings }, { data: tasks }] = await Promise.all([
+const [{ data: stays, status: staysStatus }, { data: cleanings, refresh: refreshCleanings }, { data: tasks }] = await Promise.all([
   useAsyncData('dashboard-stays', () => $fetch<Stay[]>('/api/stays'), { server: false, default: () => [], watch: [currentUser] }),
   useAsyncData('dashboard-cleanings', () => canViewWork.value ? $fetch<Cleaning[]>('/api/cleanings') : Promise.resolve([]), { server: false, default: () => [], watch: [currentUser, canViewWork] }),
   useAsyncData('dashboard-tasks', () => canViewWork.value ? $fetch<Task[]>('/api/tasks') : Promise.resolve([]), { server: false, default: () => [], watch: [currentUser, canViewWork] })
 ])
+watch(notificationState.cleaningRevision, () => {
+  if (currentUser.value && canViewWork.value) void refreshCleanings()
+})
 const dashboardMonth = ref(currentDashboardMonth())
 const monthLabel = computed(() => {
   const label = dashboardMonthLabel(dashboardMonth.value, locale.value === 'he' ? 'he-IL' : locale.value === 'en' ? 'en-US' : 'ru-RU')

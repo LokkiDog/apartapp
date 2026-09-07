@@ -11,6 +11,8 @@ export interface ManagerExpenseLine {
   occurredOn: string | null
   amountEur: number
   position: number
+  included: boolean
+  problemId: string | null
 }
 
 export function createManagerExpenseCategoryVisibility(): ManagerExpenseCategoryVisibility {
@@ -26,7 +28,7 @@ export function visibleManagerExpenseCategories(visibility: ManagerExpenseCatego
 }
 
 export function managerExpenseReportTotal(lines: ManagerExpenseLine[], visibility: ManagerExpenseCategoryVisibility): number {
-  return Number(lines.reduce((sum, line) => visibility[line.category] ? sum.plus(line.amountEur || 0) : sum, new Decimal(0)).toDecimalPlaces(2))
+  return Number(lines.reduce((sum, line) => visibility[line.category] && line.included !== false ? sum.plus(line.amountEur || 0) : sum, new Decimal(0)).toDecimalPlaces(2))
 }
 
 export function managerExpenseCategoryLines(lines: ManagerExpenseLine[], category: ManagerExpenseCategory): ManagerExpenseLine[] {
@@ -36,7 +38,7 @@ export function managerExpenseCategoryLines(lines: ManagerExpenseLine[], categor
 }
 
 export function managerExpenseReportLines(lines: ManagerExpenseLine[], visibility: ManagerExpenseCategoryVisibility, inventoryLabel = 'Расходники'): ManagerExpenseLine[] {
-  const visible = lines.filter(line => visibility[line.category])
+  const visible = lines.filter(line => visibility[line.category] && line.included !== false)
   const inventory = visible.filter(line => line.category === 'inventory')
   const otherLines = visible.filter(line => line.category !== 'inventory')
   if (!inventory.length) return otherLines
@@ -49,7 +51,9 @@ export function managerExpenseReportLines(lines: ManagerExpenseLine[], visibilit
       description: inventoryLabel,
       occurredOn: null,
       amountEur: Number(inventory.reduce((sum, line) => sum.plus(line.amountEur || 0), new Decimal(0)).toDecimalPlaces(2)),
-      position: Math.min(...inventory.map(line => line.position))
+      position: Math.min(...inventory.map(line => line.position)),
+      included: true,
+      problemId: null
     }
   ]
 }

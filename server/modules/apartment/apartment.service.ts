@@ -264,7 +264,7 @@ export async function deleteApartmentRecords(tx: any, apartmentId: string) {
   ])
   const attachmentConditions = [and(eq(attachments.entityType, 'apartment'), eq(attachments.entityId, apartmentId))]
   if (cleaningRows.length) attachmentConditions.push(and(eq(attachments.entityType, 'cleaning'), inArray(attachments.entityId, cleaningRows.map((row: { id: string }) => row.id))))
-  const problemRows = cleaningRows.length ? await tx.select({ id: cleaningProblems.id }).from(cleaningProblems).where(inArray(cleaningProblems.cleaningId, cleaningRows.map((row: { id: string }) => row.id))) : []
+  const problemRows = await tx.select({ id: cleaningProblems.id }).from(cleaningProblems).where(eq(cleaningProblems.apartmentId, apartmentId))
   if (problemRows.length) attachmentConditions.push(and(eq(attachments.entityType, 'cleaning_problem'), inArray(attachments.entityId, problemRows.map((row: { id: string }) => row.id))))
   if (taskRows.length) attachmentConditions.push(and(eq(attachments.entityType, 'task'), inArray(attachments.entityId, taskRows.map((row: { id: string }) => row.id))))
   const attachmentWhere = attachmentConditions.length === 1 ? attachmentConditions[0]! : or(...attachmentConditions)
@@ -272,6 +272,7 @@ export async function deleteApartmentRecords(tx: any, apartmentId: string) {
 
   await tx.delete(financialEntries).where(eq(financialEntries.apartmentId, apartmentId))
   await tx.delete(attachments).where(attachmentWhere)
+  if (problemRows.length) await tx.delete(cleaningProblems).where(inArray(cleaningProblems.id, problemRows.map((row: { id: string }) => row.id)))
   await tx.delete(inventoryMovements).where(eq(inventoryMovements.apartmentId, apartmentId))
   await tx.delete(inventoryLots).where(eq(inventoryLots.apartmentId, apartmentId))
   await tx.delete(apartmentConsumables).where(eq(apartmentConsumables.apartmentId, apartmentId))

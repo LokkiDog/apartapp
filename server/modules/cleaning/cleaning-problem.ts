@@ -1,11 +1,11 @@
 import { and, eq, inArray } from 'drizzle-orm'
 import { randomUUID } from 'node:crypto'
 import type { Actor } from '../../infrastructure/auth/actor'
-import { attachments, cleaningProblems } from '../../infrastructure/database/schema'
+import { attachments, cleaningProblems, financialEntries } from '../../infrastructure/database/schema'
 
 type ProblemInput = { id: string; description: string }
 
-export async function syncCleaningProblems(tx: any, actor: Actor, cleaningId: string, problems: ProblemInput[]) {
+export async function syncCleaningProblems(tx: any, actor: Actor, cleaningId: string, apartmentId: string, problems: ProblemInput[]) {
   const existing = await tx.select().from(cleaningProblems).where(eq(cleaningProblems.cleaningId, cleaningId))
   const requestedIds = problems.map(problem => problem.id)
   if (requestedIds.length) {
@@ -17,19 +17,27 @@ export async function syncCleaningProblems(tx: any, actor: Actor, cleaningId: st
     }
   }
 
-  const existingIds = new Set(existing.map((problem: { id: string }) => problem.id))
+  const existingById = new Map<string, { id: string, description: string, resolvedAt: Date | null }>(existing.map((problem: { id: string, description: string, resolvedAt: Date | null }) => [problem.id, problem]))
+  const existingIds = new Set(existingById.keys())
   for (const problem of problems) {
     if (existingIds.has(problem.id)) {
+      const current = existingById.get(problem.id)!
+      if (current.resolvedAt && current.description !== problem.description) throw createError({ statusCode: 409, statusMessage: 'Решённую проблему нельзя изменить из уборки' })
       await tx.update(cleaningProblems)
         .set({ description: problem.description, updatedAt: new Date() })
         .where(and(eq(cleaningProblems.id, problem.id), eq(cleaningProblems.cleaningId, cleaningId)))
     } else {
-      await tx.insert(cleaningProblems).values({ id: problem.id, organizationId: actor.organizationId, cleaningId, description: problem.description, createdById: actor.id })
+      await tx.insert(cleaningProblems).values({ id: problem.id, organizationId: actor.organizationId, apartmentId, cleaningId, description: problem.description, createdById: actor.id })
     }
   }
 
   const removedIds = existing.filter((problem: { id: string }) => !requestedIds.includes(problem.id)).map((problem: { id: string }) => problem.id)
   if (!removedIds.length) return [] as string[]
+  if (existing.some((problem: { id: string, resolvedAt: Date | null }) => removedIds.includes(problem.id) && problem.resolvedAt)) {
+    throw createError({ statusCode: 409, statusMessage: 'Решённую проблему нельзя удалить из уборки' })
+  }
+  const expense = await tx.select({ id: financialEntries.id }).from(financialEntries).where(inArray(financialEntries.problemId, removedIds)).limit(1)
+  if (expense.length) throw createError({ statusCode: 409, statusMessage: 'Проблему с расходами можно удалить только в разделе «Проблемы»' })
   const removedAttachments = await tx.select({ storageKey: attachments.storageKey }).from(attachments).where(and(
     eq(attachments.entityType, 'cleaning_problem'),
     inArray(attachments.entityId, removedIds)

@@ -7,7 +7,7 @@ import { calculateFifoUsage } from '../inventory/fifo'
 
 export type WorkKind = 'cleaning' | 'task'
 
-export async function deleteWorkRecord(kind: WorkKind, workId: string) {
+export async function deleteWorkRecord(kind: WorkKind, workId: string, options: { deleteProblems?: boolean } = {}) {
   const storageKeys = await db.transaction(async tx => {
     const movements = await tx.select({
       id: inventoryMovements.id,
@@ -43,12 +43,13 @@ export async function deleteWorkRecord(kind: WorkKind, workId: string) {
 
     const problemIds = kind === 'cleaning' ? (await tx.select({ id: cleaningProblems.id }).from(cleaningProblems).where(eq(cleaningProblems.cleaningId, workId))).map(problem => problem.id) : []
     const attachmentConditions = [and(eq(attachments.entityType, kind), eq(attachments.entityId, workId))]
-    if (problemIds.length) attachmentConditions.push(and(eq(attachments.entityType, 'cleaning_problem'), inArray(attachments.entityId, problemIds)))
+    if (options.deleteProblems && problemIds.length) attachmentConditions.push(and(eq(attachments.entityType, 'cleaning_problem'), inArray(attachments.entityId, problemIds)))
     const attachmentWhere = attachmentConditions.length === 1 ? attachmentConditions[0]! : or(...attachmentConditions)
     const linkedAttachments = await tx.select({ storageKey: attachments.storageKey }).from(attachments).where(attachmentWhere)
     await tx.delete(attachments).where(attachmentWhere)
     if (movements.length) await tx.delete(inventoryMovements).where(inArray(inventoryMovements.id, movements.map(movement => movement.id)))
     if (kind === 'cleaning') {
+      if (options.deleteProblems && problemIds.length) await tx.delete(cleaningProblems).where(inArray(cleaningProblems.id, problemIds))
       await tx.delete(cleaningInventoryReports).where(eq(cleaningInventoryReports.cleaningId, workId))
       await tx.delete(cleaningAssignments).where(eq(cleaningAssignments.cleaningId, workId))
       await tx.delete(cleanings).where(eq(cleanings.id, workId))

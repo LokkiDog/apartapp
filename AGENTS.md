@@ -45,6 +45,7 @@
 - Do not reintroduce hover-triggered popovers for calendar work details; opening is click-based.
 - Use the hotel card composition as the shared visual rule for CRM catalog cards: `surface` card with `overflow: hidden`, a padded header containing a 44px icon and title/status content, and a separated footer for primary data and actions. Use a responsive `grid gap-4 md:grid-cols-2`, preserve 44px action hit areas, and keep card-specific classes for domain details.
 - Interactive inventory cards should provide subtle feedback on hover and keyboard focus with a low-contrast background change; animate only `background-color` with an explicit short transition.
+- Every clickable element must visibly communicate interactivity: use the appropriate cursor on pointer devices and provide a subtle hover and pressed state. Keep status and warning colors recognizable in those states.
 
 ## Protected data loading
 

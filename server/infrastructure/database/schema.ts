@@ -32,7 +32,7 @@ export const taskPriorityEnum = pgEnum('task_priority', ['low', 'normal', 'high'
 export const inventoryMovementEnum = pgEnum('inventory_movement', ['replenishment', 'usage', 'adjustment_in', 'adjustment_out'])
 export const financialEntryTypeEnum = pgEnum('financial_entry_type', ['cleaning_charge', 'inventory_charge', 'task_charge', 'guest_service_charge', 'compensation', 'manual_expense'])
 export const visibilityEnum = pgEnum('entry_visibility', ['administrator', 'manager'])
-export const notificationTypeEnum = pgEnum('notification_type', ['stay_changed', 'work_assigned', 'work_rescheduled', 'work_canceled', 'problem', 'manager_expense_report_published'])
+export const notificationTypeEnum = pgEnum('notification_type', ['stay_changed', 'work_assigned', 'work_rescheduled', 'work_canceled', 'problem', 'manager_expense_report_published', 'cleaning_changed'])
 export const managerExpenseCategoryEnum = pgEnum('manager_expense_category', ['cleaning', 'inventory', 'task', 'other'])
 export const authTokenTypeEnum = pgEnum('auth_token_type', ['invitation', 'password_reset'])
 
@@ -176,6 +176,7 @@ export const cleanings = pgTable('cleanings', {
   comment: text('comment').notNull().default(''),
   hasProblem: boolean('has_problem').notNull().default(false),
   problemDescription: text('problem_description').notNull().default(''),
+  startedAt: timestamp('started_at', { withTimezone: true }),
   completedAt: timestamp('completed_at', { withTimezone: true }),
   ...timestamps
 }, table => [index('cleaning_report_date_idx').on(table.organizationId, table.scheduledOn)])
@@ -194,11 +195,18 @@ export const cleaningAssignments = pgTable('cleaning_assignments', {
 export const cleaningProblems = pgTable('cleaning_problems', {
   id: uuid('id').primaryKey().defaultRandom(),
   organizationId: uuid('organization_id').notNull().references(() => organizations.id),
-  cleaningId: uuid('cleaning_id').notNull().references(() => cleanings.id, { onDelete: 'cascade' }),
+  apartmentId: uuid('apartment_id').notNull().references(() => apartments.id),
+  cleaningId: uuid('cleaning_id').references(() => cleanings.id, { onDelete: 'set null' }),
   description: text('description').notNull(),
   createdById: uuid('created_by_id').references(() => users.id, { onDelete: 'set null' }),
+  resolvedAt: timestamp('resolved_at', { withTimezone: true }),
+  resolvedById: uuid('resolved_by_id').references(() => users.id, { onDelete: 'set null' }),
+  resolutionComment: text('resolution_comment').notNull().default(''),
   ...timestamps
-}, table => [index('cleaning_problem_cleaning_idx').on(table.cleaningId)])
+}, table => [
+  index('cleaning_problem_cleaning_idx').on(table.cleaningId),
+  index('cleaning_problem_list_idx').on(table.organizationId, table.resolvedAt, table.apartmentId)
+])
 
 export const tasks = pgTable('tasks', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -319,6 +327,7 @@ export const financialEntries = pgTable('financial_entries', {
   description: text('description').notNull(),
   sourceType: text('source_type').notNull(),
   sourceId: uuid('source_id').notNull(),
+  problemId: uuid('problem_id').references(() => cleaningProblems.id, { onDelete: 'cascade' }),
   createdById: uuid('created_by_id').notNull().references(() => users.id),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 }, table => [
@@ -362,6 +371,8 @@ export const managerExpenseReportLines = pgTable('manager_expense_report_lines',
   description: text('description').notNull(),
   occurredOn: date('occurred_on'),
   amountEur: numeric('amount_eur', { precision: 12, scale: 2, mode: 'number' }).notNull(),
+  included: boolean('included').notNull().default(true),
+  problemId: uuid('problem_id').references(() => cleaningProblems.id, { onDelete: 'set null' }),
   position: integer('position').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 }, table => [index('manager_expense_report_line_order_idx').on(table.reportId, table.category, table.position)])
@@ -426,7 +437,9 @@ export const usersRelations = relations(users, ({ many }) => ({
   createdStays: many(stays, { relationName: 'stayCreator' }),
   assignedCleanings: many(cleaningAssignments),
   assignedTasks: many(tasks, { relationName: 'taskAssignee' }),
-  createdTasks: many(tasks, { relationName: 'taskCreator' })
+  createdTasks: many(tasks, { relationName: 'taskCreator' }),
+  createdProblems: many(cleaningProblems, { relationName: 'problemCreator' }),
+  resolvedProblems: many(cleaningProblems, { relationName: 'problemResolver' })
 }))
 
 export const apartmentTypesRelations = relations(apartmentTypes, ({ many }) => ({ apartments: many(apartments), autoWriteOffs: many(apartmentTypeConsumableWriteOffs) }))
@@ -437,6 +450,7 @@ export const apartmentsRelations = relations(apartments, ({ one, many }) => ({
   type: one(apartmentTypes, { fields: [apartments.apartmentTypeId], references: [apartmentTypes.id] }),
   stays: many(stays),
   cleanings: many(cleanings),
+  problems: many(cleaningProblems),
   tasks: many(tasks),
   managerExpenseReports: many(managerExpenseReports)
 }))
@@ -450,7 +464,8 @@ export const managerExpenseReportsRelations = relations(managerExpenseReports, (
   lines: many(managerExpenseReportLines)
 }))
 export const managerExpenseReportLinesRelations = relations(managerExpenseReportLines, ({ one }) => ({
-  report: one(managerExpenseReports, { fields: [managerExpenseReportLines.reportId], references: [managerExpenseReports.id] })
+  report: one(managerExpenseReports, { fields: [managerExpenseReportLines.reportId], references: [managerExpenseReports.id] }),
+  problem: one(cleaningProblems, { fields: [managerExpenseReportLines.problemId], references: [cleaningProblems.id] })
 }))
 
 export const staysRelations = relations(stays, ({ one, many }) => ({
@@ -475,8 +490,10 @@ export const cleaningAssignmentsRelations = relations(cleaningAssignments, ({ on
   cleaner: one(users, { fields: [cleaningAssignments.cleanerId], references: [users.id] })
 }))
 export const cleaningProblemsRelations = relations(cleaningProblems, ({ one }) => ({
+  apartment: one(apartments, { fields: [cleaningProblems.apartmentId], references: [apartments.id] }),
   cleaning: one(cleanings, { fields: [cleaningProblems.cleaningId], references: [cleanings.id] }),
-  createdBy: one(users, { fields: [cleaningProblems.createdById], references: [users.id] })
+  createdBy: one(users, { fields: [cleaningProblems.createdById], references: [users.id], relationName: 'problemCreator' }),
+  resolvedBy: one(users, { fields: [cleaningProblems.resolvedById], references: [users.id], relationName: 'problemResolver' })
 }))
 export const cleaningInventoryReportsRelations = relations(cleaningInventoryReports, ({ one }) => ({
   cleaning: one(cleanings, { fields: [cleaningInventoryReports.cleaningId], references: [cleanings.id] }),

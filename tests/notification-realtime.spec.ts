@@ -45,4 +45,19 @@ describe('notification realtime broker', () => {
     unregisterNotificationPeer('user-a', archivedUser)
     unregisterNotificationPeer('user-b', otherUser)
   })
+
+  it('delivers a cleaning change only to addressed users', () => {
+    const addressed = { id: 'cleaning-addressed', send: vi.fn() }
+    const unrelated = { id: 'cleaning-unrelated', send: vi.fn() }
+    registerNotificationPeer('user-a', addressed)
+    registerNotificationPeer('user-b', unrelated)
+
+    const message = { type: 'cleaning.changed', cleaningId: 'cleaning-a', reason: 'accepted', occurredAt: '2026-09-07T00:00:00.000Z' } as const
+    publishNotification('user-a', message)
+
+    expect(addressed.send).toHaveBeenCalledWith(message)
+    expect(unrelated.send).not.toHaveBeenCalled()
+    unregisterNotificationPeer('user-a', addressed)
+    unregisterNotificationPeer('user-b', unrelated)
+  })
 })

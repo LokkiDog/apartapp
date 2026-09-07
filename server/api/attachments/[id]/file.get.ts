@@ -4,6 +4,7 @@ import { canAccessAssignedWork, canManageApartment, requireActor } from '../../.
 import { db } from '../../../infrastructure/database/client'
 import { apartments, attachments, cleaningProblems, tasks } from '../../../infrastructure/database/schema'
 import { CARD_PREVIEW_SUFFIX, fileStorage } from '../../../infrastructure/storage/local'
+import { inlineContentDisposition } from '../../../modules/attachment/content-disposition'
 
 async function getCardPreview(storageKey: string) {
   const previewKey = `${storageKey}${CARD_PREVIEW_SUFFIX}`
@@ -30,7 +31,7 @@ export default defineEventHandler(async event => {
     const allowed = attachment.entityType === 'apartment'
       ? await canManageApartment(actor, attachment.entityId)
       : attachment.entityType === 'cleaning_problem'
-      ? await db.query.cleaningProblems.findFirst({ where: and(eq(cleaningProblems.id, attachment.entityId), eq(cleaningProblems.organizationId, actor.organizationId)), with: { cleaning: { with: { assignments: true } } } }).then(problem => Boolean(problem && problem.cleaning.assignments.some(item => canAccessAssignedWork(actor, item.cleanerId))))
+      ? await db.query.cleaningProblems.findFirst({ where: and(eq(cleaningProblems.id, attachment.entityId), eq(cleaningProblems.organizationId, actor.organizationId)), with: { cleaning: { with: { assignments: true } } } }).then(problem => Boolean(problem?.cleaning?.assignments.some(item => canAccessAssignedWork(actor, item.cleanerId))))
       : await db.query.tasks.findFirst({ where: and(eq(tasks.id, attachment.entityId), eq(tasks.organizationId, actor.organizationId)) }).then(task => Boolean(task && canAccessAssignedWork(actor, task.assigneeId)))
     if (!allowed) throw createError({ statusCode: 403, statusMessage: 'Нет доступа к файлу' })
   }
@@ -43,6 +44,6 @@ export default defineEventHandler(async event => {
     return null
   }
   setHeader(event, 'content-type', isCardPreview ? 'image/webp' : attachment.mimeType)
-  setHeader(event, 'content-disposition', `inline; filename="${attachment.fileName.replace(/[\r\n"]/g, '')}"`)
+  setHeader(event, 'content-disposition', inlineContentDisposition(attachment.fileName))
   return isCardPreview ? getCardPreview(attachment.storageKey) : fileStorage.get(attachment.storageKey)
 })

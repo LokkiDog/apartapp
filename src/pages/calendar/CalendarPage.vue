@@ -7,6 +7,7 @@ import type { DateValue } from '@internationalized/date'
 import { filterApartmentsByScope, isPropertyScopeReady, propertyScopeQuery, PropertyScopeFilter, type PropertyScopeValue } from '#fsd/features/select-property-scope'
 import { apartmentCalendarColor, createFormValidator, formatDate, formatEuro, useSubmitFormValidation } from '#fsd/shared/lib'
 import { useCurrentUser } from '#fsd/shared/auth'
+import { useNotificationState } from '#fsd/features/manage-notifications'
 import { DateRangeInput, EmptyState, MoneyInput, PageHeader } from '#fsd/shared/ui'
 import StayCalendarPopover from './StayCalendarPopover.vue'
 import CalendarEventMarker from './CalendarEventMarker.vue'
@@ -42,6 +43,7 @@ function emptyStayForm(): StayForm {
 }
 
 const user = useCurrentUser()
+const notificationState = useNotificationState()
 const { locale } = useI18n()
 const { t } = useI18n()
 const formatLocale = computed(() => locale.value === 'he' ? 'he-IL' : locale.value === 'en' ? 'en-US' : 'ru-RU')
@@ -107,6 +109,9 @@ const { data: stays, status, refresh } = await useAsyncData('calendar-stays', ()
   if (!user.value || !scopeReady.value) return Promise.resolve([] as Stay[])
   return $fetch<Stay[]>('/api/stays', { query: stayQuery.value })
 }, { server: false, default: () => [], watch: [user, stayQuery] })
+watch(notificationState.cleaningRevision, () => {
+  if (user.value && scopeReady.value) void refresh()
+})
 const formServices = computed<SpecialServiceOption[]>(() => {
   const available = new Map((services.value ?? []).filter(service => service.active).map(service => [service.id, service]))
   for (const selected of editingStay.value?.services ?? []) {

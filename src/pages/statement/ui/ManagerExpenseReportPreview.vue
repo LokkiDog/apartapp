@@ -9,6 +9,7 @@ const emit = defineEmits<{
   select: [id: string]
   toggleInventory: []
   updateCategoryVisibility: [category: Category, enabled: boolean]
+  updateIncluded: [id: string, included: boolean]
   close: []
   update: [id: string, patch: Partial<Pick<Line, 'description' | 'occurredOn' | 'amountEur'>>]
   remove: [id: string]
@@ -62,7 +63,7 @@ function showCategoryLines(category: Category) { return category !== 'inventory'
               <UInput :model-value="line.amountEur" type="number" step="0.01" @update:model-value="value => emit('update', line.id, { amountEur: Number(value) || 0 })" />
               <div class="flex gap-1"><UButton type="submit" color="neutral" variant="ghost" icon="i-lucide-check" :aria-label="t('common.save')" class="min-h-11 min-w-11" /><UButton type="button" color="error" variant="ghost" icon="i-lucide-trash-2" :aria-label="t('common.delete')" class="min-h-11 min-w-11" @click="emit('remove', line.id)" /></div>
             </form>
-            <button v-else type="button" class="manager-expense-row grid min-h-14 w-full items-center gap-3 py-3 text-left transition-[background-color,scale] duration-150 hover:bg-[var(--color-surface-muted)] active:scale-[0.96] sm:gap-4" :class="{ 'cursor-default': !editable, 'manager-expense-row--cleaning': category === 'cleaning' }" :disabled="!editable" @click="emit('select', line.id)"><span class="min-w-0 justify-self-start truncate text-left font-medium">{{ category === 'cleaning' ? (line.occurredOn ? formatDate(line.occurredOn) : '') : line.description }}</span><span v-if="category !== 'cleaning'" class="whitespace-nowrap text-xs text-[var(--color-muted)] sm:text-sm">{{ line.occurredOn ? formatDate(line.occurredOn) : '' }}</span><strong class="shrink-0 whitespace-nowrap text-right tabular-nums">{{ formatEuro(line.amountEur) }}</strong></button>
+            <div v-else class="manager-expense-row grid min-h-14 items-center gap-3 py-3 text-left transition-[background-color] duration-150 sm:gap-4" :class="{ 'manager-expense-row--cleaning': category === 'cleaning', 'opacity-55': !line.included }"><UCheckbox v-if="editable && line.problemId" :model-value="line.included" :aria-label="line.included ? t('common.hide') : t('common.show')" class="min-h-11 min-w-11 items-center justify-center" @update:model-value="value => emit('updateIncluded', line.id, value === true)" /><button type="button" class="min-h-11 min-w-0 text-left hover:bg-[var(--color-surface-muted)]" :class="line.problemId && editable ? '' : 'col-span-2'" :disabled="!editable" @click="emit('select', line.id)"><span class="block min-w-0 truncate text-left font-medium">{{ category === 'cleaning' ? (line.occurredOn ? formatDate(line.occurredOn) : '') : line.description }}</span><span v-if="category !== 'cleaning'" class="whitespace-nowrap text-xs text-[var(--color-muted)] sm:text-sm">{{ line.occurredOn ? formatDate(line.occurredOn) : '' }}<template v-if="line.problemId && !line.included"> · {{ t('problems.open') }}</template></span></button><strong class="shrink-0 whitespace-nowrap text-right tabular-nums">{{ formatEuro(line.amountEur) }}</strong></div>
           </template>
         </div>
       </section>

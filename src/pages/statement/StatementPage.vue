@@ -37,8 +37,8 @@ const categoryLabels: Record<Category, string> = { cleaning: t('work.cleanings')
 const totalEur = computed(() => managerExpenseReportTotal(draftLines.value, draftCategoryVisibility.value))
 const hasUnsavedChanges = computed(() => {
   if (!report.value) return false
-  const saved = { categoryVisibility: report.value.categoryVisibility, lines: report.value.lines.map(({ category, description, occurredOn, amountEur, position }) => ({ category, description, occurredOn, amountEur, position })) }
-  const draft = { categoryVisibility: draftCategoryVisibility.value, lines: draftLines.value.map(({ category, description, occurredOn, amountEur, position }) => ({ category, description, occurredOn, amountEur, position })) }
+  const saved = { categoryVisibility: report.value.categoryVisibility, lines: report.value.lines.map(({ category, description, occurredOn, amountEur, position, included, problemId }) => ({ category, description, occurredOn, amountEur, position, included, problemId })) }
+  const draft = { categoryVisibility: draftCategoryVisibility.value, lines: draftLines.value.map(({ category, description, occurredOn, amountEur, position, included, problemId }) => ({ category, description, occurredOn, amountEur, position, included, problemId })) }
   return JSON.stringify(saved) !== JSON.stringify(draft)
 })
 const addItems = computed<DropdownMenuItem[][]>(() => [managerExpenseCategories.map(category => ({ label: categoryLabels[category], icon: category === 'cleaning' ? 'i-lucide-broom' : category === 'inventory' ? 'i-lucide-package' : category === 'task' ? 'i-lucide-wrench' : 'i-lucide-receipt-euro', onSelect: () => addLine(category) }))])
@@ -65,7 +65,7 @@ async function reload() { await refreshList(); await loadReport() }
 async function save() {
   if (!report.value) return
   pending.value = true; error.value = ''
-  try { report.value = await $fetch<Report>(`/api/finance/manager-expense-reports/${report.value.apartment.id}`, { method: 'PUT', body: { month: month.value, categoryVisibility: draftCategoryVisibility.value, lines: draftLines.value.map(({ category, description, occurredOn, amountEur }) => ({ category, description, occurredOn, amountEur })) } }); draftLines.value = report.value.lines.map(line => ({ ...line })); draftCategoryVisibility.value = { ...report.value.categoryVisibility }; editingLineId.value = null; await refreshList() }
+  try { report.value = await $fetch<Report>(`/api/finance/manager-expense-reports/${report.value.apartment.id}`, { method: 'PUT', body: { month: month.value, categoryVisibility: draftCategoryVisibility.value, lines: draftLines.value.map(({ category, description, occurredOn, amountEur, included, problemId }) => ({ category, description, occurredOn, amountEur, included, problemId })) } }); draftLines.value = report.value.lines.map(line => ({ ...line })); draftCategoryVisibility.value = { ...report.value.categoryVisibility }; editingLineId.value = null; await refreshList() }
   catch (cause: any) { error.value = cause?.data?.statusMessage ?? t('common.error') }
   finally { pending.value = false }
 }
@@ -76,10 +76,11 @@ async function action(action: 'publish' | 'unpublish' | 'reset') {
   catch (cause: any) { error.value = cause?.data?.statusMessage ?? t('common.error') }
   finally { pending.value = false; resetOpen.value = false }
 }
-function addLine(category: Category) { const line = { id: `new-${crypto.randomUUID()}`, category, description: '', occurredOn: null, amountEur: 0, position: draftLines.value.length }; draftLines.value.push(line); editingLineId.value = line.id; if (category === 'inventory') inventoryExpanded.value = true }
+function addLine(category: Category) { const line = { id: `new-${crypto.randomUUID()}`, category, description: '', occurredOn: null, amountEur: 0, position: draftLines.value.length, included: true, problemId: null }; draftLines.value.push(line); editingLineId.value = line.id; if (category === 'inventory') inventoryExpanded.value = true }
 function updateLine(id: string, patch: Partial<Pick<Line, 'description' | 'occurredOn' | 'amountEur'>>) { const line = draftLines.value.find(item => item.id === id); if (line) Object.assign(line, patch) }
 function removeLine(id: string) { draftLines.value = draftLines.value.filter(line => line.id !== id); editingLineId.value = null }
 function setCategoryVisibility(category: Category, enabled: boolean) { draftCategoryVisibility.value = updateManagerExpenseCategoryVisibility(draftCategoryVisibility.value, category, enabled) }
+function setLineIncluded(id: string, included: boolean) { const line = draftLines.value.find(item => item.id === id); if (line) line.included = included }
 function toggleInventory() {
   inventoryExpanded.value = !inventoryExpanded.value
   if (!inventoryExpanded.value && draftLines.value.find(line => line.id === editingLineId.value)?.category === 'inventory') editingLineId.value = null
@@ -131,7 +132,7 @@ onMounted(() => {
             </div>
           </div>
           <div class="px-4 pt-3 sm:px-5"><p class="text-sm font-medium text-[var(--color-muted)]">{{ t('statementExtra.previewHint') }}</p></div>
-          <ManagerExpenseReportPreview embedded :lines="draftLines" :total-eur="totalEur" :category-visibility="draftCategoryVisibility" editable :editing-line-id="editingLineId" :inventory-expanded="inventoryExpanded" @select="editingLineId = $event" @toggle-inventory="toggleInventory" @update-category-visibility="setCategoryVisibility" @close="editingLineId = null" @update="(id, patch) => updateLine(id, patch)" @remove="removeLine" />
+          <ManagerExpenseReportPreview embedded :lines="draftLines" :total-eur="totalEur" :category-visibility="draftCategoryVisibility" editable :editing-line-id="editingLineId" :inventory-expanded="inventoryExpanded" @select="editingLineId = $event" @toggle-inventory="toggleInventory" @update-category-visibility="setCategoryVisibility" @update-included="setLineIncluded" @close="editingLineId = null" @update="(id, patch) => updateLine(id, patch)" @remove="removeLine" />
         </div>
       </div>
       <EmptyState v-else icon="i-lucide-building-2"  :title="t('statementExtra.noApartments')" :description="t('statementExtra.addApartments')" />

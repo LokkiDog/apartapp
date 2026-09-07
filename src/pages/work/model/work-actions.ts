@@ -1,4 +1,4 @@
-export type WorkActionKey = 'stock' | 'inventory' | 'complete' | 'cancel' | 'edit' | 'delete'
+export type WorkActionKey = 'stock' | 'inventory' | 'start' | 'complete' | 'cancel' | 'edit' | 'delete'
 
 type ActionContext = {
   status: string
@@ -10,10 +10,10 @@ type ActionContext = {
 
 export function cleaningActionKeys(context: ActionContext): WorkActionKey[] {
   const actions: WorkActionKey[] = []
-  const active = ['assigned', 'in_progress'].includes(context.status)
-  if (active && context.canStock) actions.push('stock')
+  if (context.status === 'in_progress' && context.canStock) actions.push('stock')
   if (context.isAdministrator && context.status === 'completed') actions.push('inventory')
-  if (active && context.canOperate) actions.push('complete')
+  if (context.status === 'assigned' && context.canOperate) actions.push('start')
+  if (context.status === 'in_progress' && context.canOperate) actions.push('complete')
   if (context.isAdministrator && !['completed', 'canceled'].includes(context.status)) actions.push('edit')
   if (context.isAdministrator) actions.push('delete')
   return actions

@@ -3,18 +3,20 @@ import { cleaningActionKeys, taskActionKeys } from '../src/pages/work/model/work
 
 describe('work action access', () => {
   it('gives an administrator management actions and keeps finished work read-only', () => {
-    expect(cleaningActionKeys({ status: 'assigned', isAdministrator: true, canStock: true, canOperate: true })).toEqual(['stock', 'complete', 'edit', 'delete'])
+    expect(cleaningActionKeys({ status: 'assigned', isAdministrator: true, canStock: true, canOperate: true })).toEqual(['start', 'edit', 'delete'])
+    expect(cleaningActionKeys({ status: 'in_progress', isAdministrator: true, canStock: true, canOperate: true })).toEqual(['stock', 'complete', 'edit', 'delete'])
     expect(cleaningActionKeys({ status: 'completed', isAdministrator: true, canStock: true, canOperate: true })).toEqual(['inventory', 'delete'])
     expect(taskActionKeys({ status: 'completed', isAdministrator: true, canStock: true, canOperate: true, canCancel: true })).toEqual(['delete'])
   })
 
   it('keeps management actions hidden from managers', () => {
-    expect(cleaningActionKeys({ status: 'assigned', isAdministrator: false, canStock: true, canOperate: false })).toEqual(['stock'])
+    expect(cleaningActionKeys({ status: 'assigned', isAdministrator: false, canStock: true, canOperate: false })).toEqual([])
     expect(taskActionKeys({ status: 'open', isAdministrator: false, canStock: true, canOperate: false, canCancel: true })).toEqual(['stock', 'cancel'])
   })
 
   it('shows only operational actions to assigned workers', () => {
-    expect(cleaningActionKeys({ status: 'assigned', isAdministrator: false, canStock: true, canOperate: true })).toEqual(['stock', 'complete'])
+    expect(cleaningActionKeys({ status: 'assigned', isAdministrator: false, canStock: true, canOperate: true })).toEqual(['start'])
+    expect(cleaningActionKeys({ status: 'in_progress', isAdministrator: false, canStock: true, canOperate: true })).toEqual(['stock', 'complete'])
     expect(taskActionKeys({ status: 'open', isAdministrator: false, canStock: true, canOperate: true })).toEqual(['stock', 'complete'])
     expect(taskActionKeys({ status: 'canceled', isAdministrator: false, canStock: true, canOperate: true })).toEqual([])
   })

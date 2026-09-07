@@ -2430,7 +2430,10 @@ img {
 .work-cleaning-row {
   margin-inline: -1.25rem;
   padding-inline: 1.25rem;
-  transition-property: background-color;
+  cursor: pointer;
+  outline: 1px solid transparent;
+  outline-offset: -1px;
+  transition-property: background-color, outline-color;
   transition-duration: 160ms;
   transition-timing-function: ease;
 }
@@ -2537,6 +2540,28 @@ img {
 .work-cleaning-row__urgent-label {
   color: var(--calendar-arrival-ink);
   font-weight: 700;
+}
+@media (hover: hover) {
+  .work-cleaning-row:hover {
+    background-color: color-mix(in srgb, var(--color-primary-soft) 58%, transparent);
+    outline-color: color-mix(in srgb, var(--color-primary) 18%, transparent);
+  }
+  .work-cleaning-row--awaiting-acceptance:hover {
+    background-color: color-mix(in srgb, #fef3c7 82%, var(--color-primary-soft));
+  }
+  .work-cleaning-row--urgent:hover {
+    background-color: color-mix(in srgb, var(--calendar-arrival-bg) 82%, var(--color-primary-soft));
+  }
+}
+.work-cleaning-row:active {
+  background-color: color-mix(in srgb, var(--color-primary-soft) 78%, transparent);
+  outline-color: color-mix(in srgb, var(--color-primary) 28%, transparent);
+}
+.work-cleaning-row--awaiting-acceptance:active {
+  background-color: color-mix(in srgb, #fef3c7 68%, var(--color-primary-soft));
+}
+.work-cleaning-row--urgent:active {
+  background-color: color-mix(in srgb, var(--calendar-arrival-bg) 68%, var(--color-primary-soft));
 }
 .work-route-order-controls {
   width: 2rem;
@@ -3605,13 +3630,25 @@ html[dir="rtl"] .dashboard-page-header__actions {
     display: none;
   }
   .work-planning-actions {
+    display: grid;
     width: 100%;
+    grid-template-columns: minmax(0, 1fr) auto;
     align-items: stretch;
+    gap: 0.25rem;
   }
   .work-finished-filter-button,
   .work-history-button {
-    width: 100%;
-    justify-content: flex-start;
+    min-width: 0;
+    justify-content: center;
+    padding-inline: 0.375rem;
+    font-size: 0.75rem;
+    letter-spacing: -0.015em;
+    white-space: nowrap;
+  }
+  .work-finished-filter-button [data-slot="leadingIcon"],
+  .work-history-button [data-slot="leadingIcon"] {
+    width: 1rem;
+    height: 1rem;
   }
   .calendar-controls {
     padding: 1rem;
@@ -3980,7 +4017,9 @@ html[dir="rtl"] .dashboard-page-header__actions {
 .progress-section__heading > div,
 .progress-stock-list,
 .progress-stock-row,
-.progress-stock-fields > * {
+.progress-stock-main,
+.progress-stock-identification,
+.progress-stock-field {
   min-width: 0;
 }
 .progress-section__heading h2 {
@@ -3993,9 +4032,49 @@ html[dir="rtl"] .dashboard-page-header__actions {
   color: var(--color-muted);
 }
 .progress-stock-row {
-  padding: 0.875rem;
+  padding: 0.75rem;
   border-radius: 0.875rem;
   background: var(--color-surface-muted);
+}
+.progress-stock-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(7rem, 0.72fr) minmax(7rem, 0.72fr);
+  align-items: end;
+  gap: 0.75rem;
+}
+.progress-stock-identification {
+  align-self: center;
+}
+.progress-stock-name {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  font-size: 0.875rem;
+  font-weight: 650;
+  line-height: 1.2;
+}
+.progress-stock-current {
+  margin-top: 0.125rem;
+  overflow: hidden;
+  color: var(--color-muted);
+  font-size: 0.6875rem;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.progress-stock-current span,
+.progress-stock-input input {
+  font-variant-numeric: tabular-nums;
+}
+.progress-stock-field [data-slot="label"] {
+  margin-bottom: 0.25rem;
+  font-size: 0.75rem;
+  line-height: 1.1;
+}
+.progress-stock-input [data-slot="base"] {
+  min-height: 2.75rem;
+  padding-inline: 0.625rem;
 }
 .progress-stock-row.progress-stock-row--focused {
   scroll-margin-top: 6rem;
@@ -4234,13 +4313,25 @@ html[dir="rtl"] .dashboard-page-header__actions {
   .progress-stock-row {
     border-radius: 0;
     background: transparent;
-    padding: 0.75rem 0;
+    padding: 0.5rem 0;
   }
-  .progress-stock-fields {
-    gap: 0.5rem;
+  .progress-stock-main {
+    grid-template-columns: minmax(0, 1fr) minmax(4.5rem, 0.8fr) minmax(4.5rem, 0.8fr);
+    gap: 0.375rem;
   }
-  .progress-stock-fields [data-slot="label"] {
+  .progress-stock-name {
     font-size: 0.8125rem;
+  }
+  .progress-stock-current {
+    font-size: 0.625rem;
+  }
+  .progress-stock-field [data-slot="label"] {
+    margin-bottom: 0.1875rem;
+    font-size: 0.6875rem;
+    white-space: nowrap;
+  }
+  .progress-stock-input [data-slot="base"] {
+    padding-inline: 0.5rem;
   }
   .progress-stock-label--desktop {
     display: none;

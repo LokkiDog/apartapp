@@ -17,7 +17,7 @@ export default defineEventHandler(async event => {
     const allowed = query.entityType === 'apartment'
       ? await canManageApartment(actor, query.entityId)
       : query.entityType === 'cleaning_problem'
-      ? await db.query.cleaningProblems.findFirst({ where: and(eq(cleaningProblems.id, query.entityId), eq(cleaningProblems.organizationId, actor.organizationId)), with: { cleaning: { with: { assignments: true } } } }).then(problem => Boolean(problem && problem.cleaning.assignments.some(item => canAccessAssignedWork(actor, item.cleanerId))))
+      ? await db.query.cleaningProblems.findFirst({ where: and(eq(cleaningProblems.id, query.entityId), eq(cleaningProblems.organizationId, actor.organizationId)), with: { cleaning: { with: { assignments: true } } } }).then(problem => Boolean(problem?.cleaning?.assignments.some(item => canAccessAssignedWork(actor, item.cleanerId))))
       : await db.query.tasks.findFirst({ where: and(eq(tasks.id, query.entityId), eq(tasks.organizationId, actor.organizationId)) }).then(task => Boolean(task && canAccessAssignedWork(actor, task.assigneeId)))
     if (!allowed) throw createError({ statusCode: 403, statusMessage: 'Нет доступа к вложениям' })
   }

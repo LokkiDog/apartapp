@@ -37,7 +37,8 @@ const notificationAppearance: Record<NotificationType, { icon: string; className
   work_rescheduled: { icon: 'i-lucide-calendar-clock', className: 'bg-[#fff4d7] text-[#9a5b10]' },
   work_canceled: { icon: 'i-lucide-circle-x', className: 'bg-[#f1f3f2] text-[#647a70]' },
   problem: { icon: 'i-lucide-circle-alert', className: 'bg-[#ffebec] text-[#b63843]' },
-  manager_expense_report_published: { icon: 'i-lucide-receipt-euro', className: 'bg-[#e8f1f7] text-[#356882]' }
+  manager_expense_report_published: { icon: 'i-lucide-receipt-euro', className: 'bg-[#e8f1f7] text-[#356882]' },
+  cleaning_changed: { icon: 'i-lucide-broom', className: 'bg-[var(--color-primary-soft)] text-[var(--color-primary)]' }
 }
 
 function dateKey(value: string) {

@@ -7,6 +7,7 @@ import { db } from '../../infrastructure/database/client'
 import { apartmentConsumables, apartments, cleaningAssignments, cleaningInventoryReports, cleanings, consumables, financialEntries, inventoryLots, inventoryMovements, tasks } from '../../infrastructure/database/schema'
 import { createFinancialEntry } from '../finance/finance.service'
 import { requireAcceptedCleaningAssignment } from '../cleaning/cleaning-acceptance'
+import { publishCleaningChangeForId } from '../cleaning/cleaning-events'
 import { cleaningInventoryReportContext, resolveCompletionInventoryReports, shouldPreserveInventoryReportApproval, type CleaningInventoryReport } from './cleaning-inventory'
 import { calculateFifoUsage } from './fifo'
 
@@ -173,10 +174,12 @@ export async function updateCleaningInventory(actor: Actor, cleaningId: string, 
   await requireAcceptedCleaningAssignment(actor, cleaningId)
   const data = cleaningInventoryReportInputSchema.parse(input)
   if (cleaning.status === 'canceled') throw createError({ statusCode: 409, statusMessage: 'Отмененную уборку нельзя изменить' })
+  if (cleaning.status !== 'in_progress' && cleaning.status !== 'completed') throw createError({ statusCode: 409, statusMessage: 'Сначала начните уборку' })
   const reports = await db.transaction(tx => ['completed', 'canceled'].includes(cleaning.status)
     ? applyCleaningInventoryReports(tx, actor, cleaning, data.reports)
     : saveCleaningInventoryDrafts(tx, actor, cleaning, data.reports))
   await writeAuditLog({ organizationId: actor.organizationId, actorId: actor.id, action: 'cleaning.inventory_updated', entityType: 'cleaning', entityId: cleaningId, payload: { reports: data.reports.length } })
+  await publishCleaningChangeForId(actor, cleaningId, 'inventory')
   return reports
 }
 
@@ -208,6 +211,7 @@ export async function approveCleaningInventoryDiscrepancy(actor: Actor, reportId
     throw createError({ statusCode: 409, statusMessage: 'Не удалось утвердить расхождение' })
   }
   await writeAuditLog({ organizationId: actor.organizationId, actorId: actor.id, action: 'inventory.discrepancy_approved', entityType: 'cleaning_inventory_report', entityId: reportId, payload: { cleaningId: report.cleaningId, consumableId: report.consumableId, discrepancyQuantity: Number(report.discrepancyQuantity), remainingQuantity: Number(report.remainingQuantity) } })
+  await publishCleaningChangeForId(actor, report.cleaningId, 'inventory')
   return { ok: true, approvedAt: approved.approvedAt, approvedById: approved.approvedById }
 }
 
@@ -372,10 +376,14 @@ export async function deleteApartmentStock(actor: Actor, apartmentId: string, co
 
 export async function useStock(actor: Actor, apartmentId: string, input: unknown) {
   const data = inventoryUsageInputSchema.parse(input)
+  const sourceCleaning = data.sourceType === 'cleaning'
+    ? await db.query.cleanings.findFirst({ where: and(eq(cleanings.id, data.sourceId), eq(cleanings.apartmentId, apartmentId), eq(cleanings.organizationId, actor.organizationId)) })
+    : null
   const sourceBelongsToApartment = data.sourceType === 'cleaning'
-    ? await db.query.cleanings.findFirst({ where: and(eq(cleanings.id, data.sourceId), eq(cleanings.apartmentId, apartmentId), eq(cleanings.organizationId, actor.organizationId)) }).then(Boolean)
+    ? Boolean(sourceCleaning)
     : await db.query.tasks.findFirst({ where: and(eq(tasks.id, data.sourceId), eq(tasks.apartmentId, apartmentId), eq(tasks.organizationId, actor.organizationId)) }).then(Boolean)
   if (!sourceBelongsToApartment) throw createError({ statusCode: 404, statusMessage: 'Исходная работа не найдена в этом апартаменте' })
+  if (data.sourceType === 'cleaning' && sourceCleaning?.status !== 'in_progress') throw createError({ statusCode: 409, statusMessage: 'Сначала начните уборку' })
   const canUse = actor.roles.includes('administrator') || await (async () => {
     if (!actor.roles.includes('cleaner')) return false
     if (data.sourceType === 'cleaning') {
@@ -404,5 +412,6 @@ export async function useStock(actor: Actor, apartmentId: string, input: unknown
     await createFinancialEntry({ organizationId: actor.organizationId, apartmentId, type: 'inventory_charge', visibility: 'manager', amountEur: total, occurredOn: new Date().toISOString().slice(0, 10), description: `Расход: ${consumable?.name ?? 'Неизвестный расходник'}`, sourceType: 'inventory_movement', sourceId: movement.id, createdById: actor.id }, tx as unknown as typeof db)
     return { movement, totalCostEur: total }
   })
+  if (data.sourceType === 'cleaning') await publishCleaningChangeForId(actor, data.sourceId, 'inventory')
   return result.movement
 }
