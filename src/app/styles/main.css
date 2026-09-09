@@ -92,6 +92,60 @@ select {
   align-items: center;
   justify-content: center;
 }
+.photo-file-input {
+  display: grid;
+  min-height: 44px;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: stretch;
+  overflow: hidden;
+  border-radius: 10px;
+  background: var(--color-surface);
+  box-shadow: inset 0 0 0 1px var(--color-line);
+}
+.photo-file-input:focus-within {
+  outline: 2px solid color-mix(in srgb, var(--color-primary) 55%, transparent);
+  outline-offset: 1px;
+}
+.photo-file-input--disabled {
+  cursor: not-allowed;
+  opacity: 0.75;
+}
+.photo-file-input__button {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 0.625rem;
+  color: var(--color-muted);
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.25rem;
+  cursor: pointer;
+  transition-property: background-color, color;
+  transition-duration: 150ms;
+}
+.photo-file-input__button:hover:not(:disabled) {
+  background: var(--color-surface-muted);
+  color: var(--color-ink);
+}
+.photo-file-input__button:active:not(:disabled) {
+  background: color-mix(in srgb, var(--color-surface-muted) 82%, var(--color-line));
+}
+.photo-file-input__button:disabled {
+  cursor: not-allowed;
+}
+.photo-file-input__status {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0 0.625rem;
+  overflow: hidden;
+  color: var(--color-ink);
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 textarea {
   display: block;
   width: 100%;
@@ -3341,6 +3395,10 @@ img {
   padding: 0.45rem 0.2rem calc(0.45rem + env(safe-area-inset-bottom));
   backdrop-filter: blur(16px);
 }
+[data-slot="overlay"],
+[data-slot="content"][role="dialog"] {
+  z-index: 30;
+}
 .mobile-nav__item {
   display: flex;
   min-width: 58px;
@@ -4214,6 +4272,14 @@ html[dir="rtl"] .dashboard-page-header__actions {
   box-shadow: none;
   backdrop-filter: none;
 }
+.problem-detail-actions.work-progress-actions--in-cleaning {
+  width: 100%;
+}
+.problem-detail-section + .problem-detail-section {
+  border-top: 1px solid
+    color-mix(in srgb, var(--color-line) 82%, transparent);
+  padding-top: 1.5rem;
+}
 .work-progress-actions__secondary,
 .work-progress-actions__primary {
   display: flex;
@@ -4272,6 +4338,10 @@ html[dir="rtl"] .dashboard-page-header__actions {
 }
 
 @media (max-width: 639px) {
+  .problem-detail-overlay[data-slot="overlay"],
+  .problem-detail-slideover[data-slot="content"] {
+    z-index: 24;
+  }
   .work-detail-page {
     max-width: 100%;
     min-width: 0;
@@ -4338,6 +4408,36 @@ html[dir="rtl"] .dashboard-page-header__actions {
     background: rgb(255 255 255 / 0.94);
     box-shadow: 0 -8px 24px rgba(35, 64, 52, 0.08);
     backdrop-filter: blur(12px);
+  }
+  .problem-detail-actions.work-progress-actions--in-cleaning {
+    position: fixed;
+    z-index: 24;
+    right: 0;
+    bottom: calc(3.9rem + env(safe-area-inset-bottom));
+    left: 0;
+    width: 100%;
+    flex-wrap: nowrap;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    border-top: 1px solid var(--color-line);
+    background: rgb(255 255 255 / 0.94);
+    box-shadow: 0 -8px 24px rgba(35, 64, 52, 0.08);
+    backdrop-filter: blur(12px);
+  }
+  .problem-detail-actions.work-progress-actions--in-cleaning .work-progress-actions__secondary {
+    flex-wrap: nowrap;
+  }
+  .problem-detail-actions.work-progress-actions--in-cleaning .work-progress-actions__primary {
+    position: static;
+    width: auto;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    margin-left: auto;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    backdrop-filter: none;
   }
   .progress-section {
     padding: 0.875rem;

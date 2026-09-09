@@ -6,7 +6,7 @@ const id = '00000000-0000-4000-8000-000000000001'
 
 describe('cleaning problems', () => {
   it('uses the new multi-problem payload verbatim', () => {
-    const problems = [{ id, description: 'Протекает кран' }]
+    const problems = [{ id, description: 'Протекает кран', details: 'Капает после использования' }]
     expect(resolveCleaningProblems({ problems }, { hasProblem: false, problemDescription: '', problems }, [])).toEqual(problems)
   })
 
@@ -18,7 +18,7 @@ describe('cleaning problems', () => {
     )).toEqual([{ id, description: 'Новая формулировка' }])
   })
 
-  it('ships an additive migration and problem-scoped attachments', () => {
+  it('ships additive problem migrations and problem-scoped attachments', () => {
     const migration = readFileSync('server/infrastructure/database/migrations/0029_cleaning_problems.sql', 'utf8')
     const upload = readFileSync('server/api/attachments/index.post.ts', 'utf8')
     expect(migration).toContain('CREATE TABLE "cleaning_problems"')
@@ -26,5 +26,9 @@ describe('cleaning problems', () => {
     expect(migration).not.toContain('DROP COLUMN')
     expect(upload).toContain("storedEntityType = 'cleaning_problem'")
     expect(upload).toContain("entityType === 'cleaning_problem'")
+    const detailsMigration = readFileSync('server/infrastructure/database/migrations/0035_problem_details.sql', 'utf8')
+    expect(detailsMigration).toContain('"cleaning_problems" ADD COLUMN "details" text DEFAULT \'\' NOT NULL')
+    expect(detailsMigration).toContain('"tasks" ADD COLUMN "problem_details" text DEFAULT \'\' NOT NULL')
+    expect(detailsMigration).not.toContain('DROP COLUMN')
   })
 })

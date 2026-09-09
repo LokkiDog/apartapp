@@ -95,15 +95,17 @@ describe('CRM contracts', () => {
     expect(stayListQuerySchema.parse({ hotelId: firstId }).hotelId).toBe(firstId)
   })
 
-  it('requires a reason for tariff override and a description for a problem', () => {
+  it('requires a reason for tariff override and a title for a problem', () => {
     const tariff = { cleanerPoolEur: 5, laundryEur: 4, serviceEur: 3 }
     const problemId = '00000000-0000-4000-8000-000000000001'
     expect(cleaningTariffOverrideSchema.safeParse({ ...tariff, reason: 'Праздничный тариф' }).success).toBe(true)
     expect(cleaningTariffOverrideSchema.safeParse({ ...tariff, reason: '' }).success).toBe(false)
     expect(completionInputSchema.safeParse({ checklist: [], hasProblem: true, problemDescription: '' }).success).toBe(false)
     expect(completionInputSchema.safeParse({ checklist: [], hasProblem: true, problemDescription: 'Протекает кран' }).success).toBe(true)
+    expect(completionInputSchema.parse({ checklist: [], hasProblem: true, problemDescription: 'Протекает кран', problemDetails: 'Капает после использования' }).problemDetails).toBe('Капает после использования')
     expect(completionInputSchema.safeParse({ checklist: [], problems: [{ id: problemId, description: '' }] }).success).toBe(false)
     expect(completionInputSchema.safeParse({ checklist: [], problems: [{ id: problemId, description: 'Протекает кран' }] }).success).toBe(true)
+    expect(completionInputSchema.parse({ checklist: [], problems: [{ id: problemId, description: 'Протекает кран', details: '' }] }).problems[0]?.details).toBe('')
   })
 
   it('validates combined cleaning updates', () => {

@@ -126,4 +126,15 @@ describe('CRUD form registry', () => {
     expect(source).toContain('@error=')
     for (const field of expectedFields) expect(source).toContain(field)
   })
+
+  it('aligns the shared visible photo input text to the right and centers it vertically', () => {
+    const styles = readFileSync('src/app/styles/main.css', 'utf8')
+    const component = readFileSync('src/shared/ui/PhotoFileInput.vue', 'utf8')
+    expect(component).toContain("t('common.noFileSelected')")
+    expect(component).toContain("t('common.chooseFiles')")
+    expect(component).toContain('tabindex="-1" aria-hidden="true"')
+    expect(styles).toContain('.photo-file-input__status {\n  display: flex;')
+    expect(styles).toContain('align-items: center;\n  justify-content: flex-end;')
+    expect(styles).toContain('text-align: right;')
+  })
 })

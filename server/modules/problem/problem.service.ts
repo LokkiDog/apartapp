@@ -87,7 +87,7 @@ export async function createProblem(actor: Actor, input: unknown) {
   const data = problemInputSchema.parse(input)
   const apartment = await db.query.apartments.findFirst({ where: and(eq(apartments.id, data.apartmentId), eq(apartments.organizationId, actor.organizationId)) })
   if (!apartment) throw createError({ statusCode: 404, statusMessage: 'Апартамент не найден' })
-  const [created] = await db.insert(cleaningProblems).values({ organizationId: actor.organizationId, apartmentId: data.apartmentId, description: data.description, createdById: actor.id }).returning({ id: cleaningProblems.id })
+  const [created] = await db.insert(cleaningProblems).values({ organizationId: actor.organizationId, apartmentId: data.apartmentId, description: data.description, details: data.details, createdById: actor.id }).returning({ id: cleaningProblems.id })
   await writeAuditLog({ organizationId: actor.organizationId, actorId: actor.id, action: 'problem.created', entityType: 'cleaning_problem', entityId: created!.id })
   return getProblem(actor, created!.id)
 }
@@ -97,7 +97,7 @@ export async function updateProblem(actor: Actor, problemId: string, input: unkn
   const data = problemUpdateSchema.parse(input)
   const problem = await requireProblem(actor, problemId)
   if (problem.resolvedAt) throw createError({ statusCode: 409, statusMessage: 'Сначала переоткройте проблему' })
-  await db.update(cleaningProblems).set({ description: data.description, updatedAt: new Date() }).where(eq(cleaningProblems.id, problemId))
+  await db.update(cleaningProblems).set({ description: data.description, ...(data.details === undefined ? {} : { details: data.details }), updatedAt: new Date() }).where(eq(cleaningProblems.id, problemId))
   if (problem.cleaningId) await refreshCleaningProblemSummary(actor.organizationId, problem.cleaningId)
   await writeAuditLog({ organizationId: actor.organizationId, actorId: actor.id, action: 'problem.updated', entityType: 'cleaning_problem', entityId: problemId })
   return getProblem(actor, problemId)
@@ -158,7 +158,7 @@ export async function deleteProblem(actor: Actor, problemId: string) {
     return rows.map((row: { storageKey: string }) => row.storageKey)
   })
   if (problem.cleaningId) await refreshCleaningProblemSummary(actor.organizationId, problem.cleaningId)
-  if (problem.sourceTaskId) await db.update(tasks).set({ hasProblem: false, problemDescription: '', updatedAt: new Date() }).where(eq(tasks.id, problem.sourceTaskId))
+  if (problem.sourceTaskId) await db.update(tasks).set({ hasProblem: false, problemDescription: '', problemDetails: '', updatedAt: new Date() }).where(eq(tasks.id, problem.sourceTaskId))
   await Promise.allSettled(storageKeys.map(key => fileStorage.remove(key)))
   await writeAuditLog({ organizationId: actor.organizationId, actorId: actor.id, action: 'problem.deleted', entityType: 'cleaning_problem', entityId: problemId })
   return { ok: true }

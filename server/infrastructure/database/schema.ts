@@ -201,6 +201,7 @@ export const cleaningProblems = pgTable('cleaning_problems', {
   cleaningId: uuid('cleaning_id').references(() => cleanings.id, { onDelete: 'set null' }),
   sourceTaskId: uuid('source_task_id'),
   description: text('description').notNull(),
+  details: text('details').notNull().default(''),
   createdById: uuid('created_by_id').references(() => users.id, { onDelete: 'set null' }),
   resolvedAt: timestamp('resolved_at', { withTimezone: true }),
   resolvedById: uuid('resolved_by_id').references(() => users.id, { onDelete: 'set null' }),
@@ -231,6 +232,7 @@ export const tasks = pgTable('tasks', {
   comment: text('comment').notNull().default(''),
   hasProblem: boolean('has_problem').notNull().default(false),
   problemDescription: text('problem_description').notNull().default(''),
+  problemDetails: text('problem_details').notNull().default(''),
   completedAt: timestamp('completed_at', { withTimezone: true }),
   ...timestamps
 }, table => [

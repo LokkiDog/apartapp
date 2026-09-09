@@ -12,7 +12,7 @@ import { useCleaningRealtimeState } from '#fsd/shared/realtime'
 type WorkKind = 'cleaning' | 'task'
 type InventoryReportSource = { id: string; reportedBy: { id: string; name: string }; reportedAt: string; appliedAt: string | null; approvedAt: string | null; approvedBy: { id: string; name: string } | null; usedQuantity: number; remainingQuantity: number; discrepancyQuantity: number; startingQuantity: number; expectedRemainingQuantity: number }
 type InventoryItem = { consumable: { id: string; name: string; unit: string }; autoWriteOffQuantity: number | null; quantity: number; usedQuantity: number; remainingQuantity: number; discrepancyQuantity: number; startingQuantity: number; expectedRemainingQuantity: number; report: InventoryReportSource | null }
-type ProgressPayload = { checklist: Array<{ label: string; checked: boolean }>; comment: string; hasProblem: boolean; problemDescription: string; problems: Array<{ id: string; description: string; photos: File[] }>; inventoryReports?: Array<{ consumableId: string; usedQuantity: number; remainingQuantity: number }>; photos: File[] }
+type ProgressPayload = { checklist: Array<{ label: string; checked: boolean }>; comment: string; hasProblem: boolean; problemDescription: string; problemDetails?: string; problems: Array<{ id: string; description: string; details?: string; photos: File[] }>; inventoryReports?: Array<{ consumableId: string; usedQuantity: number; remainingQuantity: number }>; photos: File[] }
 type WorkAttachment = { id: string; fileName: string; mimeType: string }
 
 const props = defineProps<{ kind: WorkKind }>()
@@ -27,6 +27,7 @@ const isSpecialist = computed(() => Boolean(currentUser.value?.roles.includes('s
 const workRequest = await useAsyncData(`work-detail-${props.kind}-${id}`, () => currentUser.value ? $fetch<Cleaning | Task>(`/api/${props.kind}s/${id}`) : Promise.resolve(null), { server: false, default: () => null, watch: [currentUser] })
 const work = workRequest.data as Ref<Cleaning | Task | null>
 const { status, refresh, error: workLoadError } = workRequest
+const taskProblemDetails = computed(() => props.kind === 'task' ? ((work.value as Task | null)?.problemDetails ?? '') : '')
 const inventoryReports = ref<InventoryItem[]>([])
 const inventoryLoaded = ref(false)
 const attachments = ref<WorkAttachment[]>([])
@@ -113,7 +114,7 @@ onBeforeUnmount(() => {
 function title() { return props.kind === 'cleaning' ? `${t('calendar.cleaning')} · ${cleaning.value?.apartment.name ?? ''}` : task.value?.title ?? t('work.tasks') }
 function checklist() { return work.value?.checklist ?? [] }
 function cleanerNames() { return cleaning.value?.assignments.map(item => item.cleaner.name).join(', ') || t('work.notAssigned') }
-function draftBody(payload: ProgressPayload) { return { checklist: payload.checklist, comment: payload.comment, hasProblem: props.kind === 'task' ? payload.hasProblem : false, problemDescription: props.kind === 'task' ? payload.problemDescription : '', problems: props.kind === 'cleaning' ? payload.problems.map(problem => ({ id: problem.id, description: problem.description })) : [], inventoryReports: props.kind === 'cleaning' && inventoryLoaded.value ? payload.inventoryReports : undefined } }
+function draftBody(payload: ProgressPayload) { return { checklist: payload.checklist, comment: payload.comment, hasProblem: props.kind === 'task' ? payload.hasProblem : false, problemDescription: props.kind === 'task' ? payload.problemDescription : '', problemDetails: props.kind === 'task' ? payload.problemDetails : undefined, problems: props.kind === 'cleaning' ? payload.problems.map(problem => ({ id: problem.id, description: problem.description, details: problem.details })) : [], inventoryReports: props.kind === 'cleaning' && inventoryLoaded.value ? payload.inventoryReports : undefined } }
 
 async function refreshAttachments() {
   if (props.kind === 'cleaning') { attachments.value = []; return }
@@ -244,7 +245,7 @@ function requestComplete() {
   if (!work.value) return
   const incomplete = work.value.checklist.some(item => !item.checked)
   if (incomplete) { finishHint.value = t('work.incompleteHint'); window.setTimeout(() => document.querySelector('.progress-section--attention')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 0); return }
-  void saveProgress({ checklist: work.value.checklist, comment: work.value.comment ?? '', hasProblem: work.value.hasProblem, problemDescription: work.value.problemDescription, problems: cleaning.value?.problems.map(problem => ({ id: problem.id, description: problem.description, photos: [] })) ?? [], inventoryReports: inventoryReports.value.map(item => ({ consumableId: item.consumable.id, usedQuantity: item.usedQuantity, remainingQuantity: item.remainingQuantity })), photos: [] }, true)
+  void saveProgress({ checklist: work.value.checklist, comment: work.value.comment ?? '', hasProblem: work.value.hasProblem, problemDescription: work.value.problemDescription, problemDetails: taskProblemDetails.value, problems: cleaning.value?.problems.map(problem => ({ id: problem.id, description: problem.description, details: problem.details, photos: [] })) ?? [], inventoryReports: inventoryReports.value.map(item => ({ consumableId: item.consumable.id, usedQuantity: item.usedQuantity, remainingQuantity: item.remainingQuantity })), photos: [] }, true)
 }
 </script>
 
@@ -278,7 +279,7 @@ function requestComplete() {
         <UButton v-if="showCleaningAcceptance" class="min-h-11 w-full justify-center" color="warning" :loading="acceptancePending" @click="acceptAssignedCleaning">{{ t('work.acceptCleaning') }}</UButton>
         <UButton v-else class="min-h-11 w-full justify-center" icon="i-lucide-play" :loading="startPending" @click="startAssignedCleaning">{{ t('work.startCleaning') }}</UButton>
       </div>
-      <WorkProgressForm :key="`${work.id}-${attachments.length}`" :kind="props.kind" :checklist="work.checklist" :comment="work.comment" :has-problem="work.hasProblem" :problem-description="work.problemDescription" :problems="cleaning?.problems ?? []" :inventory-reports="inventoryReports" :attachments="attachments" :focus-consumable-id="focusConsumableId" :editable="canProgress" :inventory-editable="inventoryEditable" :can-approve-inventory-discrepancy="inventoryEditable" :show-checklist="!isSpecialist" :show-inventory="props.kind !== 'cleaning' || !isSpecialist" :show-comment-problems="props.kind !== 'cleaning' || !isSpecialist" :can-complete="canComplete" :busy="pending" :error="error" :finish-hint="finishHint" @save="payload => saveProgress(payload)" @complete="payload => saveProgress(payload, true)" @save-inventory="saveInventoryOnly" @approve-inventory-discrepancy="requestInventoryDiscrepancyApproval">
+      <WorkProgressForm :key="`${work.id}-${attachments.length}`" :kind="props.kind" :checklist="work.checklist" :comment="work.comment" :has-problem="work.hasProblem" :problem-description="work.problemDescription" :problem-details="taskProblemDetails" :problems="cleaning?.problems ?? []" :inventory-reports="inventoryReports" :attachments="attachments" :focus-consumable-id="focusConsumableId" :editable="canProgress" :inventory-editable="inventoryEditable" :can-approve-inventory-discrepancy="inventoryEditable" :show-checklist="!isSpecialist" :show-inventory="props.kind !== 'cleaning' || !isSpecialist" :can-complete="canComplete" :busy="pending" :error="error" :finish-hint="finishHint" @save="payload => saveProgress(payload)" @complete="payload => saveProgress(payload, true)" @save-inventory="saveInventoryOnly" @approve-inventory-discrepancy="requestInventoryDiscrepancyApproval">
         <template v-if="props.kind === 'cleaning' && canUpdateLinen" #after-checklist>
           <section class="progress-section">
             <UCheckbox :model-value="cleaning?.linenCollected" :label="t('work.linenCollected')" class="min-h-11 items-center font-medium" @update:model-value="updateLinen($event === true)" />

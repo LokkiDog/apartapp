@@ -1,15 +1,16 @@
 <script setup lang="ts">
 import type { FormErrorEvent } from '@nuxt/ui'
 import { createFormValidator, formatDateTime, useSubmitFormValidation } from '#fsd/shared/lib'
+import { PhotoFileInput } from '#fsd/shared/ui'
 import { workProgressInputSchema } from '@contracts/crm'
 
 type ChecklistItem = { label: string; checked: boolean }
 type WorkAttachment = { id: string; fileName: string }
-type CleaningProblemSource = { id: string; description: string; attachments: WorkAttachment[] }
+type CleaningProblemSource = { id: string; description: string; details: string; attachments: WorkAttachment[] }
 type CleaningProblemDraft = CleaningProblemSource & { photos: File[]; previews: Array<{ file: File; url: string }> }
 type InventoryReportSource = { id: string; reportedBy: { id: string; name: string }; reportedAt: string; appliedAt: string | null; approvedAt: string | null; approvedBy: { id: string; name: string } | null; usedQuantity: number; remainingQuantity: number; discrepancyQuantity: number; startingQuantity: number; expectedRemainingQuantity: number }
 type InventoryItem = { consumable: { id: string; name: string; unit: string }; autoWriteOffQuantity: number | null; quantity: number; usedQuantity: number; remainingQuantity: number; discrepancyQuantity: number; startingQuantity: number; expectedRemainingQuantity: number; report: InventoryReportSource | null; remainingTouched?: boolean }
-type ProgressPayload = { checklist: ChecklistItem[]; comment: string; hasProblem: boolean; problemDescription: string; problems: Array<{ id: string; description: string; photos: File[] }>; inventoryReports?: Array<{ consumableId: string; usedQuantity: number; remainingQuantity: number }>; photos: File[] }
+type ProgressPayload = { checklist: ChecklistItem[]; comment: string; hasProblem: boolean; problemDescription: string; problemDetails?: string; problems: Array<{ id: string; description: string; details?: string; photos: File[] }>; inventoryReports?: Array<{ consumableId: string; usedQuantity: number; remainingQuantity: number }>; photos: File[] }
 const { t } = useI18n()
 
 const props = withDefaults(defineProps<{
@@ -18,6 +19,7 @@ const props = withDefaults(defineProps<{
   comment?: string
   hasProblem?: boolean
   problemDescription?: string
+  problemDetails?: string
   problems?: CleaningProblemSource[]
   inventoryReports?: InventoryItem[]
   attachments?: Array<{ id: string; fileName: string }>
@@ -32,13 +34,14 @@ const props = withDefaults(defineProps<{
   busy?: boolean
   error?: string
   finishHint?: string
-}>(), { comment: '', hasProblem: false, problemDescription: '', problems: () => [], inventoryReports: () => [], attachments: () => [], focusConsumableId: '', editable: false, canComplete: false, inventoryEditable: false, canApproveInventoryDiscrepancy: false, showChecklist: true, showInventory: true, showCommentProblems: true, busy: false, error: '', finishHint: '' })
+}>(), { comment: '', hasProblem: false, problemDescription: '', problemDetails: '', problems: () => [], inventoryReports: () => [], attachments: () => [], focusConsumableId: '', editable: false, canComplete: false, inventoryEditable: false, canApproveInventoryDiscrepancy: false, showChecklist: true, showInventory: true, showCommentProblems: true, busy: false, error: '', finishHint: '' })
 
 const emit = defineEmits<{ save: [payload: ProgressPayload]; complete: [payload: ProgressPayload]; saveInventory: [reports: NonNullable<ProgressPayload['inventoryReports']>]; approveInventoryDiscrepancy: [item: InventoryItem] }>()
 const checklist = ref<ChecklistItem[]>([])
 const comment = ref('')
 const hasProblem = ref(false)
 const problemDescription = ref('')
+const problemDetails = ref('')
 const problems = ref<CleaningProblemDraft[]>([])
 const photos = ref<File[]>([])
 const photoPreviews = ref<Array<{ file: File; url: string }>>([])
@@ -51,7 +54,8 @@ const validationState = computed(() => ({
   comment: comment.value,
   hasProblem: hasProblem.value,
   problemDescription: problemDescription.value,
-  problems: props.kind === 'cleaning' ? problems.value.map(problem => ({ id: problem.id, description: problem.description })) : [],
+  problemDetails: problemDetails.value,
+  problems: props.kind === 'cleaning' ? problems.value.map(problem => ({ id: problem.id, description: problem.description, details: problem.details })) : [],
   inventoryReports: props.kind === 'cleaning' ? inventoryReports.value.map(item => ({ consumableId: item.consumable.id, usedQuantity: item.usedQuantity, remainingQuantity: item.remainingQuantity })) : undefined
 }))
 const validateProgress = createFormValidator(workProgressInputSchema, t, {
@@ -60,12 +64,13 @@ const validateProgress = createFormValidator(workProgressInputSchema, t, {
     : []
 })
 
-watch(() => [props.checklist, props.comment, props.hasProblem, props.problemDescription, props.problems, props.inventoryReports], () => {
+watch(() => [props.checklist, props.comment, props.hasProblem, props.problemDescription, props.problemDetails, props.problems, props.inventoryReports], () => {
   clearProblemPhotoPreviews()
   checklist.value = props.checklist.map(item => ({ ...item }))
   comment.value = props.comment
   hasProblem.value = props.hasProblem
   problemDescription.value = props.problemDescription
+  problemDetails.value = props.problemDetails
   problems.value = props.problems.map(problem => ({ ...problem, attachments: problem.attachments.map(attachment => ({ ...attachment })), photos: [], previews: [] }))
   inventoryReports.value = props.inventoryReports.map(item => ({ ...item, consumable: { ...item.consumable }, remainingTouched: false }))
 }, { immediate: true, deep: true })
@@ -97,7 +102,8 @@ function payload(): ProgressPayload {
     comment: comment.value,
     hasProblem: hasProblem.value,
     problemDescription: problemDescription.value,
-    problems: props.kind === 'cleaning' ? problems.value.map(problem => ({ id: problem.id, description: problem.description, photos: problem.photos })) : [],
+    problemDetails: problemDetails.value,
+    problems: props.kind === 'cleaning' ? problems.value.map(problem => ({ id: problem.id, description: problem.description, details: problem.details, photos: problem.photos })) : [],
     inventoryReports: props.kind === 'cleaning' ? inventoryReports.value.map(item => ({ consumableId: item.consumable.id, usedQuantity: Number(item.usedQuantity) || 0, remainingQuantity: Number(item.remainingQuantity) || 0 })) : undefined,
     photos: photos.value
   }
@@ -106,22 +112,20 @@ function clearPhotoPreviews() {
   if (import.meta.client) photoPreviews.value.forEach(preview => URL.revokeObjectURL(preview.url))
   photoPreviews.value = []
 }
-function choosePhotos(event: Event) {
-  clearPhotoPreviews()
-  photos.value = Array.from((event.target as HTMLInputElement).files ?? [])
-  if (import.meta.client) photoPreviews.value = photos.value.map(file => ({ file, url: URL.createObjectURL(file) }))
+function choosePhotos(selectedPhotos: File[]) {
+  photos.value.push(...selectedPhotos)
+  if (import.meta.client) photoPreviews.value.push(...selectedPhotos.map(file => ({ file, url: URL.createObjectURL(file) })))
 }
 function addProblem() {
-  problems.value.push({ id: crypto.randomUUID(), description: '', attachments: [], photos: [], previews: [] })
+  problems.value.push({ id: crypto.randomUUID(), description: '', details: '', attachments: [], photos: [], previews: [] })
 }
 function removeProblem(index: number) {
   if (import.meta.client) problems.value[index]?.previews.forEach(preview => URL.revokeObjectURL(preview.url))
   problems.value.splice(index, 1)
 }
-function chooseProblemPhotos(event: Event, problem: CleaningProblemDraft) {
-  if (import.meta.client) problem.previews.forEach(preview => URL.revokeObjectURL(preview.url))
-  problem.photos = Array.from((event.target as HTMLInputElement).files ?? [])
-  problem.previews = import.meta.client ? problem.photos.map(file => ({ file, url: URL.createObjectURL(file) })) : []
+function chooseProblemPhotos(selectedPhotos: File[], problem: CleaningProblemDraft) {
+  problem.photos.push(...selectedPhotos)
+  if (import.meta.client) problem.previews.push(...selectedPhotos.map(file => ({ file, url: URL.createObjectURL(file) })))
 }
 function clearProblemPhotoPreviews() {
   if (import.meta.client) problems.value.forEach(problem => problem.previews.forEach(preview => URL.revokeObjectURL(preview.url)))
@@ -187,18 +191,18 @@ onBeforeUnmount(() => { clearPhotoPreviews(); clearProblemPhotoPreviews() })
         <div class="mt-4 flex items-center justify-between gap-3"><h3 class="font-semibold">{{ t('progress.problems') }}</h3><UButton v-if="editable" type="button" color="neutral" variant="soft" icon="i-lucide-plus" class="min-h-11" @click="addProblem">{{ t('progress.addProblem') }}</UButton></div>
         <div v-if="problems.length" class="mt-3 grid gap-3">
           <article v-for="(problem, problemIndex) in problems" :key="problem.id" class="work-problem-card">
-            <div class="flex items-start gap-2"><UFormField :name="`problems.${problemIndex}.description`" :label="t('progress.problemDescription')" class="min-w-0 flex-1"><UTextarea v-model="problem.description" class="w-full" :disabled="!editable" :rows="3" :placeholder="t('progress.problemPlaceholder')" /></UFormField><UButton v-if="editable" type="button" color="error" variant="ghost" icon="i-lucide-trash-2" class="min-h-11 min-w-11" :aria-label="t('progress.removeProblem')" @click="removeProblem(problemIndex)" /></div>
+            <div class="flex items-start gap-2"><div class="min-w-0 flex-1 space-y-3"><UFormField :name="`problems.${problemIndex}.description`" :label="t('progress.problemTitle')"><UInput v-model="problem.description" class="w-full" :disabled="!editable" :placeholder="t('progress.problemPlaceholder')" /></UFormField><UFormField :name="`problems.${problemIndex}.details`" :label="t('progress.problemDescription')"><UTextarea v-model="problem.details" class="w-full" :disabled="!editable" :rows="3" :placeholder="t('progress.problemDetailsPlaceholder')" /></UFormField></div><UButton v-if="editable" type="button" color="error" variant="ghost" icon="i-lucide-trash-2" class="min-h-11 min-w-11" :aria-label="t('progress.removeProblem')" @click="removeProblem(problemIndex)" /></div>
             <div v-if="problem.attachments.length || problem.previews.length" class="work-attachment-gallery mt-3">
               <a v-for="attachment in problem.attachments" :key="attachment.id" :href="`/api/attachments/${attachment.id}/file`" target="_blank" rel="noreferrer" class="work-attachment-card"><img :src="`/api/attachments/${attachment.id}/file?variant=card`" :alt="attachment.fileName" class="work-attachment-card__image" /><span class="work-attachment-card__name">{{ attachment.fileName }}</span></a>
               <figure v-for="preview in problem.previews" :key="preview.url" class="work-attachment-card work-attachment-card--preview"><img :src="preview.url" :alt="preview.file.name" class="work-attachment-card__image" /><figcaption class="work-attachment-card__name">{{ preview.file.name }}</figcaption></figure>
             </div>
-            <UFormField :label="t('progress.problemPhotos')" class="mt-3"><UInput type="file" accept="image/*" multiple :disabled="!editable" @change="chooseProblemPhotos($event, problem)" /></UFormField>
+            <UFormField :label="t('progress.problemPhotos')" class="mt-3"><PhotoFileInput :files="problem.photos" :disabled="!editable" @select="chooseProblemPhotos($event, problem)" /></UFormField>
           </article>
         </div>
       </template>
       <template v-else>
         <UCheckbox v-model="hasProblem" :label="t('progress.problem')" :disabled="!editable" class="mt-4 min-h-11 items-center font-medium" />
-        <UFormField v-if="hasProblem" name="problemDescription" :label="t('progress.problemDescription')" :error="false" class="mt-3 w-full"><UTextarea v-model="problemDescription" class="w-full" :disabled="!editable" :rows="3" :placeholder="t('progress.problemPlaceholder')" /></UFormField>
+        <div v-if="hasProblem" class="mt-3 space-y-3"><UFormField name="problemDescription" :label="t('progress.problemTitle')" :error="false" class="w-full"><UInput v-model="problemDescription" class="w-full" :disabled="!editable" :placeholder="t('progress.problemPlaceholder')" /></UFormField><UFormField name="problemDetails" :label="t('progress.problemDescription')" :error="false" class="w-full"><UTextarea v-model="problemDetails" class="w-full" :disabled="!editable" :rows="3" :placeholder="t('progress.problemDetailsPlaceholder')" /></UFormField></div>
       </template>
     </section>
 
@@ -214,7 +218,7 @@ onBeforeUnmount(() => { clearPhotoPreviews(); clearProblemPhotoPreviews() })
           <figcaption class="work-attachment-card__name">{{ preview.file.name }}</figcaption>
         </figure>
       </div>
-      <UInput type="file" accept="image/*" multiple :disabled="!editable" @change="choosePhotos" />
+      <PhotoFileInput :files="photos" :disabled="!editable" @select="choosePhotos" />
     </section>
 
     <div v-if="editable || canComplete" class="work-progress-actions" :class="{ 'work-progress-actions--in-cleaning': kind === 'cleaning' }">

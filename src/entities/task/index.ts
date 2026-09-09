@@ -13,6 +13,7 @@ export type Task = {
   comment: string
   hasProblem: boolean
   problemDescription: string
+  problemDetails: string
   completedAt: string | null
   assignee?: { id: string; name: string } | null
   apartment: { name: string; managers: Array<{ id: string; name: string }>; hotel: { name: string; address: string; latitude: string; longitude: string } }

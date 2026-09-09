@@ -169,7 +169,8 @@ export const cleaningRouteUpdateSchema = z.object({
 
 export const cleaningProblemInputSchema = z.object({
   id: z.uuid(),
-  description: z.string().trim().min(1, 'Опишите проблему').max(2000)
+  description: z.string().trim().min(1, 'Укажите проблему').max(2000),
+  details: z.string().trim().max(2000).optional()
 })
 const cleaningProblemsInputSchema = z.array(cleaningProblemInputSchema).max(50).refine(
   problems => new Set(problems.map(problem => problem.id)).size === problems.length,
@@ -181,6 +182,7 @@ export const completionInputSchema = z.object({
   comment: z.string().max(2000).default(''),
   hasProblem: z.boolean().default(false),
   problemDescription: z.string().max(2000).default(''),
+  problemDetails: z.string().trim().max(2000).optional(),
   problems: cleaningProblemsInputSchema.default([]),
   inventoryReports: z.array(z.object({
     consumableId: z.uuid(),
@@ -198,6 +200,7 @@ export const workProgressInputSchema = z.object({
   comment: z.string().max(2000).default(''),
   hasProblem: z.boolean().default(false),
   problemDescription: z.string().max(2000).default(''),
+  problemDetails: z.string().trim().max(2000).optional(),
   problems: cleaningProblemsInputSchema.default([]),
   inventoryReports: z.array(z.object({
     consumableId: z.uuid(),

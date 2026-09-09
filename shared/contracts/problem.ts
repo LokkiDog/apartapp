@@ -8,9 +8,12 @@ const taskCostSchema = z.coerce.number().finite('Укажите сумму').non
 
 export const problemInputSchema = z.object({
   apartmentId: z.uuid({ error: 'Выберите апартамент' }),
-  description: z.string().trim().min(1, 'Опишите проблему').max(2000)
+  description: z.string().trim().min(1, 'Укажите проблему').max(2000),
+  details: z.string().trim().max(2000).optional().default('')
 })
-export const problemUpdateSchema = problemInputSchema.pick({ description: true })
+export const problemUpdateSchema = problemInputSchema.pick({ description: true }).extend({
+  details: z.string().trim().max(2000).optional()
+})
 export const problemResolveSchema = z.object({ resolutionComment: z.string().trim().max(2000).default('') })
 export const problemResolveWithTaskSchema = problemResolveSchema.extend({ taskDisposition: z.enum(['cancel', 'delete']).optional() })
 export const problemListQuerySchema = z.object({

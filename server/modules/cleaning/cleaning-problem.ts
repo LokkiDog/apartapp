@@ -4,7 +4,7 @@ import type { Actor } from '../../infrastructure/auth/actor'
 import { attachments, cleaningProblems, financialEntries, tasks } from '../../infrastructure/database/schema'
 import { administratorsForOrganization, notifyUsers } from '../../infrastructure/notification/publish'
 
-type ProblemInput = { id: string; description: string }
+type ProblemInput = { id: string; description: string; details?: string }
 
 export async function syncCleaningProblems(tx: any, actor: Actor, cleaningId: string, apartmentId: string, problems: ProblemInput[]) {
   const existing = await tx.select().from(cleaningProblems).where(eq(cleaningProblems.cleaningId, cleaningId))
@@ -18,17 +18,18 @@ export async function syncCleaningProblems(tx: any, actor: Actor, cleaningId: st
     }
   }
 
-  const existingById = new Map<string, { id: string, description: string, resolvedAt: Date | null }>(existing.map((problem: { id: string, description: string, resolvedAt: Date | null }) => [problem.id, problem]))
+  const existingById = new Map<string, { id: string, description: string, details: string, resolvedAt: Date | null }>(existing.map((problem: { id: string, description: string, details: string, resolvedAt: Date | null }) => [problem.id, problem]))
   const existingIds = new Set(existingById.keys())
   for (const problem of problems) {
     if (existingIds.has(problem.id)) {
       const current = existingById.get(problem.id)!
-      if (current.resolvedAt && current.description !== problem.description) throw createError({ statusCode: 409, statusMessage: 'Решённую проблему нельзя изменить из уборки' })
+      const details = problem.details?.trim()
+      if (current.resolvedAt && (current.description !== problem.description || (details !== undefined && current.details !== details))) throw createError({ statusCode: 409, statusMessage: 'Решённую проблему нельзя изменить из уборки' })
       await tx.update(cleaningProblems)
-        .set({ description: problem.description, updatedAt: new Date() })
+        .set({ description: problem.description, ...(details === undefined ? {} : { details }), updatedAt: new Date() })
         .where(and(eq(cleaningProblems.id, problem.id), eq(cleaningProblems.cleaningId, cleaningId)))
     } else {
-      await tx.insert(cleaningProblems).values({ id: problem.id, organizationId: actor.organizationId, apartmentId, cleaningId, description: problem.description, createdById: actor.id })
+      await tx.insert(cleaningProblems).values({ id: problem.id, organizationId: actor.organizationId, apartmentId, cleaningId, description: problem.description, details: problem.details?.trim() ?? '', createdById: actor.id })
     }
   }
 

@@ -10,14 +10,14 @@ import { deleteWorkRecord } from '../work/work-record.service'
 import { canBeWorkAssignee, canChangeTaskApartment } from '../work/work-policy'
 import { serializeApartment } from '../apartment/apartment-view'
 
-async function syncTaskProblem(actor: Actor, task: { id: string, apartmentId: string, createdById: string, hasProblem: boolean, problemDescription: string }, data: { hasProblem: boolean, problemDescription: string }) {
+async function syncTaskProblem(actor: Actor, task: { id: string, apartmentId: string, createdById: string, hasProblem: boolean, problemDescription: string, problemDetails: string }, data: { hasProblem: boolean, problemDescription: string, problemDetails?: string }) {
   const existing = await db.query.cleaningProblems.findFirst({ where: and(eq(cleaningProblems.sourceTaskId, task.id), eq(cleaningProblems.organizationId, actor.organizationId)) })
   if (data.hasProblem && data.problemDescription.trim()) {
     if (existing) {
-      await db.update(cleaningProblems).set({ description: data.problemDescription.trim(), updatedAt: new Date() }).where(eq(cleaningProblems.id, existing.id))
+      await db.update(cleaningProblems).set({ description: data.problemDescription.trim(), ...(data.problemDetails === undefined ? {} : { details: data.problemDetails }), updatedAt: new Date() }).where(eq(cleaningProblems.id, existing.id))
       return existing.id
     }
-    const [created] = await db.insert(cleaningProblems).values({ organizationId: actor.organizationId, apartmentId: task.apartmentId, sourceTaskId: task.id, description: data.problemDescription.trim(), createdById: task.createdById }).returning({ id: cleaningProblems.id })
+    const [created] = await db.insert(cleaningProblems).values({ organizationId: actor.organizationId, apartmentId: task.apartmentId, sourceTaskId: task.id, description: data.problemDescription.trim(), details: data.problemDetails ?? '', createdById: task.createdById }).returning({ id: cleaningProblems.id })
     return created!.id
   }
   if (existing) {
@@ -73,7 +73,7 @@ export async function completeTask(actor: Actor, taskId: string, input: unknown)
   const completeChecklist = task.checklist.every(required => data.checklist.some(item => item.label === required.label && item.checked))
   if (!completeChecklist || data.checklist.some(item => !item.checked)) throw createError({ statusCode: 400, statusMessage: 'Завершите обязательный чек-лист' })
   const updated = await db.transaction(async tx => {
-    const [completed] = await tx.update(tasks).set({ status: 'completed', checklist: data.checklist, comment: data.comment, hasProblem: data.hasProblem, problemDescription: data.problemDescription, completedAt: new Date(), updatedAt: new Date() }).where(eq(tasks.id, taskId)).returning()
+    const [completed] = await tx.update(tasks).set({ status: 'completed', checklist: data.checklist, comment: data.comment, hasProblem: data.hasProblem, problemDescription: data.problemDescription, ...(data.problemDetails === undefined ? {} : { problemDetails: data.problemDetails }), completedAt: new Date(), updatedAt: new Date() }).where(eq(tasks.id, taskId)).returning()
     if (task.ownerCostEur > 0) await createFinancialEntry({ organizationId: actor.organizationId, apartmentId: task.apartmentId, type: 'task_charge', visibility: 'manager', amountEur: task.ownerCostEur, occurredOn: new Date().toISOString().slice(0, 10), description: task.title, sourceType: 'task', sourceId: taskId, problemId: task.problemId ?? null, createdById: actor.id }, tx as unknown as typeof db)
     return completed
   })
@@ -93,7 +93,7 @@ export async function saveTaskProgress(actor: Actor, taskId: string, input: unkn
   if (!task) throw createError({ statusCode: 404, statusMessage: 'Задача не найдена' })
   if (['completed', 'canceled'].includes(task.status)) throw createError({ statusCode: 409, statusMessage: 'Завершенную или отмененную задачу нельзя изменить' })
   if (!actor.roles.includes('administrator') && task.assigneeId !== actor.id) throw createError({ statusCode: 403, statusMessage: 'Задача не назначена вам' })
-  const [updated] = await db.update(tasks).set({ checklist: data.checklist, comment: data.comment, hasProblem: data.hasProblem, problemDescription: data.problemDescription, updatedAt: new Date() }).where(eq(tasks.id, taskId)).returning()
+  const [updated] = await db.update(tasks).set({ checklist: data.checklist, comment: data.comment, hasProblem: data.hasProblem, problemDescription: data.problemDescription, ...(data.problemDetails === undefined ? {} : { problemDetails: data.problemDetails }), updatedAt: new Date() }).where(eq(tasks.id, taskId)).returning()
   await syncTaskProblem(actor, task, data)
   await writeAuditLog({ organizationId: actor.organizationId, actorId: actor.id, action: 'task.progress_saved', entityType: 'task', entityId: taskId })
   return updated
