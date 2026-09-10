@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { Apartment } from "#fsd/entities/apartment";
+import { ApartmentSelect } from "#fsd/features/select-apartment";
 import type { Cleaning } from "#fsd/entities/cleaning";
 import type { Stay } from "#fsd/entities/stay";
 import {
@@ -281,6 +282,8 @@ function submit() {
           ? t('common.assignCleaning')
           : t('work.newCleaning')
     "
+    :modal="true"
+    :overlay="true"
     @update:open="emit('update:open', $event)"
   >
     <template #body>
@@ -344,15 +347,9 @@ function submit() {
               </template>
             </USelect></UFormField>
           <UFormField name="apartmentId" :label="t('work.apartment')"
-            ><USelect
+            ><ApartmentSelect
               :model-value="form.apartmentId"
-              :items="
-                apartments.map((apartment) => ({
-                  label: `${apartment.name} · ${apartment.hotel.name}`,
-                  value: apartment.id,
-                }))
-              "
-              class="w-full"
+              :apartments="apartments"
               :disabled="linked || !canChangeContext"
               @update:model-value="chooseApartment($event)"
           /></UFormField>

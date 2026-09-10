@@ -58,7 +58,7 @@ async function removeType() { if (!typeToDelete.value) return; deletePending.val
     </div>
     <EmptyState v-else icon="i-lucide-badge-euro" :title="t('apartmentTypes.emptyTitle')" :description="t('apartmentTypes.emptyDescription')" />
 
-    <USlideover v-model:open="open" :title="typeToEdit ? t('apartmentTypes.edit') : t('apartmentTypes.new')">
+    <USlideover v-model:open="open" :title="typeToEdit ? t('apartmentTypes.edit') : t('apartmentTypes.new')" :modal="true" :overlay="true">
       <template #body>
         <UForm :key="validation.formKey.value" id="apartment-type-form" :state="form" :validate="validate" :validate-on="validation.validateOn.value" novalidate class="form-grid" @error="validation.onError" @submit="save">
           <UFormField name="name" :label="t('apartmentTypes.name')"><UInput v-model="form.name" placeholder="Studio" /></UFormField>

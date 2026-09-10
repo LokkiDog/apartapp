@@ -319,6 +319,8 @@ function hotelMenuItems(hotel: Hotel): DropdownMenuItem[] {
     <USlideover
       v-model:open="open"
       :title="hotelToEdit ? t('hotels.edit') : t('hotels.newTitle')"
+      :modal="true"
+      :overlay="true"
     >
       <template #body>
         <UForm

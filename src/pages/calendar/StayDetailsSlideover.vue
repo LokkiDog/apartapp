@@ -28,7 +28,7 @@ function editStay() {
 </script>
 
 <template>
-  <USlideover v-model:open="isOpen" :title="t('calendarExtra.bookingDetails')">
+  <USlideover v-model:open="isOpen" :title="t('calendarExtra.bookingDetails')" :modal="true" :overlay="true">
     <template #body>
       <article v-if="stay" class="stay-details">
         <header class="stay-details__header">

@@ -12,10 +12,14 @@ const props = withDefaults(defineProps<{
 const emit = defineEmits<{ 'update:modelValue': [value: number | null] }>()
 const raw = ref(formatEuroInput(props.modelValue))
 const invalid = ref(false)
+const clearedZeroOnFocus = ref(false)
 
 watch(() => props.modelValue, value => {
   const parsed = parseEuroInput(raw.value)
-  if (parsed !== value) raw.value = formatEuroInput(value)
+  if (parsed !== value) {
+    clearedZeroOnFocus.value = false
+    raw.value = formatEuroInput(value)
+  }
 })
 
 function update(value: string | number) {
@@ -24,6 +28,7 @@ function update(value: string | number) {
     invalid.value = true
     return
   }
+  clearedZeroOnFocus.value = false
   invalid.value = false
   if (!next.trim() && props.emptyValue !== null) {
     raw.value = formatEuroInput(props.emptyValue)
@@ -34,9 +39,18 @@ function update(value: string | number) {
   emit('update:modelValue', parseEuroInput(next))
 }
 
+function focus() {
+  if (parseEuroInput(raw.value) !== 0) return
+  raw.value = ''
+  clearedZeroOnFocus.value = true
+}
+
 function blur() {
   const parsed = parseEuroInput(raw.value)
-  const value = !raw.value.trim() && props.emptyValue !== null ? props.emptyValue : parsed
+  const value = clearedZeroOnFocus.value && !raw.value.trim()
+    ? 0
+    : !raw.value.trim() && props.emptyValue !== null ? props.emptyValue : parsed
+  clearedZeroOnFocus.value = false
   invalid.value = Boolean(raw.value.trim()) && parsed === null
   raw.value = formatEuroInput(value)
   emit('update:modelValue', value)
@@ -55,6 +69,7 @@ function blur() {
     :highlight="invalid"
     :aria-invalid="invalid"
     class="w-full tabular-nums"
+    @focus="focus"
     @update:model-value="update"
     @blur="blur"
   >

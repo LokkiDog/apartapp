@@ -36,6 +36,7 @@ export default defineAppConfig({
     } },
     textarea: { slots: { base: 'block w-full min-h-28 resize-y rounded-[12px] bg-white px-3.5 py-3 text-[0.9375rem] leading-6 text-[var(--color-ink)] shadow-[inset_0_0_0_1px_var(--color-line)] ring-0 placeholder:text-[var(--color-muted)]/70 focus-visible:outline-none focus-visible:shadow-[inset_0_0_0_2px_var(--color-primary),0_0_0_3px_var(--color-primary-soft)] disabled:cursor-not-allowed disabled:bg-[#f5f8f6] disabled:text-[var(--color-muted)] transition-[background-color,box-shadow,color] duration-150' } },
     card: { slots: { root: 'rounded-2xl bg-white shadow-[var(--shadow-surface)] ring-0', header: 'px-5 py-4 sm:px-6', body: 'px-5 py-5 sm:px-6', footer: 'px-5 py-4 sm:px-6' } },
-    modal: { slots: { content: 'rounded-2xl shadow-[var(--shadow-overlay)]', header: 'px-5 pt-5', body: 'px-5 pb-5' } }
+    modal: { slots: { content: 'rounded-2xl shadow-[var(--shadow-overlay)]', header: 'px-5 pt-5', body: 'px-5 pb-5' } },
+    slideover: { slots: { content: 'overflow-hidden', body: 'min-h-0 overscroll-contain' } }
   }
 })

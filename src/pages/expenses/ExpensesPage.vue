@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { DropdownMenuItem } from '@nuxt/ui'
 import type { Apartment } from '#fsd/entities/apartment'
+import { ApartmentSelect } from '#fsd/features/select-apartment'
 import { useCurrentUser } from '#fsd/shared/auth'
 import { createFormValidator, formatDate, formatEuro, useSubmitFormValidation } from '#fsd/shared/lib'
 import { DateInput, DateRangeInput, DeleteConfirmModal, EmptyState, MoneyInput, PageHeader } from '#fsd/shared/ui'
@@ -50,11 +51,6 @@ const { data: expenses, status, refresh } = await useAsyncData('expenses', () =>
   if (!user.value?.roles.includes('administrator')) return Promise.resolve([] as Expense[])
   return $fetch<Expense[]>('/api/expenses', { query: { from: from.value, to: to.value, ...(apartmentId.value !== 'all' ? { apartmentId: apartmentId.value } : {}) } })
 }, { server: false, default: () => [], watch: [user, from, to, apartmentId] })
-
-const apartmentOptions = computed(() => [
-  { label: t('expenses.allApartments'), value: 'all' },
-  ...(apartments.value ?? []).map(apartment => ({ label: `${apartment.name} · ${apartment.hotel.name}`, value: apartment.id }))
-])
 
 function expenseMenuItems(expense: Expense): DropdownMenuItem[] {
   return [
@@ -128,7 +124,7 @@ async function remove() {
 
     <div class="surface grid gap-3 p-4 sm:grid-cols-[minmax(0,1.4fr)_minmax(14rem,1fr)] sm:p-5">
       <UFormField :label="t('expenses.period')"><DateRangeInput v-model:start="from" v-model:end="to" :start-label="t('reports.start')" :end-label="t('reports.end')" required /></UFormField>
-      <UFormField :label="t('expenses.apartment')"><USelect v-model="apartmentId" :items="apartmentOptions" class="w-full" /></UFormField>
+      <UFormField :label="t('expenses.apartment')"><ApartmentSelect v-model="apartmentId" :apartments="apartments ?? []" :prepend-items="[{ label: t('expenses.allApartments'), value: 'all' }]" /></UFormField>
     </div>
 
     <UAlert v-if="hydrated && error && !open && !deleteOpen" color="error" variant="soft" :description="error" />
@@ -143,8 +139,8 @@ async function remove() {
     </div>
     <EmptyState v-else icon="i-lucide-receipt-euro" :title="t('expenses.emptyTitle')" :description="t('expenses.emptyDescription')"><template #actions><UButton @click="openCreate">{{ t('expenses.add') }}</UButton></template></EmptyState>
 
-    <USlideover v-model:open="open" :title="expenseToEdit ? t('expenses.edit') : t('expenses.new')">
-      <template #body><UForm :key="validation.formKey.value" id="expense-form" :state="form" :validate="validate" :validate-on="validation.validateOn.value" novalidate class="form-grid" @error="validation.onError" @submit="save"><UFormField name="apartmentId" :label="t('expenses.apartment')"><USelect v-model="form.apartmentId" :items="(apartments ?? []).map(apartment => ({ label: `${apartment.name} · ${apartment.hotel.name}`, value: apartment.id }))" class="w-full" /></UFormField><UFormField name="occurredOn" :label="t('expenses.date')"><DateInput v-model="form.occurredOn" /></UFormField><UFormField name="amountEur" :label="t('expenses.amount')"><MoneyInput v-model="form.amountEur" /></UFormField><UFormField name="description" :label="t('expenses.description')" class="w-full"><UTextarea v-model="form.description" class="w-full" :rows="4" maxlength="200" placeholder="Mixer repair" /></UFormField><UAlert v-if="error" color="error" variant="soft" :description="error" /></UForm></template>
+    <USlideover v-model:open="open" :title="expenseToEdit ? t('expenses.edit') : t('expenses.new')" :modal="true" :overlay="true">
+      <template #body><UForm :key="validation.formKey.value" id="expense-form" :state="form" :validate="validate" :validate-on="validation.validateOn.value" novalidate class="form-grid" @error="validation.onError" @submit="save"><UFormField name="apartmentId" :label="t('expenses.apartment')"><ApartmentSelect v-model="form.apartmentId" :apartments="apartments ?? []" /></UFormField><UFormField name="occurredOn" :label="t('expenses.date')"><DateInput v-model="form.occurredOn" /></UFormField><UFormField name="amountEur" :label="t('expenses.amount')"><MoneyInput v-model="form.amountEur" /></UFormField><UFormField name="description" :label="t('expenses.description')" class="w-full"><UTextarea v-model="form.description" class="w-full" :rows="4" maxlength="200" placeholder="Mixer repair" /></UFormField><UAlert v-if="error" color="error" variant="soft" :description="error" /></UForm></template>
       <template #footer><div class="form-actions form-actions--footer"><UButton type="button" color="neutral" variant="ghost" @click="open = false">{{ t('expenses.cancel') }}</UButton><UButton type="submit" form="expense-form" :loading="pending">{{ expenseToEdit ? t('expenses.save') : t('expenses.add') }}</UButton></div></template>
     </USlideover>
     <DeleteConfirmModal v-model:open="deleteOpen" :title="t('expenses.delete')" :description="t('expenses.deleteDescription')" :loading="pending" :error="error" @confirm="remove" />

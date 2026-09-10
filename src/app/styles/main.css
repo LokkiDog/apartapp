@@ -127,7 +127,11 @@ select {
   color: var(--color-ink);
 }
 .photo-file-input__button:active:not(:disabled) {
-  background: color-mix(in srgb, var(--color-surface-muted) 82%, var(--color-line));
+  background: color-mix(
+    in srgb,
+    var(--color-surface-muted) 82%,
+    var(--color-line)
+  );
 }
 .photo-file-input__button:disabled {
   cursor: not-allowed;
@@ -391,8 +395,7 @@ img {
   );
   gap: 0.875rem;
   overflow-y: auto;
-  border: 1px solid
-    var(--color-line);
+  border: 1px solid var(--color-line);
   border-radius: 16px;
   background: rgba(255, 255, 255, 0.96);
   padding: 0.875rem;
@@ -853,8 +856,12 @@ img {
   display: flex;
   min-width: 0;
   align-items: center;
-  justify-content: space-between;
+  flex-wrap: wrap;
   gap: 0.75rem;
+}
+.apartment-search {
+  min-width: 0;
+  flex: 1 1 14rem;
 }
 .apartment-sort-button {
   max-width: min(15rem, calc(100vw - 12rem));
@@ -866,6 +873,15 @@ img {
 }
 .apartment-view-toolbar > .apartment-view-switch {
   flex: 0 0 auto;
+}
+@media (max-width: 767px) {
+  .apartment-view-toolbar {
+    justify-content: space-between;
+  }
+  .apartment-search {
+    order: 3;
+    flex-basis: 100%;
+  }
 }
 .apartment-view-switch {
   width: max-content;
@@ -1565,7 +1581,9 @@ img {
   color: #854d0e;
 }
 .stay-bookings-panel--warning .stay-bookings-panel__header,
-.stay-bookings-panel--warning .stay-bookings-panel__group + .stay-bookings-panel__group {
+.stay-bookings-panel--warning
+  .stay-bookings-panel__group
+  + .stay-bookings-panel__group {
   border-color: color-mix(in srgb, #d97706 18%, transparent);
 }
 .stay-bookings-panel--warning .stay-bookings-panel__count {
@@ -1998,7 +2016,9 @@ img {
 .calendar-event-marker--combined .calendar-event-marker__segment--arrival {
   padding-left: 0.55rem;
 }
-.calendar-event-marker--combined .calendar-event-marker__segment--departure .stay-cleaning-marker {
+.calendar-event-marker--combined
+  .calendar-event-marker__segment--departure
+  .stay-cleaning-marker {
   position: absolute;
   top: 50%;
   left: 50%;
@@ -2636,25 +2656,45 @@ img {
 }
 @media (hover: hover) {
   .work-cleaning-row:hover {
-    background-color: color-mix(in srgb, var(--color-primary-soft) 58%, transparent);
+    background-color: color-mix(
+      in srgb,
+      var(--color-primary-soft) 58%,
+      transparent
+    );
     outline-color: color-mix(in srgb, var(--color-primary) 18%, transparent);
   }
   .work-cleaning-row--awaiting-acceptance:hover {
-    background-color: color-mix(in srgb, #fef3c7 82%, var(--color-primary-soft));
+    background-color: color-mix(
+      in srgb,
+      #fef3c7 82%,
+      var(--color-primary-soft)
+    );
   }
   .work-cleaning-row--urgent:hover {
-    background-color: color-mix(in srgb, var(--calendar-arrival-bg) 82%, var(--color-primary-soft));
+    background-color: color-mix(
+      in srgb,
+      var(--calendar-arrival-bg) 82%,
+      var(--color-primary-soft)
+    );
   }
 }
 .work-cleaning-row:active {
-  background-color: color-mix(in srgb, var(--color-primary-soft) 78%, transparent);
+  background-color: color-mix(
+    in srgb,
+    var(--color-primary-soft) 78%,
+    transparent
+  );
   outline-color: color-mix(in srgb, var(--color-primary) 28%, transparent);
 }
 .work-cleaning-row--awaiting-acceptance:active {
   background-color: color-mix(in srgb, #fef3c7 68%, var(--color-primary-soft));
 }
 .work-cleaning-row--urgent:active {
-  background-color: color-mix(in srgb, var(--calendar-arrival-bg) 68%, var(--color-primary-soft));
+  background-color: color-mix(
+    in srgb,
+    var(--calendar-arrival-bg) 68%,
+    var(--color-primary-soft)
+  );
 }
 .work-route-order-controls {
   width: 2rem;
@@ -2764,7 +2804,11 @@ img {
 }
 .inventory-stock-card:hover,
 .inventory-stock-card:focus-visible {
-  background-color: color-mix(in srgb, var(--color-primary-soft) 42%, transparent);
+  background-color: color-mix(
+    in srgb,
+    var(--color-primary-soft) 42%,
+    transparent
+  );
 }
 .inventory-catalog-card {
   transition-property: background-color;
@@ -2773,7 +2817,11 @@ img {
 }
 .inventory-catalog-card:hover,
 .inventory-catalog-card:focus-visible {
-  background-color: color-mix(in srgb, var(--color-primary-soft) 42%, transparent);
+  background-color: color-mix(
+    in srgb,
+    var(--color-primary-soft) 42%,
+    transparent
+  );
 }
 .inventory-discrepancies {
   border: 1px solid var(--color-line);
@@ -2814,34 +2862,114 @@ img {
   outline: 2px solid color-mix(in srgb, rgb(180 83 9) 55%, transparent);
   outline-offset: -2px;
 }
-.inventory-page .inventory-form [data-slot='control'] {
+.inventory-page .inventory-form [data-slot="control"] {
   border-color: var(--color-line);
 }
 .user-list-row {
   display: grid;
   min-height: 5rem;
-  grid-template-columns: auto minmax(0, 1fr) max-content 5.75rem;
+  grid-template-columns:
+    minmax(8rem, 1fr) minmax(6.5rem, 1fr) minmax(0, 4.5rem)
+    2.75rem;
   align-items: center;
-  gap: 0.75rem;
-  padding-block: 1rem;
+  gap: 0.25rem;
+  padding-block: 0.75rem;
 }
 .user-list > * + * {
   border-top: 1px solid color-mix(in srgb, var(--color-line) 55%, transparent);
 }
-.user-list-row__vika {
-  grid-column: 2 / -1;
+.user-list-row__identity,
+.user-list-row__roles,
+.user-list-row__status {
+  min-width: 0;
+}
+.user-list-row__name {
   display: flex;
-  min-height: 44px;
+  min-width: 0;
+  align-items: baseline;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+}
+.user-list-row__name-text {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.user-list-row__vika-marker {
+  flex: 0 0 auto;
+  color: var(--color-muted);
+  white-space: nowrap;
+}
+.user-list-row__vika-letter {
+  color: #b63843;
+  font-weight: 800;
+}
+.user-list-row__roles {
+  display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.25rem;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.user-list-row__role {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.75rem;
+}
+.user-list-row__role--desktop {
+  display: none;
+}
+.user-list-row__status {
+  display: flex;
+  justify-content: center;
+  overflow: hidden;
+}
+.user-list-row__status-dot {
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  flex: 0 0 auto;
+  border-radius: 9999px;
+  background-color: #53665d;
+}
+.user-list-row__status-dot[data-tone="success"] {
+  background-color: #16734f;
+}
+.user-list-row__status-dot[data-tone="warning"] {
+  background-color: #9a5b10;
+}
+.user-list-row__status-dot[data-tone="error"] {
+  background-color: #b63843;
+}
+.user-list-row__status-badge {
+  display: none;
+}
+.user-list-row__menu-button {
+  justify-self: end;
 }
 @media (min-width: 640px) {
   .user-list-row {
-    grid-template-columns: auto minmax(0, 1fr) 7rem 8rem 6rem 5.75rem;
+    grid-template-columns: minmax(0, 1fr) minmax(8rem, 13rem) 8rem 2.75rem;
     gap: 1rem;
+    padding-block: 1rem;
   }
-  .user-list-row__vika {
-    grid-column: auto;
+  .user-list-row__role--mobile {
+    display: none;
+  }
+  .user-list-row__role--desktop {
+    display: inline-flex;
+  }
+
+  .user-list-row__status {
+    justify-content: flex-start;
+  }
+  .user-list-row__status-dot {
+    display: none;
+  }
+  .user-list-row__status-badge {
+    display: inline-flex;
   }
 }
 .cleaning-context-fields {
@@ -3123,8 +3251,12 @@ img {
   color: var(--color-ink);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
 }
-.apartment-photo-carousel__control--previous { left: 0.5rem; }
-.apartment-photo-carousel__control--next { right: 0.5rem; }
+.apartment-photo-carousel__control--previous {
+  left: 0.5rem;
+}
+.apartment-photo-carousel__control--next {
+  right: 0.5rem;
+}
 .apartment-photo-carousel__counter {
   position: absolute;
   right: 0.625rem;
@@ -3398,6 +3530,9 @@ img {
 [data-slot="overlay"],
 [data-slot="content"][role="dialog"] {
   z-index: 30;
+}
+[data-reka-popper-content-wrapper] {
+  z-index: 60 !important;
 }
 .mobile-nav__item {
   display: flex;
@@ -4142,7 +4277,10 @@ html[dir="rtl"] .dashboard-page-header__actions {
 }
 .progress-stock-main {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(7rem, 0.72fr) minmax(7rem, 0.72fr);
+  grid-template-columns: minmax(0, 1fr) minmax(7rem, 0.72fr) minmax(
+      7rem,
+      0.72fr
+    );
   align-items: end;
   gap: 0.75rem;
 }
@@ -4276,8 +4414,7 @@ html[dir="rtl"] .dashboard-page-header__actions {
   width: 100%;
 }
 .problem-detail-section + .problem-detail-section {
-  border-top: 1px solid
-    color-mix(in srgb, var(--color-line) 82%, transparent);
+  border-top: 1px solid color-mix(in srgb, var(--color-line) 82%, transparent);
   padding-top: 1.5rem;
 }
 .work-progress-actions__secondary,
@@ -4340,7 +4477,7 @@ html[dir="rtl"] .dashboard-page-header__actions {
 @media (max-width: 639px) {
   .problem-detail-overlay[data-slot="overlay"],
   .problem-detail-slideover[data-slot="content"] {
-    z-index: 24;
+    z-index: 30;
   }
   .work-detail-page {
     max-width: 100%;
@@ -4424,10 +4561,12 @@ html[dir="rtl"] .dashboard-page-header__actions {
     box-shadow: 0 -8px 24px rgba(35, 64, 52, 0.08);
     backdrop-filter: blur(12px);
   }
-  .problem-detail-actions.work-progress-actions--in-cleaning .work-progress-actions__secondary {
+  .problem-detail-actions.work-progress-actions--in-cleaning
+    .work-progress-actions__secondary {
     flex-wrap: nowrap;
   }
-  .problem-detail-actions.work-progress-actions--in-cleaning .work-progress-actions__primary {
+  .problem-detail-actions.work-progress-actions--in-cleaning
+    .work-progress-actions__primary {
     position: static;
     width: auto;
     justify-content: flex-end;
@@ -4462,7 +4601,10 @@ html[dir="rtl"] .dashboard-page-header__actions {
     padding: 0.5rem 0;
   }
   .progress-stock-main {
-    grid-template-columns: minmax(0, 1fr) minmax(4.5rem, 0.8fr) minmax(4.5rem, 0.8fr);
+    grid-template-columns: minmax(0, 1fr) minmax(4.5rem, 0.8fr) minmax(
+        4.5rem,
+        0.8fr
+      );
     gap: 0.375rem;
   }
   .progress-stock-name {

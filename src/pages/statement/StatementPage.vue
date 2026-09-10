@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { DropdownMenuItem } from '@nuxt/ui'
+import { ApartmentSelect, matchesApartmentSearch } from '#fsd/features/select-apartment'
 import { useCurrentUser } from '#fsd/shared/auth'
 import { formatEuro } from '#fsd/shared/lib'
 import { EmptyState, MonthInput, PageHeader, StatusBadge } from '#fsd/shared/ui'
@@ -17,6 +18,7 @@ const { t } = useI18n()
 const route = useRoute()
 const month = ref(typeof route.query.month === 'string' && /^\d{4}-(0[1-9]|1[0-2])$/.test(route.query.month) ? route.query.month : new Date().toISOString().slice(0, 7))
 const selectedApartmentId = ref(typeof route.query.apartmentId === 'string' ? route.query.apartmentId : '')
+const apartmentSearch = ref('')
 const reports = ref<Summary[]>([])
 const report = ref<Report | null>(null)
 const draftLines = ref<Line[]>([])
@@ -32,6 +34,10 @@ const isAdministrator = computed(() => user.value?.roles.includes('administrator
 const reportTitle = computed(() => {
   const summary = reports.value.find(item => item.apartmentId === report.value?.apartment.id)
   return summary ? `${summary.hotelName} · ${summary.apartmentName}` : report.value?.apartment.name ?? ''
+})
+const filteredReports = computed(() => {
+  if (!apartmentSearch.value.trim()) return reports.value
+  return reports.value.filter(item => matchesApartmentSearch({ name: item.apartmentName, hotelName: item.hotelName }, apartmentSearch.value))
 })
 const categoryLabels: Record<Category, string> = { cleaning: t('work.cleanings'), inventory: t('reports.procurement'), task: t('work.tasks'), other: t('reports.finance') }
 const totalEur = computed(() => managerExpenseReportTotal(draftLines.value, draftCategoryVisibility.value))
@@ -108,11 +114,15 @@ onMounted(() => {
     <template v-if="isAdministrator">
       <div v-if="loading && !reports.length" class="grid gap-3"><USkeleton v-for="item in 4" :key="item" class="h-20 rounded-2xl" /></div>
       <div v-else-if="reports.length" class="manager-expense-layout grid gap-3">
-        <aside class="surface divide-y divide-[var(--color-line)] overflow-hidden">
-          <button v-for="item in reports" :key="item.apartmentId" type="button" class="manager-expense-report-option flex min-h-18 w-full flex-col justify-center px-4 py-3 text-left" :aria-pressed="selectedApartmentId === item.apartmentId" aria-controls="manager-expense-report-detail" :aria-expanded="selectedApartmentId === item.apartmentId && Boolean(report)" @click="selectedApartmentId = item.apartmentId">
-            <span class="flex w-full min-w-0 items-baseline justify-between gap-3"><strong class="min-w-0 truncate">{{ item.hotelName }} · {{ item.apartmentName }}</strong><strong class="shrink-0 text-right tabular-nums">{{ formatEuro(item.totalEur) }}</strong></span>
-            <span class="mt-0.5 flex w-full min-w-0 items-baseline justify-between gap-3"><span class="min-w-0 truncate text-sm text-[var(--color-muted)]">{{ item.managerNames.join(', ') || t('statementExtra.managersMissing') }}</span><span class="shrink-0 text-right text-xs" :class="item.published ? 'text-[var(--color-primary)]' : 'text-[var(--color-muted)]'">{{ item.published ? t('statementExtra.accessOpen') : t('statementExtra.draft') }}</span></span>
-          </button>
+        <aside class="surface overflow-hidden">
+          <div class="border-b border-[var(--color-line)] p-3"><UInput v-model="apartmentSearch" icon="i-lucide-search" :placeholder="t('common.searchApartment')" :aria-label="t('common.searchApartment')" /></div>
+          <div v-if="filteredReports.length" class="divide-y divide-[var(--color-line)]">
+            <button v-for="item in filteredReports" :key="item.apartmentId" type="button" class="manager-expense-report-option flex min-h-18 w-full flex-col justify-center px-4 py-3 text-left" :aria-pressed="selectedApartmentId === item.apartmentId" aria-controls="manager-expense-report-detail" :aria-expanded="selectedApartmentId === item.apartmentId && Boolean(report)" @click="selectedApartmentId = item.apartmentId">
+              <span class="flex w-full min-w-0 items-baseline justify-between gap-3"><strong class="min-w-0 truncate">{{ item.hotelName }} · {{ item.apartmentName }}</strong><strong class="shrink-0 text-right tabular-nums">{{ formatEuro(item.totalEur) }}</strong></span>
+              <span class="mt-0.5 flex w-full min-w-0 items-baseline justify-between gap-3"><span class="min-w-0 truncate text-sm text-[var(--color-muted)]">{{ item.managerNames.join(', ') || t('statementExtra.managersMissing') }}</span><span class="shrink-0 text-right text-xs" :class="item.published ? 'text-[var(--color-primary)]' : 'text-[var(--color-muted)]'">{{ item.published ? t('statementExtra.accessOpen') : t('statementExtra.draft') }}</span></span>
+            </button>
+          </div>
+          <p v-else class="px-4 py-5 text-sm text-[var(--color-muted)]">{{ t('common.noApartmentsFound') }}</p>
         </aside>
         <div v-if="report" id="manager-expense-report-detail" class="surface overflow-hidden">
           <div class="manager-expense-toolbar border-b border-[var(--color-line)] p-4 sm:p-5">
@@ -138,7 +148,7 @@ onMounted(() => {
       <EmptyState v-else icon="i-lucide-building-2"  :title="t('statementExtra.noApartments')" :description="t('statementExtra.addApartments')" />
     </template>
     <div v-else class="manager-expense-manager-view grid gap-4 sm:gap-5">
-      <USelect v-if="reports.length > 1" v-model="selectedApartmentId" :items="reports.map(item => ({ label: item.apartmentName, value: item.apartmentId }))" class="w-full sm:w-80" />
+      <ApartmentSelect v-if="reports.length > 1" v-model="selectedApartmentId" :apartments="reports.map(item => ({ id: item.apartmentId, name: item.apartmentName, hotel: { name: item.hotelName } }))" class="w-full sm:w-80" />
       <ManagerExpenseReportPreview v-if="report" :lines="report.lines" :total-eur="report.totalEur" :category-visibility="report.categoryVisibility" />
       <EmptyState v-else-if="!loading" icon="i-lucide-receipt-euro"  :title="t('statementExtra.unavailable')" :description="t('statementExtra.unavailableDescription')" />
     </div>

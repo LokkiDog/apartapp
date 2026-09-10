@@ -46,7 +46,8 @@ describe('problem registry contracts', () => {
   it('uses the cleaning-card action layout for problem cards', () => {
     const page = readFileSync('src/pages/problems/ProblemsPage.vue', 'utf8')
     const styles = readFileSync('src/app/styles/main.css', 'utf8')
-    expect(page).toContain(':modal="false" :portal="false" class="problem-detail-slideover"')
+    expect(page).toContain('class="problem-detail-slideover"')
+    expect(page).toContain(':modal="true" :overlay="true"')
     expect(page).toContain(":ui=\"{ overlay: 'problem-detail-overlay' }\"")
     expect(page).toContain('class="problem-detail-actions work-progress-actions work-progress-actions--in-cleaning"')
     expect(page).toContain('class="work-progress-actions__secondary"')
@@ -58,7 +59,7 @@ describe('problem registry contracts', () => {
     expect(styles).toContain('bottom: calc(3.9rem + env(safe-area-inset-bottom));')
     expect(styles).toContain('.problem-detail-actions.work-progress-actions--in-cleaning {\n    position: fixed;')
     expect(styles).toContain('.problem-detail-actions.work-progress-actions--in-cleaning .work-progress-actions__primary {\n    position: static;\n    width: auto;\n    justify-content: flex-end;')
-    expect(styles).toContain('.problem-detail-overlay[data-slot="overlay"],\n  .problem-detail-slideover[data-slot="content"] {\n    z-index: 24;\n  }')
+    expect(styles).toContain('.problem-detail-overlay[data-slot="overlay"],\n  .problem-detail-slideover[data-slot="content"] {\n    z-index: 30;\n  }')
   })
 
   it('groups problem details, solution task and expenses into separated sections', () => {

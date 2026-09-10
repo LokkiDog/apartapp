@@ -3,6 +3,7 @@ import type { DropdownMenuItem } from "@nuxt/ui";
 import { LinenStatusControl, type Cleaning } from "#fsd/entities/cleaning";
 import type { Task } from "#fsd/entities/task";
 import type { Apartment } from "#fsd/entities/apartment";
+import { ApartmentSelect } from "#fsd/features/select-apartment";
 import {
   createFormValidator,
   formatDate,
@@ -1606,6 +1607,8 @@ function taskMenuItems(task: Task): DropdownMenuItem[] {
     <USlideover
       v-model:open="taskOpen"
       :title="editingTask ? t('work.editTask') : t('work.newTask')"
+      :modal="true"
+      :overlay="true"
       ><template #body
         ><UForm
           :key="taskValidation.formKey.value"
@@ -1622,15 +1625,9 @@ function taskMenuItems(task: Task): DropdownMenuItem[] {
             name="apartmentId"
             :label="t('work.apartment')"
             :help="editingTask ? t('workExtra.taskEditHint') : undefined"
-            ><USelect
+            ><ApartmentSelect
               v-model="taskForm.apartmentId"
-              :items="
-                (apartments ?? []).map((apartment) => ({
-                  label: `${apartment.name} · ${apartment.hotel.name}`,
-                  value: apartment.id,
-                }))
-              "
-              class="w-full"
+              :apartments="apartments ?? []"
               :disabled="Boolean(editingTask && editingTask.status !== 'open')"
               /></UFormField
           ><UFormField name="title" :label="t('workExtra.taskTitle')"
@@ -1697,6 +1694,8 @@ function taskMenuItems(task: Task): DropdownMenuItem[] {
     />
 
     <USlideover v-model:open="stockOpen" :title="t('work.stockTitle')"
+      :modal="true"
+      :overlay="true"
       ><template #body
         ><form
           id="stock-usage-form"

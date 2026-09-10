@@ -24,7 +24,7 @@ describe('stay creation ownership', () => {
     expect(page).toContain('const ownApartments = computed')
     expect(page).toContain('apartment.managers.some(manager => manager.id === userId)')
     expect(page).toContain('if (!editingStay.value) return ownApartments.value')
-    expect(page).toContain(':items="formApartments.map(apartment =>')
+    expect(page).toContain('<ApartmentSelect\n              v-model="form.apartmentId"\n              :apartments="formApartments"')
     expect(page).toContain(':disabled="!canCreateStays"')
     expect(page).toContain("t('calendar.noOwnedApartments')")
   })

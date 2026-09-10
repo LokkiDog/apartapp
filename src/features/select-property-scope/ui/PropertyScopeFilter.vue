@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { Apartment } from '#fsd/entities/apartment'
 import type { Hotel } from '#fsd/entities/hotel'
+import { ApartmentSelect } from '#fsd/features/select-apartment'
 import type { PropertyScope } from '../model/property-scope'
 import { useI18n } from 'vue-i18n'
 
@@ -29,24 +30,6 @@ const hotelOptions = computed(() => [
   { label: t('scope.chooseHotel'), value: 'all' },
   ...props.hotels.filter(hotel => hotel.status === 'active').map(hotel => ({ label: hotel.name, value: hotel.id }))
 ])
-const apartmentItems = computed(() => {
-  const byHotel = new Map<string, Apartment[]>()
-  const sorted = [...props.apartments].sort((left, right) => left.hotel.name.localeCompare(right.hotel.name, 'ru') || left.name.localeCompare(right.name, 'ru'))
-  for (const apartment of sorted) {
-    const list = byHotel.get(apartment.hotel.id) ?? []
-    list.push(apartment)
-    byHotel.set(apartment.hotel.id, list)
-  }
-  return [...byHotel.values()].flatMap(group => [
-    { type: 'label' as const, label: group[0]?.hotel.name ?? '', value: group[0]?.hotel.id ?? '' },
-    ...group.map(apartment => ({
-      label: apartment.name,
-      value: apartment.id,
-      description: `${apartment.hotel.name}${apartment.status === 'archived' ? ` · ${t('scope.archived')}` : ''}`,
-      status: apartment.status
-    }))
-  ])
-})
 const selectedApartments = computed(() => props.apartments.filter(apartment => apartmentIds.value.includes(apartment.id)))
 
 watch(scope, value => {
@@ -61,14 +44,6 @@ watch(scope, value => {
   }
 })
 
-function plural(value: number, one: string, few: string, many: string) {
-  const mod100 = Math.abs(value) % 100
-  const mod10 = mod100 % 10
-  return mod100 >= 11 && mod100 <= 19 ? many : mod10 === 1 ? one : mod10 >= 2 && mod10 <= 4 ? few : many
-}
-function selectedCountLabel(value: number) {
-  return value === 1 ? t('scope.selectedOne') : t('scope.selectedMany', { count: value })
-}
 function removeApartment(id: string) {
   apartmentIds.value = apartmentIds.value.filter(apartmentId => apartmentId !== id)
 }
@@ -86,25 +61,14 @@ function removeApartment(id: string) {
 
     <UFormField v-else-if="scope === 'apartments'" :label="t('scope.apartmentsLabel')">
       <UAlert v-if="apartmentsError" color="error" variant="soft" :title="t('scope.loadError')" :description="t('scope.loadErrorDescription')" />
-      <USelectMenu
+      <ApartmentSelect
         v-model="apartmentIds"
-        :items="apartmentItems"
-        value-key="value"
+        :apartments="apartments"
         multiple
         clear
-        size="md"
-        color="neutral"
-        variant="outline"
-        :content="{ align: 'start', sideOffset: 8, collisionPadding: 8 }"
-        :search-input="{ placeholder: t('scope.search'), variant: 'none', ui: { root: 'h-10 min-h-0 self-stretch', base: 'h-10 min-h-0 border-0 px-3 py-0 text-sm font-medium text-[var(--color-ink)] ring-0 focus:ring-0 focus-visible:ring-0' } }"
-        :ui="{ base: 'w-full h-11 min-h-11 rounded-[10px] bg-white text-[var(--color-ink)] ring-[var(--color-line)] hover:bg-white focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]', input: 'h-11 min-h-0 border-0 bg-white text-[var(--color-ink)]', content: 'rounded-[12px] bg-white p-2 shadow-[var(--shadow-overlay)] ring-1 ring-[var(--color-line)]' }"
+        :placeholder="t('scope.chooseApartments')"
         class="property-scope-filter__apartment-select w-full"
-      >
-        <template #default="{ modelValue }">
-          <span v-if="modelValue?.length">{{ selectedCountLabel(modelValue.length) }}</span>
-          <span v-else class="text-[var(--color-muted)]">{{ t('scope.chooseApartments') }}</span>
-        </template>
-      </USelectMenu>
+      />
       <div v-if="selectedApartments.length" class="property-scope-filter__selected">
         <span v-for="apartment in selectedApartments" :key="apartment.id" class="property-scope-filter__selected-item">
           <span class="min-w-0"><span class="block truncate font-medium">{{ apartment.name }}</span><span class="block truncate text-xs text-[var(--color-muted)]">{{ apartment.hotel.name }}<span v-if="apartment.status === 'archived'"> · {{ t('scope.archived') }}</span></span></span>

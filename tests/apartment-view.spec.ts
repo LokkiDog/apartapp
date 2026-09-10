@@ -28,8 +28,8 @@ describe('apartment catalog view', () => {
     const page = readFileSync('src/pages/apartments/ApartmentsPage.vue', 'utf8')
     const styles = readFileSync('src/app/styles/main.css', 'utf8')
 
-    expect(page).toContain("v-else-if=\"apartments?.length && view === 'compact'\"")
-    expect(page).toContain("v-else-if=\"apartments?.length && view === 'list'\"")
+    expect(page).toContain("v-else-if=\"sortedApartments.length && view === 'compact'\"")
+    expect(page).toContain("v-else-if=\"sortedApartments.length && view === 'list'\"")
     expect(page).toContain("{ value: 'compact', icon: 'i-lucide-layout-grid'")
     expect(page).toContain("{ value: 'dense', icon: 'i-lucide-grid-2x2'")
     expect(page).toContain("{ value: 'standard', icon: 'i-lucide-panels-top-left'")
@@ -47,6 +47,25 @@ describe('apartment catalog view', () => {
     expect(styles).toContain('grid-template-columns: repeat(2, minmax(0, 1fr));')
     expect(styles).toContain('.apartment-view-switch__button')
     expect(styles).toContain('.apartment-list-item')
+  })
+
+  it('filters every view by apartment or property name and keeps catalog and search empty states separate', () => {
+    const page = readFileSync('src/pages/apartments/ApartmentsPage.vue', 'utf8')
+    const styles = readFileSync('src/app/styles/main.css', 'utf8')
+
+    expect(page).toContain("import { matchesApartmentSearch } from '#fsd/features/select-apartment'")
+    expect(page).toContain("const search = ref('')")
+    expect(page).toContain('const filteredApartments = computed')
+    expect(page).toContain('matchesApartmentSearch({ name: apartment.name, hotelName: apartment.hotel.name }, search.value)')
+    expect(page).toContain('return [...filteredApartments.value].sort')
+    expect(page).toContain('v-model="search"')
+    expect(page).toContain("t('common.searchApartment')")
+    expect(page.match(/v-for="(?:\(apartment, index\) in |apartment in )sortedApartments"/g)).toHaveLength(3)
+    expect(page).toContain("v-else-if=\"apartments?.length\" icon=\"i-lucide-search-x\" :title=\"t('common.noApartmentsFound')\"")
+    expect(styles).toContain('.apartment-search')
+    expect(styles).toContain('@media (max-width: 767px)')
+    expect(styles).toContain('justify-content: space-between;')
+    expect(styles).toContain('order: 3;')
   })
 
   it('supplies every view label in each supported locale', () => {

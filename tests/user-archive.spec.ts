@@ -33,13 +33,15 @@ describe('user archive and restoration contracts', () => {
     expect(service).toContain('eq(users.status, expectedStatus)')
   })
 
-  it('offers restore only in the archived list and handles session revocation', () => {
+  it('offers archived-user actions through the row menu and handles session revocation', () => {
     const page = readFileSync('src/pages/settings/UsersSettingsPage.vue', 'utf8')
     const realtime = readFileSync('app/plugins/notifications-realtime.client.ts', 'utf8')
 
     expect(page).toContain('async function restore(member: Member)')
     expect(page).toContain("/api/users/${member.id}/restore")
-    expect(page).toContain("v-else><UButton color=\"neutral\" variant=\"ghost\" icon=\"i-lucide-archive-restore\"")
+    expect(page).toContain("label: t('users.restoreAction'), icon: 'i-lucide-archive-restore'")
+    expect(page).toContain("label: t('users.deleteAction'), icon: 'i-lucide-trash-2', color: 'error'")
+    expect(page).toContain('function userMenuItems(member: Member): DropdownMenuItem[][]')
     expect(realtime).toContain("if (message.type === 'session.revoked')")
     expect(realtime).toContain("await $fetch('/api/auth/me')")
     expect(realtime).toContain("await navigateTo('/login?reason=archived')")

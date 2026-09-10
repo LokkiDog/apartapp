@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { DropdownMenuItem } from '@nuxt/ui'
 import type { Apartment } from '#fsd/entities/apartment'
+import { ApartmentSelect } from '#fsd/features/select-apartment'
 import type { Stay } from '#fsd/entities/stay'
 import type { Hotel } from '#fsd/entities/hotel'
 import type { DateValue } from '@internationalized/date'
@@ -638,15 +639,14 @@ async function saveStay() {
 
     <StayDetailsSlideover v-model:open="detailsOpen" :stay="selectedStay" :can-edit="canEditStays" :can-manage-cleaning="Boolean(user?.roles.includes('administrator'))" :show-service-prices="showFinancialDetails" @edit="openEdit" />
 
-    <USlideover v-model:open="open" :title="editingStay ? t('calendar.editBooking') : t('calendar.newStay')">
+    <USlideover v-model:open="open" :title="editingStay ? t('calendar.editBooking') : t('calendar.newStay')" :modal="true" :overlay="true">
       <template #body>
         <UForm :key="validation.formKey.value" id="stay-form" :state="form" :validate="validate" :validate-on="validation.validateOn.value" novalidate class="form-grid stay-form-grid" @error="validation.onError" @submit="saveStay">
           <UFormField name="apartmentId" :label="t('calendar.apartment')">
-            <USelect
+            <ApartmentSelect
               v-model="form.apartmentId"
-              :items="formApartments.map(apartment => ({ label: `${apartment.name} · ${apartment.hotel.name}`, value: apartment.id }))"
+              :apartments="formApartments"
               :disabled="Boolean(editingStay)"
-              class="w-full"
             />
           </UFormField>
           <UFormField name="checkInOn" :error-pattern="/^check(In|Out)On$/" :label="t('calendar.stayPeriod')"><DateRangeInput v-model:start="form.checkInOn" v-model:end="form.checkOutOn" :is-date-disabled="isStayDateDisabled" /></UFormField>

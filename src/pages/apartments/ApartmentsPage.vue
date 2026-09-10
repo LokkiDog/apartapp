@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useCurrentUser } from '#fsd/shared/auth'
 import { EmptyState, PageHeader, StatusBadge } from '#fsd/shared/ui'
+import { matchesApartmentSearch } from '#fsd/features/select-apartment'
 import { apartmentSortStorageKey, apartmentViewStorageKey, parseApartmentSort, parseApartmentView, type ApartmentSort, type ApartmentView } from './model/apartment-view'
 import ApartmentPhotoCarousel from './ApartmentPhotoCarousel.vue'
 import { useI18n } from 'vue-i18n'
@@ -14,6 +15,7 @@ const { data: apartments, status } = await useAsyncData('apartments', () => user
 const canEdit = computed(() => user.value?.roles.includes('administrator') ?? false)
 const view = ref<ApartmentView>('standard')
 const sort = ref<ApartmentSort>('name')
+const search = ref('')
 const viewOptions: Array<{ value: ApartmentView; icon: string; label: string }> = [
   { value: 'compact', icon: 'i-lucide-layout-grid', label: 'apartments.compactView' },
   { value: 'dense', icon: 'i-lucide-grid-2x2', label: 'common.apartmentDenseView' },
@@ -33,9 +35,10 @@ const sortMenuItems = computed(() => sortOptions.map(option => ({
   checked: sort.value === option.value,
   onSelect: () => { sort.value = option.value }
 })))
+const filteredApartments = computed(() => (apartments.value ?? []).filter(apartment => matchesApartmentSearch({ name: apartment.name, hotelName: apartment.hotel.name }, search.value)))
 const sortedApartments = computed(() => {
   const collator = new Intl.Collator(locale.value, { sensitivity: 'base' })
-  return [...(apartments.value ?? [])].sort((left, right) => {
+  return [...filteredApartments.value].sort((left, right) => {
     if (sort.value === 'createdAt') return new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime() || collator.compare(left.name, right.name)
     if (sort.value === 'hotel') return collator.compare(left.hotel.name, right.hotel.name) || collator.compare(left.name, right.name)
     return collator.compare(left.name, right.name) || collator.compare(left.hotel.name, right.hotel.name)
@@ -70,6 +73,7 @@ function openApartment(apartmentId: string) {
     </PageHeader>
 
     <div class="apartment-view-toolbar">
+      <UInput v-if="status !== 'pending' && apartments?.length" v-model="search" icon="i-lucide-search" :placeholder="t('common.searchApartment')" :aria-label="t('common.searchApartment')" class="apartment-search" />
       <UDropdownMenu :items="sortMenuItems" :content="{ align: 'start' }" :modal="false">
         <UButton color="neutral" variant="soft" icon="i-lucide-arrow-down-a-z" class="apartment-sort-button min-h-11 min-w-11 active:scale-[0.96] transition-transform" :aria-label="t('apartments.sort')"><span class="hidden sm:inline">{{ t('apartments.sort') }}: {{ t(selectedSort.label) }}</span></UButton>
       </UDropdownMenu>
@@ -80,7 +84,7 @@ function openApartment(apartmentId: string) {
 
     <div v-if="status === 'pending'" class="apartments-collection" :class="`apartments-collection--${view}`"><USkeleton v-for="item in 6" :key="item" class="apartments-collection__skeleton" /></div>
 
-    <div v-else-if="apartments?.length && view === 'compact'" class="apartments-collection apartments-collection--compact">
+    <div v-else-if="sortedApartments.length && view === 'compact'" class="apartments-collection apartments-collection--compact">
       <article v-for="apartment in sortedApartments" :key="apartment.id" class="apartment-compact-card surface" :class="{ 'apartment-compact-card--interactive': canEdit }" :role="canEdit ? 'link' : undefined" :tabindex="canEdit ? 0 : undefined" :aria-label="canEdit ? `${t('apartments.edit')}: ${apartment.name}` : undefined" @click="openApartment(apartment.id)" @keydown.enter="openApartment(apartment.id)" @keydown.space.prevent="openApartment(apartment.id)">
         <div class="apartment-compact-card__media">
           <img v-if="apartment.photo" :src="`/api/attachments/${apartment.photo.id}/file?variant=card`" :alt="`${apartment.name}: ${apartment.photo.fileName}`" class="apartment-card__image" loading="lazy" decoding="async">
@@ -91,7 +95,7 @@ function openApartment(apartmentId: string) {
       </article>
     </div>
 
-    <div v-else-if="apartments?.length && view === 'list'" class="apartments-collection apartments-collection--list">
+    <div v-else-if="sortedApartments.length && view === 'list'" class="apartments-collection apartments-collection--list">
       <article v-for="apartment in sortedApartments" :key="apartment.id" class="apartment-list-item surface" :class="{ 'apartment-list-item--interactive': canEdit }" :role="canEdit ? 'link' : undefined" :tabindex="canEdit ? 0 : undefined" :aria-label="canEdit ? `${t('apartments.edit')}: ${apartment.name}` : undefined" @click="openApartment(apartment.id)" @keydown.enter="openApartment(apartment.id)" @keydown.space.prevent="openApartment(apartment.id)">
         <div class="apartment-list-item__media"><img v-if="apartment.photo" :src="`/api/attachments/${apartment.photo.id}/file?variant=card`" :alt="`${apartment.name}: ${apartment.photo.fileName}`" class="apartment-card__image" loading="lazy" decoding="async"><div v-else class="apartment-list-item__placeholder"><UIcon name="i-lucide-building-2" class="size-5" /></div></div>
         <div class="apartment-list-item__details"><div class="min-w-0"><h2 class="truncate font-semibold">{{ apartment.name }}</h2><p class="truncate text-sm text-[var(--color-muted)]">{{ hotelLabel(apartment) }}</p></div><p class="hidden truncate text-sm text-[var(--color-muted)] sm:block">{{ apartment.locationDetails || apartment.type.name }}</p><p class="apartment-list-item__facts"><span>{{ t('apartments.guests') }}: <b>{{ apartment.capacity }}</b></span><span>{{ t('apartments.rooms') }}: <b>{{ apartment.rooms }}</b></span></p></div>
@@ -100,13 +104,14 @@ function openApartment(apartmentId: string) {
       </article>
     </div>
 
-    <div v-else-if="apartments?.length" class="apartments-collection" :class="`apartments-collection--${view}`">
+    <div v-else-if="sortedApartments.length" class="apartments-collection" :class="`apartments-collection--${view}`">
       <article v-for="(apartment, index) in sortedApartments" :key="apartment.id" class="apartment-card surface" :class="{ 'apartment-card--dense': view === 'dense', 'apartment-card--interactive': canEdit }" :role="canEdit ? 'link' : undefined" :tabindex="canEdit ? 0 : undefined" :aria-label="canEdit ? `${t('apartments.edit')}: ${apartment.name}` : undefined" @click="openApartment(apartment.id)" @keydown.enter="openApartment(apartment.id)" @keydown.space.prevent="openApartment(apartment.id)">
         <div class="apartment-card__media"><ApartmentPhotoCarousel v-if="apartment.photos.length" :photos="apartment.photos" :apartment-name="apartment.name" :eager="index < 3" /><div v-else class="apartment-card__placeholder"><UIcon name="i-lucide-building-2" class="size-9" /><span>{{ t('apartments.photo') }}</span></div><StatusBadge class="apartment-card__status" :label="statusLabel(apartment)" :tone="statusTone(apartment)" /></div>
         <div class="apartment-card__body"><div class="min-w-0"><p class="truncate text-sm font-medium text-[var(--color-primary)]">{{ hotelLabel(apartment) }}</p><h2 class="mt-1 truncate text-xl font-semibold tracking-[-0.03em]">{{ apartment.name }}</h2><p class="mt-1 min-h-10 text-sm leading-5 text-[var(--color-muted)]">{{ apartment.locationDetails || apartment.type.name }}</p></div><dl class="apartment-card__facts"><div><dt>{{ t('apartments.guests') }}</dt><dd>{{ apartment.capacity }}</dd></div><div><dt>{{ t('apartments.rooms') }}</dt><dd>{{ apartment.rooms }}</dd></div></dl><div class="apartment-card__footer"><div class="min-w-0"><p class="text-xs text-[var(--color-muted)]">{{ t('apartments.managers') }}</p><p class="truncate text-sm font-semibold">{{ apartment.managers.map(manager => manager.name).join(', ') || t('apartments.notAssigned') }}</p></div></div></div>
       </article>
     </div>
 
+    <EmptyState v-else-if="apartments?.length" icon="i-lucide-search-x" :title="t('common.noApartmentsFound')" />
     <EmptyState v-else icon="i-lucide-building-2" :title="t('apartments.emptyTitle')" :description="t('apartments.emptyDescription')"><template v-if="user?.roles.includes('administrator')" #actions><UButton to="/apartments/new">{{ t('apartments.add') }}</UButton></template></EmptyState>
   </section>
 </template>
