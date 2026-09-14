@@ -3835,6 +3835,12 @@ html[dir="rtl"] .dashboard-page-header__actions {
   }
 }
 
+.work-detail-linen-plan {
+  grid-column: 1 / -1;
+  border-top: 1px solid var(--color-line);
+  padding-top: 1rem;
+}
+
 @media (max-width: 639px) {
   .page-header {
     flex-direction: column;

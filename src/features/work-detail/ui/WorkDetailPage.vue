@@ -16,7 +16,7 @@ type ProgressPayload = { checklist: Array<{ label: string; checked: boolean }>; 
 type WorkAttachment = { id: string; fileName: string; mimeType: string }
 
 const props = defineProps<{ kind: WorkKind }>()
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const toast = useToast()
 const taskToastUi = {
   root: 'task-save-toast mx-auto min-h-10 w-fit max-w-full items-center gap-2 rounded-[10px] px-3 py-2 shadow-[var(--shadow-surface)] ring-0',
@@ -64,6 +64,16 @@ const backLabel = computed(() => cameFromInventory.value ? t('inventoryDiscrepan
 
 const cleaning = computed(() => props.kind === 'cleaning' ? work.value as Cleaning | null : null)
 const task = computed(() => props.kind === 'task' ? work.value as Task | null : null)
+const linenPlan = computed(() => cleaning.value?.linenPlan ?? null)
+const linenGuestCountLabel = computed(() => {
+  const count = linenPlan.value?.current.guestCount ?? 0
+  const forms = t('common.guestsPlural').split('|').map(form => form.trim())
+  const plural = new Intl.PluralRules(locale.value).select(count)
+  const formIndex = forms.length === 3
+    ? plural === 'one' ? 0 : plural === 'few' ? 1 : 2
+    : plural === 'one' ? 0 : 1
+  return `${count} ${forms[formIndex] ?? forms[forms.length - 1]}`
+})
 const hotelLocation = computed(() => {
   const latitudeSource = work.value?.apartment.hotel.latitude
   const longitudeSource = work.value?.apartment.hotel.longitude
@@ -292,6 +302,11 @@ function requestComplete() {
         </div>
         <div v-if="props.kind === 'cleaning' && cleaning?.tariffSnapshot?.ownerTotalEur !== undefined"><p class="detail-label">{{ t('work.cost') }}</p><p class="font-semibold tabular-nums">{{ formatEuro(cleaning.tariffSnapshot.ownerTotalEur) }}</p></div>
         <div v-if="props.kind === 'cleaning' && cleaning?.tariffSnapshot?.cleanerPoolEur !== undefined"><p class="detail-label">{{ t('work.payout') }}</p><p class="font-semibold tabular-nums">{{ formatEuro(cleaning.tariffSnapshot.cleanerPoolEur) }}</p></div>
+        <div v-if="props.kind === 'cleaning' && linenPlan" class="work-detail-linen-plan" :class="{ 'rounded-xl bg-amber-50 py-4 text-amber-950 dark:bg-amber-950/25 dark:text-amber-50': linenPlan.mismatch }">
+          <p class="detail-label">{{ t('work.nextArrival') }}</p>
+          <p class="mt-1 font-semibold tabular-nums">{{ linenGuestCountLabel }} · {{ linenPlan.current.source === 'booking' ? formatDate(linenPlan.current.checkInOn!) : t('work.noStay') }}</p>
+          <p v-if="linenPlan.prepared" class="mt-2 text-sm text-[var(--color-muted)]" :class="{ 'text-amber-800 dark:text-amber-200': linenPlan.mismatch }">{{ t('work.preparedForGuests', { count: linenPlan.prepared.guestCount }) }}</p>
+        </div>
         <div v-if="props.kind === 'cleaning' && hotelLocation" class="work-directions-action col-span-full"><UButton color="primary" variant="link" class="work-directions-action__button" @click="directionsOpen = true">{{ t('directions.title') }}</UButton></div>
       </section>
       <div v-if="showCleaningAcceptance || canStartCleaning" class="work-detail-mobile-cleaning-action sm:hidden">

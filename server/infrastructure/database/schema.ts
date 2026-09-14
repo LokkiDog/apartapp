@@ -82,10 +82,12 @@ export const apartmentTypes = pgTable('apartment_types', {
   cleanerPoolEur: numeric('cleaner_pool_eur', { precision: 12, scale: 2, mode: 'number' }).notNull(),
   laundryEur: numeric('laundry_eur', { precision: 12, scale: 2, mode: 'number' }).notNull(),
   serviceEur: numeric('service_eur', { precision: 12, scale: 2, mode: 'number' }).notNull(),
+  defaultLinenGuestCount: integer('default_linen_guest_count').notNull().default(2),
   defaultChecklist: jsonb('default_checklist').$type<string[]>().notNull().default(sql`'[]'::jsonb`),
   ...timestamps
 }, table => [
   check('apartment_type_tariff_nonnegative', sql`${table.ownerTotalEur} >= 0 AND ${table.cleanerPoolEur} >= 0 AND ${table.laundryEur} >= 0 AND ${table.serviceEur} >= 0`),
+  check('apartment_type_default_linen_guest_count', sql`${table.defaultLinenGuestCount} >= 1 AND ${table.defaultLinenGuestCount} <= 50`),
   check('apartment_type_tariff_total', sql`${table.ownerTotalEur} = ${table.cleanerPoolEur} + ${table.laundryEur} + ${table.serviceEur}`)
 ])
 
@@ -202,6 +204,7 @@ export const cleaningProblems = pgTable('cleaning_problems', {
   sourceTaskId: uuid('source_task_id'),
   description: text('description').notNull(),
   details: text('details').notNull().default(''),
+  origin: text('origin').notNull().default('manual'),
   createdById: uuid('created_by_id').references(() => users.id, { onDelete: 'set null' }),
   resolvedAt: timestamp('resolved_at', { withTimezone: true }),
   resolvedById: uuid('resolved_by_id').references(() => users.id, { onDelete: 'set null' }),
@@ -212,7 +215,24 @@ export const cleaningProblems = pgTable('cleaning_problems', {
 }, table => [
   index('cleaning_problem_cleaning_idx').on(table.cleaningId),
   uniqueIndex('cleaning_problem_source_task_unique').on(table.sourceTaskId),
+  uniqueIndex('cleaning_problem_guest_count_change_unique').on(table.cleaningId).where(sql`${table.origin} = 'guest_count_change'`),
   index('cleaning_problem_list_idx').on(table.organizationId, table.resolvedAt, table.apartmentId)
+])
+
+export const cleaningGuestPreparations = pgTable('cleaning_guest_preparations', {
+  cleaningId: uuid('cleaning_id').primaryKey().references(() => cleanings.id, { onDelete: 'cascade' }),
+  organizationId: uuid('organization_id').notNull().references(() => organizations.id),
+  source: text('source').notNull(),
+  stayId: uuid('stay_id'),
+  checkInOn: date('check_in_on'),
+  adultCount: integer('adult_count'),
+  childCount: integer('child_count'),
+  guestCount: integer('guest_count').notNull(),
+  capturedAt: timestamp('captured_at', { withTimezone: true }).notNull().defaultNow()
+}, table => [
+  check('cleaning_guest_preparation_source', sql`${table.source} IN ('booking', 'type_default')`),
+  check('cleaning_guest_preparation_guest_count', sql`${table.guestCount} >= 1 AND ${table.guestCount} <= 50`),
+  index('cleaning_guest_preparation_organization_idx').on(table.organizationId)
 ])
 
 export const tasks = pgTable('tasks', {
@@ -493,7 +513,11 @@ export const cleaningsRelations = relations(cleanings, ({ one, many }) => ({
   stay: one(stays, { fields: [cleanings.stayId], references: [stays.id] }),
   assignments: many(cleaningAssignments),
   problems: many(cleaningProblems),
+  guestPreparation: one(cleaningGuestPreparations),
   inventoryReports: many(cleaningInventoryReports)
+}))
+export const cleaningGuestPreparationsRelations = relations(cleaningGuestPreparations, ({ one }) => ({
+  cleaning: one(cleanings, { fields: [cleaningGuestPreparations.cleaningId], references: [cleanings.id] })
 }))
 export const cleaningAssignmentsRelations = relations(cleaningAssignments, ({ one }) => ({
   cleaning: one(cleanings, { fields: [cleaningAssignments.cleaningId], references: [cleanings.id] }),

@@ -54,6 +54,7 @@ export function buildCleaningChecklist(defaultChecklist: readonly string[] = [],
 const apartmentTypeAutoWriteOffSchema = z.object({ consumableId: z.uuid(), quantity: z.coerce.number().finite().positive().max(9_999_999.999) })
 export const apartmentTypeInputSchema = withCalculatedTariff({
   name: z.string().trim().min(1).max(100),
+  defaultLinenGuestCount: z.coerce.number().int('Укажите целое число').min(1, 'Укажите хотя бы одного гостя').max(50, 'Максимум 50 гостей').default(2),
   defaultChecklist: checklistLabelsSchema.default(['Сменить белье и полотенца', 'Проверить санузел и кухню', 'Проверить расходники']),
   autoWriteOffs: z.array(apartmentTypeAutoWriteOffSchema).max(500).default([]).superRefine((rules, context) => {
     if (new Set(rules.map(rule => rule.consumableId)).size !== rules.length) context.addIssue({ code: 'custom', message: 'Расходники в автосписании не должны повторяться' })

@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, isNull, ne } from 'drizzle-orm'
+import { and, asc, eq, gte, inArray, isNull, ne } from 'drizzle-orm'
 import { cleaningAssignmentInputSchema, cleaningInputSchema, cleaningLinenUpdateSchema, cleaningRouteUpdateSchema, cleaningTariffOverrideSchema, cleaningUpdateSchema, completionInputSchema, workProgressInputSchema } from '@contracts/crm'
 import { canAccessAssignedWork, requireRole, requireWorkSectionAccess, type Actor } from '../../infrastructure/auth/actor'
 import { writeAuditLog } from '../../infrastructure/audit/log'
@@ -12,10 +12,11 @@ import { deleteWorkRecord } from '../work/work-record.service'
 import { canBeCleaningAssignee, cleaningTariffHasChanged } from '../work/work-policy'
 import { applyCleaningInventoryReports, saveCleaningInventoryDrafts } from '../inventory/inventory.service'
 import { calculateCleaningUrgency } from './cleaning-urgency'
-import { buildCleaningChecklist } from './checklist-template'
+import { buildCleaningChecklist, sofiaToday } from './checklist-template'
 import { requireAcceptedCleaningAssignment } from './cleaning-acceptance'
 import { cleaningProblemSummary, resolveCleaningProblems, syncCleaningProblems } from './cleaning-problem'
 import { cleaningEventSnapshot, publishCleaningChange, publishCleaningChangeForId } from './cleaning-events'
+import { captureCleaningGuestPreparation, linenPlanForCleaningFromStays, supersedeCleaningGuestPreparations } from './guest-preparation'
 
 export async function createCleaning(actor: Actor, input: unknown) {
   requireRole(actor, 'administrator')
@@ -53,12 +54,18 @@ export async function listCleanings(actor: Actor) {
   requireWorkSectionAccess(actor)
   const all = await db.query.cleanings.findMany({
     where: eq(cleanings.organizationId, actor.organizationId),
-    with: { apartment: { with: { hotel: true, managerAssignments: { with: { manager: { columns: { id: true, name: true } } } } } }, assignments: { with: { cleaner: true } }, problems: true, stay: true },
+    with: { apartment: { with: { hotel: true, type: true, managerAssignments: { with: { manager: { columns: { id: true, name: true } } } } } }, assignments: { with: { cleaner: true } }, problems: true, guestPreparation: true, stay: true },
     orderBy: (cleanings, { asc }) => [asc(cleanings.scheduledOn)]
   })
   const problemIds = all.flatMap(cleaning => cleaning.problems.map(problem => problem.id))
   const problemAttachments = problemIds.length ? await db.select({ id: attachments.id, entityId: attachments.entityId, fileName: attachments.fileName }).from(attachments).where(and(eq(attachments.entityType, 'cleaning_problem'), inArray(attachments.entityId, problemIds))).orderBy(asc(attachments.createdAt), asc(attachments.id)) : []
-  const serializeCleaning = (cleaning: (typeof all)[number]) => ({ ...cleaning, problems: cleaning.problems.map(problem => ({ ...problem, attachments: problemAttachments.filter(attachment => attachment.entityId === problem.id) })), apartment: serializeApartment(cleaning.apartment) })
+  const futureStays = await db.query.stays.findMany({
+    where: and(eq(stays.organizationId, actor.organizationId), gte(stays.checkInOn, sofiaToday())),
+    columns: { id: true, apartmentId: true, checkInOn: true, adultCount: true, childCount: true },
+    orderBy: [asc(stays.checkInOn)]
+  })
+  const linenPlan = (cleaning: (typeof all)[number]) => linenPlanForCleaningFromStays(cleaning, futureStays.filter(stay => stay.apartmentId === cleaning.apartmentId))
+  const serializeCleaning = (cleaning: (typeof all)[number]) => ({ ...cleaning, linenPlan: linenPlan(cleaning), problems: cleaning.problems.map(problem => ({ ...problem, attachments: problemAttachments.filter(attachment => attachment.entityId === problem.id) })), apartment: serializeApartment(cleaning.apartment) })
   if (actor.roles.includes('administrator')) return all.map(serializeCleaning)
   if (actor.roles.includes('specialist')) return all.map(cleaning => ({
     id: cleaning.id,
@@ -70,6 +77,7 @@ export async function listCleanings(actor: Actor) {
     startedAt: cleaning.startedAt,
     completedAt: cleaning.completedAt,
     linenCollected: cleaning.linenCollected,
+    linenPlan: linenPlan(cleaning),
     assignments: cleaning.assignments.map(assignment => ({
       cleanerId: assignment.cleanerId,
       routePosition: assignment.routePosition,
@@ -169,7 +177,7 @@ export async function acceptCleaning(actor: Actor, cleaningId: string) {
 export async function completeCleaning(actor: Actor, cleaningId: string, input: unknown) {
   requireRole(actor, 'cleaner', 'administrator')
   const data = completionInputSchema.parse(input)
-  const cleaning = await db.query.cleanings.findFirst({ where: and(eq(cleanings.id, cleaningId), eq(cleanings.organizationId, actor.organizationId)), with: { apartment: true, problems: true } })
+  const cleaning = await db.query.cleanings.findFirst({ where: and(eq(cleanings.id, cleaningId), eq(cleanings.organizationId, actor.organizationId)), with: { apartment: { with: { type: true } }, problems: true } })
   if (!cleaning) throw createError({ statusCode: 404, statusMessage: 'Уборка не найдена' })
   const beforeEvent = await cleaningEventSnapshot(cleaningId)
   if (cleaning.status !== 'in_progress') throw createError({ statusCode: 409, statusMessage: 'Сначала начните уборку' })
@@ -182,11 +190,13 @@ export async function completeCleaning(actor: Actor, cleaningId: string, input: 
   const updated = await db.transaction(async tx => {
     await applyCleaningInventoryReports(tx, actor, cleaning, data.inventoryReports)
     removedStorageKeys = await syncCleaningProblems(tx, actor, cleaningId, cleaning.apartmentId, problems)
+    await captureCleaningGuestPreparation(tx, { cleaningId, organizationId: actor.organizationId, apartmentId: cleaning.apartmentId, scheduledOn: cleaning.scheduledOn, defaultLinenGuestCount: cleaning.apartment.type.defaultLinenGuestCount })
     const [completed] = await tx.update(cleanings).set({ status: 'completed', checklist: data.checklist, comment: data.comment, hasProblem: problems.length > 0, problemDescription, completedAt: new Date(), updatedAt: new Date() }).where(eq(cleanings.id, cleaningId)).returning()
     await createFinancialEntry({ organizationId: actor.organizationId, apartmentId: cleaning.apartmentId, type: 'cleaning_charge', visibility: 'manager', amountEur: cleaning.tariffSnapshot.ownerTotalEur, occurredOn: new Date().toISOString().slice(0, 10), description: 'Уборка', sourceType: 'cleaning', sourceId: cleaningId, createdById: actor.id }, tx as unknown as typeof db)
     return completed
   })
   await Promise.allSettled(removedStorageKeys.map(storageKey => fileStorage.remove(storageKey)))
+  await supersedeCleaningGuestPreparations(actor, cleaning.apartmentId, cleaningId)
   await writeAuditLog({ organizationId: actor.organizationId, actorId: actor.id, action: 'cleaning.completed', entityType: 'cleaning', entityId: cleaningId, payload: { problemCount: problems.length } })
   if (problems.length) {
     const administrators = await administratorsForOrganization(actor.organizationId)

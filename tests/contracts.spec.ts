@@ -28,6 +28,7 @@ describe('CRM contracts', () => {
   it('calculates a cleaning tariff total from its components', () => {
     const parsed = apartmentTypeInputSchema.parse({ name: 'Studio', cleanerPoolEur: 5, laundryEur: 3, serviceEur: 2 })
     expect(parsed.ownerTotalEur).toBe(10)
+    expect(parsed.defaultLinenGuestCount).toBe(2)
     expect(parsed.defaultChecklist).toEqual(['Сменить белье и полотенца', 'Проверить санузел и кухню', 'Проверить расходники'])
     expect(apartmentTypeInputSchema.safeParse({ name: 'Studio', cleanerPoolEur: 5, laundryEur: 3, serviceEur: 2, defaultChecklist: [''] }).success).toBe(false)
   })

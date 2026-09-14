@@ -196,6 +196,6 @@ export async function deleteProblemExpense(actor: Actor, problemId: string, expe
 }
 
 export async function refreshCleaningProblemSummary(organizationId: string, cleaningId: string) {
-  const problems = await db.select({ id: cleaningProblems.id, description: cleaningProblems.description }).from(cleaningProblems).where(and(eq(cleaningProblems.organizationId, organizationId), eq(cleaningProblems.cleaningId, cleaningId)))
+  const problems = await db.select({ id: cleaningProblems.id, description: cleaningProblems.description }).from(cleaningProblems).where(and(eq(cleaningProblems.organizationId, organizationId), eq(cleaningProblems.cleaningId, cleaningId), isNull(cleaningProblems.resolvedAt)))
   await db.update(cleanings).set({ hasProblem: problems.length > 0, problemDescription: cleaningProblemSummary(problems), updatedAt: new Date() }).where(and(eq(cleanings.id, cleaningId), eq(cleanings.organizationId, organizationId)))
 }
