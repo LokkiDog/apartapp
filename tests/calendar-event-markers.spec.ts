@@ -65,7 +65,7 @@ describe('calendar arrival and departure markers', () => {
     expect(styles).toContain('white-space: nowrap')
     expect(styles).toContain('.calendar-event-marker__segment .stay-service-icons')
     expect(styles).toContain('flex-shrink: 0')
-    expect(styles).toMatch(/\.calendar-event-marker--combined \.calendar-event-marker__segment--departure \.stay-cleaning-marker\s*\{[^}]*top: 50%;[^}]*left: 50%;[^}]*pointer-events: none;[^}]*transform: translate\(-50%, -50%\);/s)
+    expect(styles).toMatch(/\.calendar-event-marker--combined\s+\.calendar-event-marker__segment--departure\s+\.stay-cleaning-marker\s*\{[^}]*top: 50%;[^}]*left: 50%;[^}]*pointer-events: none;[^}]*transform: translate\(-50%, -50%\);/s)
     expect(styles).toMatch(/\.stay-cleaning-marker\.stay-cleaning-indicator--missing\s*\{[^}]*background: #fff7e8;[^}]*opacity: 1;/s)
     expect(popover).toContain('showCleaningMarker?: boolean')
     expect(popover).toContain('showServiceIcons?: boolean')

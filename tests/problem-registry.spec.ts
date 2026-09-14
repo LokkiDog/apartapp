@@ -58,7 +58,7 @@ describe('problem registry contracts', () => {
     expect(styles).toContain('.work-progress-actions--in-cleaning .work-progress-actions__primary {\n    position: fixed;')
     expect(styles).toContain('bottom: calc(3.9rem + env(safe-area-inset-bottom));')
     expect(styles).toContain('.problem-detail-actions.work-progress-actions--in-cleaning {\n    position: fixed;')
-    expect(styles).toContain('.problem-detail-actions.work-progress-actions--in-cleaning .work-progress-actions__primary {\n    position: static;\n    width: auto;\n    justify-content: flex-end;')
+    expect(styles).toMatch(/\.problem-detail-actions\.work-progress-actions--in-cleaning\s+\.work-progress-actions__primary\s*\{\s*position: static;\s*width: auto;\s*justify-content: flex-end;/s)
     expect(styles).toContain('.problem-detail-overlay[data-slot="overlay"],\n  .problem-detail-slideover[data-slot="content"] {\n    z-index: 30;\n  }')
   })
 
