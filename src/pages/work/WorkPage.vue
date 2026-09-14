@@ -7,6 +7,7 @@ import { ApartmentSelect } from "#fsd/features/select-apartment";
 import {
   createFormValidator,
   formatDate,
+  formatDateTime,
   formatEuro,
   useSubmitFormValidation,
 } from "#fsd/shared/lib";
@@ -32,6 +33,13 @@ import {
   sortRoute,
   unacceptedCleaningsForCleaner,
 } from "./model/work-planning";
+import {
+  currentTasks,
+  filterAndSortCurrentTasks,
+  historyTasks,
+  type TaskSort,
+  type TaskStatusFilter,
+} from "./model/task-list";
 import { useI18n } from "vue-i18n";
 import { taskInputSchema } from "@contracts/crm";
 
@@ -48,6 +56,9 @@ const tab = ref<"cleanings" | "tasks">(
 const planningMode = ref<"days" | "cleaners" | "apartments">("days");
 const linenQueueOnly = ref(true);
 const historyOpen = ref(false);
+const taskHistoryOpen = ref(false);
+const taskStatusFilter = ref<TaskStatusFilter>("all");
+const taskSort = ref<TaskSort>("priority-desc");
 const laterOpen = ref(false);
 const [
   { data: cleanings, refresh: refreshCleanings },
@@ -188,6 +199,14 @@ onMounted(() => {
 });
 
 const today = localDate();
+
+function taskDueState(task: Task) {
+  if (!task.dueOn || ["completed", "canceled"].includes(task.status))
+    return "default";
+  if (task.dueOn < today) return "overdue";
+  if (task.dueOn === today) return "today";
+  return "default";
+}
 const displayedCleanings = computed(() => isSpecialist.value && linenQueueOnly.value
   ? (cleanings.value ?? []).filter(canCollectLinen)
   : cleanings.value ?? []
@@ -260,6 +279,87 @@ const priorityLabels = computed<Record<string, string>>(() => ({
   high: t("work.priorityHigh"),
   urgent: t("work.priorityUrgent"),
 }));
+const taskStatusFilterOptions = computed<
+  Array<{ value: TaskStatusFilter; icon: string; label: string }>
+>(() => [
+  { value: "all", icon: "i-lucide-list", label: t("workExtra.taskStatusAll") },
+  {
+    value: "open",
+    icon: "i-lucide-circle",
+    label: statusLabels.value.open ?? "",
+  },
+  {
+    value: "in_progress",
+    icon: "i-lucide-loader-circle",
+    label: statusLabels.value.in_progress ?? "",
+  },
+]);
+const taskSortOptions = computed<
+  Array<{ value: TaskSort; icon: string; label: string }>
+>(() => [
+  {
+    value: "priority-desc",
+    icon: "i-lucide-arrow-down-wide-narrow",
+    label: t("workExtra.taskSortPriorityHigh"),
+  },
+  {
+    value: "priority-asc",
+    icon: "i-lucide-arrow-up-narrow-wide",
+    label: t("workExtra.taskSortPriorityLow"),
+  },
+  {
+    value: "due-asc",
+    icon: "i-lucide-calendar-arrow-down",
+    label: t("workExtra.taskSortDueSoon"),
+  },
+  {
+    value: "due-desc",
+    icon: "i-lucide-calendar-arrow-up",
+    label: t("workExtra.taskSortDueLate"),
+  },
+]);
+const selectedTaskStatusFilter = computed(
+  () =>
+    taskStatusFilterOptions.value.find(
+      (option) => option.value === taskStatusFilter.value,
+    ) ?? taskStatusFilterOptions.value[0]!,
+);
+const selectedTaskSort = computed(
+  () =>
+    taskSortOptions.value.find((option) => option.value === taskSort.value) ??
+    taskSortOptions.value[0]!,
+);
+const taskStatusFilterMenuItems = computed<DropdownMenuItem[]>(() =>
+  taskStatusFilterOptions.value.map((option) => ({
+    label: option.label,
+    icon: option.icon,
+    type: "checkbox" as const,
+    checked: taskStatusFilter.value === option.value,
+    onSelect: () => {
+      taskStatusFilter.value = option.value;
+    },
+  })),
+);
+const taskSortMenuItems = computed<DropdownMenuItem[]>(() =>
+  taskSortOptions.value.map((option) => ({
+    label: option.label,
+    icon: option.icon,
+    type: "checkbox" as const,
+    checked: taskSort.value === option.value,
+    onSelect: () => {
+      taskSort.value = option.value;
+    },
+  })),
+);
+const activeTasks = computed(() => currentTasks(tasks.value ?? []));
+const filteredTasks = computed(() =>
+  filterAndSortCurrentTasks(
+    tasks.value ?? [],
+    taskStatusFilter.value,
+    taskSort.value,
+  ),
+);
+const taskHistory = computed(() => historyTasks(tasks.value ?? []));
 
 function cleaningAmount(cleaning: Cleaning) {
   return (
@@ -743,7 +843,7 @@ function taskMenuItems(task: Task): DropdownMenuItem[] {
           @click="tab = 'tasks'"
           >{{ t("work.tasks") }}
           <UBadge color="neutral" variant="soft">{{
-            tasks?.length ?? 0
+            activeTasks.length
           }}</UBadge></UButton
         ></UFieldGroup
       >
@@ -1498,24 +1598,70 @@ function taskMenuItems(task: Task): DropdownMenuItem[] {
     </template>
 
     <template v-if="tab === 'tasks'">
-      <div
-        v-if="tasks?.length"
-        class="surface divide-y divide-[var(--color-line)] px-5 sm:px-6"
-      >
+      <div v-if="tasks?.length" class="space-y-4">
+        <div class="task-list-controls">
+          <UDropdownMenu
+            :items="taskSortMenuItems"
+            :content="{ align: 'start' }"
+            :modal="false"
+          >
+            <UButton
+              color="neutral"
+              variant="soft"
+              icon="i-lucide-arrow-up-down"
+              class="task-list-control-button min-h-11 min-w-11 active:scale-[0.96] transition-transform"
+              :aria-label="t('workExtra.taskSort')"
+            >
+              <span class="hidden sm:inline">
+                {{ t("workExtra.taskSort") }}: {{ selectedTaskSort.label }}
+              </span>
+            </UButton>
+          </UDropdownMenu>
+          <div class="task-list-actions">
+            <UButton
+              class="work-history-button"
+              color="neutral"
+              variant="ghost"
+              icon="i-lucide-history"
+              :aria-pressed="taskHistoryOpen"
+              @click="taskHistoryOpen = !taskHistoryOpen"
+            >{{ taskHistoryOpen
+              ? `${t('common.hide')} ${t('common.history').toLocaleLowerCase()}`
+              : t('common.history') }}
+              <UBadge color="neutral" variant="soft" class="tabular-nums">{{
+                taskHistory.length
+              }}</UBadge>
+            </UButton>
+            <UDropdownMenu
+              :items="taskStatusFilterMenuItems"
+              :content="{ align: 'end' }"
+              :modal="false"
+            >
+              <UButton
+                color="neutral"
+                variant="soft"
+                icon="i-lucide-list-filter"
+                class="task-list-control-button min-h-11 min-w-11 active:scale-[0.96] transition-transform"
+                :aria-label="t('workExtra.taskStatusFilter')"
+              >
+                <span class="hidden sm:inline">
+                  {{ t("workExtra.taskStatusFilter") }}:
+                  {{ selectedTaskStatusFilter.label }}
+                </span>
+              </UButton>
+            </UDropdownMenu>
+          </div>
+        </div>
+        <div
+          v-if="filteredTasks.length"
+          class="surface divide-y divide-[var(--color-line)] sm:px-6"
+        >
         <article
-          v-for="task in tasks"
+          v-for="task in filteredTasks"
           :key="task.id"
           class="work-task-row group items-center gap-3"
           @click="openTaskCard($event, task)"
         >
-          <div
-            class="work-task-row__icon grid shrink-0 place-items-center bg-[#edf3f7] text-[#356882]"
-          >
-            <UIcon
-              name="i-lucide-clipboard-check"
-              class="work-task-row__icon-symbol"
-            />
-          </div>
           <div class="work-task-row__content">
             <NuxtLink
               :to="workHref('task', task.id)"
@@ -1526,29 +1672,17 @@ function taskMenuItems(task: Task): DropdownMenuItem[] {
                   :aria-label="priorityLabels[task.priority] ?? ''"
                   class="work-task-row__priority-dot"
                   :class="`work-task-row__priority-dot--${task.priority}`"
-                ></span>{{ task.title
-                }}<span class="work-task-row__mobile-apartment">
-                  · {{ task.apartment.name }}</span
-                >
+                ></span>{{ task.title }}
               </p>
-              <p class="mt-1 truncate text-sm text-[var(--color-muted)]">
-                <span class="work-task-row__mobile-subtitle"
-                  >{{
-                    task.dueOn
-                      ? formatDate(task.dueOn)
-                      : t("work.noDeadline")
-                  }}
-                  · {{ task.assignee?.name ?? t("work.notAssigned") }}</span
-                ><span class="work-task-row__desktop-subtitle"
-                  >{{
-                    task.dueOn
-                      ? formatDate(task.dueOn)
-                      : t("work.noDeadline")
-                  }}
-                  · {{ task.assignee?.name ?? t("work.notAssigned") }} ·
-                  {{ task.apartment.name }} ·
-                  {{ task.apartment.hotel.name }}</span
-                >
+              <p class="work-task-row__desktop-subtitle mt-1 truncate text-sm text-[var(--color-muted)]">
+                {{
+                  task.dueOn
+                    ? formatDate(task.dueOn)
+                    : t("work.noDeadline")
+                }}
+                · {{ task.assignee?.name ?? t("work.notAssigned") }} ·
+                {{ task.apartment.name }} ·
+                {{ task.apartment.hotel.name }}
               </p>
               <p
                 v-if="task.hasProblem"
@@ -1558,6 +1692,20 @@ function taskMenuItems(task: Task): DropdownMenuItem[] {
               </p></NuxtLink
             >
           </div>
+          <NuxtLink
+            :to="workHref('task', task.id)"
+            class="work-task-row__metadata block rounded-lg p-1 -m-1 hover:bg-[var(--color-surface-muted)]"
+          >
+            <p class="truncate text-sm text-[var(--color-muted)]">
+              {{ task.apartment.name }} ·
+              <span :class="`work-task-row__due--${taskDueState(task)}`">
+                {{ task.dueOn ? formatDate(task.dueOn) : t("work.noDeadline") }}
+              </span>
+              <template v-if="isAdministrator">
+                · {{ task.assignee?.name ?? t("work.notAssigned") }}
+              </template>
+            </p>
+          </NuxtLink>
           <StatusBadge
             class="work-task-row__priority"
             :label="priorityLabels[task.priority] ?? ''"
@@ -1586,10 +1734,100 @@ function taskMenuItems(task: Task): DropdownMenuItem[] {
                 variant="ghost"
                 icon="i-lucide-ellipsis-vertical"
                 :aria-label="t('workExtra.taskActions')"
-                class="min-h-11 min-w-11 active:scale-[0.96] transition-transform"
+                class="work-task-row__menu-button active:scale-[0.96] transition-transform"
             /></UDropdownMenu>
           </div>
         </article>
+        </div>
+        <EmptyState
+          v-else
+          icon="i-lucide-list-filter"
+          :title="
+            activeTasks.length
+              ? t('workExtra.noFilteredTasks')
+              : t('workExtra.noCurrentTasks')
+          "
+          :description="
+            activeTasks.length
+              ? t('workExtra.noFilteredTasksDescription')
+              : t('workExtra.noCurrentTasksDescription')
+          "
+        />
+        <section v-if="taskHistoryOpen" class="surface overflow-hidden">
+          <div class="border-b border-[var(--color-line)] px-5 py-4 sm:px-6">
+            <h2 class="font-semibold">{{ t('workExtra.taskHistoryTitle') }}</h2>
+          </div>
+          <div
+            v-if="taskHistory.length"
+            class="divide-y divide-[var(--color-line)] sm:px-6"
+          >
+            <article
+              v-for="task in taskHistory"
+              :key="`task-history-${task.id}`"
+              class="work-task-row group items-center gap-3"
+              @click="openTaskCard($event, task)"
+            >
+              <div class="work-task-row__content">
+                <NuxtLink
+                  :to="workHref('task', task.id)"
+                  class="block rounded-lg p-1 -m-1 hover:bg-[var(--color-surface-muted)]"
+                >
+                  <p class="truncate font-semibold">
+                    <span
+                      role="img"
+                      :aria-label="priorityLabels[task.priority] ?? ''"
+                      class="work-task-row__priority-dot"
+                      :class="`work-task-row__priority-dot--${task.priority}`"
+                    ></span>{{ task.title }}
+                  </p>
+                  <p class="work-task-row__desktop-subtitle mt-1 truncate text-sm text-[var(--color-muted)]">
+                    {{ task.apartment.name }} · {{ task.apartment.hotel.name }}
+                  </p>
+                  <p v-if="task.hasProblem" class="mt-1 truncate text-sm text-red-700">
+                    {{ task.problemDescription }}
+                  </p>
+                </NuxtLink>
+              </div>
+              <NuxtLink
+                :to="workHref('task', task.id)"
+                class="work-task-row__metadata block rounded-lg p-1 -m-1 hover:bg-[var(--color-surface-muted)]"
+              >
+                <p class="truncate text-sm text-[var(--color-muted)]">
+                  {{ task.apartment.name }} ·
+                  {{ formatDateTime(task.completedAt ?? task.updatedAt) }}
+                </p>
+              </NuxtLink>
+              <StatusBadge
+                class="work-task-row__priority"
+                :label="priorityLabels[task.priority] ?? ''"
+                :tone="task.priority === 'urgent' ? 'danger' : task.priority === 'high' ? 'warning' : 'neutral'"
+              />
+              <StatusBadge
+                class="work-task-row__status"
+                :label="statusLabels[task.status] ?? ''"
+                :tone="statusTones[task.status] ?? 'neutral'"
+              />
+              <div v-if="taskMenuItems(task).length" class="work-task-row__menu">
+                <UDropdownMenu
+                  :items="taskMenuItems(task)"
+                  :content="{ align: 'end' }"
+                  :modal="false"
+                >
+                  <UButton
+                    color="neutral"
+                    variant="ghost"
+                    icon="i-lucide-ellipsis-vertical"
+                    :aria-label="t('workExtra.taskActions')"
+                    class="work-task-row__menu-button active:scale-[0.96] transition-transform"
+                  />
+                </UDropdownMenu>
+              </div>
+            </article>
+          </div>
+          <p v-else class="px-5 py-6 text-sm text-[var(--color-muted)] sm:px-6">
+            {{ t('workExtra.taskHistoryEmpty') }}
+          </p>
+        </section>
       </div>
       <EmptyState
         v-else

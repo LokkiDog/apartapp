@@ -1,5 +1,5 @@
 import { and, eq } from 'drizzle-orm'
-import { completionInputSchema, taskInputSchema, taskUpdateSchema, workProgressInputSchema } from '@contracts/crm'
+import { taskCompletionInputSchema, taskInputSchema, taskUpdateSchema, taskWorkProgressInputSchema } from '@contracts/crm'
 import { requireRole, requireWorkSectionAccess, type Actor } from '../../infrastructure/auth/actor'
 import { writeAuditLog } from '../../infrastructure/audit/log'
 import { db } from '../../infrastructure/database/client'
@@ -43,11 +43,7 @@ export async function listTasks(actor: Actor) {
     orderBy: (tasks, { asc }) => [asc(tasks.dueOn)]
   })
   if (actor.roles.includes('administrator')) return rows.map(task => ({ ...task, apartment: serializeApartment(task.apartment) }))
-  return rows.filter(task => task.assigneeId === actor.id).map(task => {
-    const apartment = serializeApartment(task.apartment)
-    const { ownerCostEur: _ownerCostEur, ...safeTask } = task
-    return { ...safeTask, apartment }
-  })
+  return rows.filter(task => task.assigneeId === actor.id).map(task => ({ ...task, apartment: serializeApartment(task.apartment) }))
 }
 
 export async function createTask(actor: Actor, input: unknown) {
@@ -65,16 +61,17 @@ export async function createTask(actor: Actor, input: unknown) {
 
 export async function completeTask(actor: Actor, taskId: string, input: unknown) {
   requireRole(actor, 'administrator', 'cleaner', 'specialist')
-  const data = completionInputSchema.parse(input)
+  const data = taskCompletionInputSchema.parse(input)
   const task = await db.query.tasks.findFirst({ where: and(eq(tasks.id, taskId), eq(tasks.organizationId, actor.organizationId)) })
   if (!task) throw createError({ statusCode: 404, statusMessage: 'Задача не найдена' })
   if (!['open', 'in_progress'].includes(task.status)) throw createError({ statusCode: 409, statusMessage: 'Задачу нельзя завершить в текущем статусе' })
   if (!actor.roles.includes('administrator') && task.assigneeId !== actor.id) throw createError({ statusCode: 403, statusMessage: 'Задача не назначена вам' })
   const completeChecklist = task.checklist.every(required => data.checklist.some(item => item.label === required.label && item.checked))
   if (!completeChecklist || data.checklist.some(item => !item.checked)) throw createError({ statusCode: 400, statusMessage: 'Завершите обязательный чек-лист' })
+  const ownerCostEur = data.ownerCostEur ?? task.ownerCostEur
   const updated = await db.transaction(async tx => {
-    const [completed] = await tx.update(tasks).set({ status: 'completed', checklist: data.checklist, comment: data.comment, hasProblem: data.hasProblem, problemDescription: data.problemDescription, ...(data.problemDetails === undefined ? {} : { problemDetails: data.problemDetails }), completedAt: new Date(), updatedAt: new Date() }).where(eq(tasks.id, taskId)).returning()
-    if (task.ownerCostEur > 0) await createFinancialEntry({ organizationId: actor.organizationId, apartmentId: task.apartmentId, type: 'task_charge', visibility: 'manager', amountEur: task.ownerCostEur, occurredOn: new Date().toISOString().slice(0, 10), description: task.title, sourceType: 'task', sourceId: taskId, problemId: task.problemId ?? null, createdById: actor.id }, tx as unknown as typeof db)
+    const [completed] = await tx.update(tasks).set({ status: 'completed', checklist: data.checklist, comment: data.comment, hasProblem: data.hasProblem, problemDescription: data.problemDescription, ...(data.problemDetails === undefined ? {} : { problemDetails: data.problemDetails }), ownerCostEur, completedAt: new Date(), updatedAt: new Date() }).where(eq(tasks.id, taskId)).returning()
+    if (ownerCostEur > 0) await createFinancialEntry({ organizationId: actor.organizationId, apartmentId: task.apartmentId, type: 'task_charge', visibility: 'manager', amountEur: ownerCostEur, occurredOn: new Date().toISOString().slice(0, 10), description: task.title, sourceType: 'task', sourceId: taskId, problemId: task.problemId ?? null, createdById: actor.id }, tx as unknown as typeof db)
     return completed
   })
   await writeAuditLog({ organizationId: actor.organizationId, actorId: actor.id, action: 'task.completed', entityType: 'task', entityId: taskId })
@@ -88,12 +85,12 @@ export async function completeTask(actor: Actor, taskId: string, input: unknown)
 
 export async function saveTaskProgress(actor: Actor, taskId: string, input: unknown) {
   requireRole(actor, 'administrator', 'cleaner', 'specialist')
-  const data = workProgressInputSchema.parse(input)
+  const data = taskWorkProgressInputSchema.parse(input)
   const task = await db.query.tasks.findFirst({ where: and(eq(tasks.id, taskId), eq(tasks.organizationId, actor.organizationId)) })
   if (!task) throw createError({ statusCode: 404, statusMessage: 'Задача не найдена' })
   if (['completed', 'canceled'].includes(task.status)) throw createError({ statusCode: 409, statusMessage: 'Завершенную или отмененную задачу нельзя изменить' })
   if (!actor.roles.includes('administrator') && task.assigneeId !== actor.id) throw createError({ statusCode: 403, statusMessage: 'Задача не назначена вам' })
-  const [updated] = await db.update(tasks).set({ checklist: data.checklist, comment: data.comment, hasProblem: data.hasProblem, problemDescription: data.problemDescription, ...(data.problemDetails === undefined ? {} : { problemDetails: data.problemDetails }), updatedAt: new Date() }).where(eq(tasks.id, taskId)).returning()
+  const [updated] = await db.update(tasks).set({ checklist: data.checklist, comment: data.comment, hasProblem: data.hasProblem, problemDescription: data.problemDescription, ...(data.problemDetails === undefined ? {} : { problemDetails: data.problemDetails }), ...(data.ownerCostEur === undefined ? {} : { ownerCostEur: data.ownerCostEur }), updatedAt: new Date() }).where(eq(tasks.id, taskId)).returning()
   await syncTaskProblem(actor, task, data)
   await writeAuditLog({ organizationId: actor.organizationId, actorId: actor.id, action: 'task.progress_saved', entityType: 'task', entityId: taskId })
   return updated

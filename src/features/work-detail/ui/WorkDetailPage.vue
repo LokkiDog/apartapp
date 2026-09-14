@@ -12,7 +12,7 @@ import { useCleaningRealtimeState } from '#fsd/shared/realtime'
 type WorkKind = 'cleaning' | 'task'
 type InventoryReportSource = { id: string; reportedBy: { id: string; name: string }; reportedAt: string; appliedAt: string | null; approvedAt: string | null; approvedBy: { id: string; name: string } | null; usedQuantity: number; remainingQuantity: number; discrepancyQuantity: number; startingQuantity: number; expectedRemainingQuantity: number }
 type InventoryItem = { consumable: { id: string; name: string; unit: string }; autoWriteOffQuantity: number | null; quantity: number; usedQuantity: number; remainingQuantity: number; discrepancyQuantity: number; startingQuantity: number; expectedRemainingQuantity: number; report: InventoryReportSource | null }
-type ProgressPayload = { checklist: Array<{ label: string; checked: boolean }>; comment: string; hasProblem: boolean; problemDescription: string; problemDetails?: string; problems: Array<{ id: string; description: string; details?: string; photos: File[] }>; inventoryReports?: Array<{ consumableId: string; usedQuantity: number; remainingQuantity: number }>; photos: File[] }
+type ProgressPayload = { checklist: Array<{ label: string; checked: boolean }>; comment: string; hasProblem: boolean; problemDescription: string; problemDetails?: string; ownerCostEur?: number; problems: Array<{ id: string; description: string; details?: string; photos: File[] }>; inventoryReports?: Array<{ consumableId: string; usedQuantity: number; remainingQuantity: number }>; photos: File[] }
 type WorkAttachment = { id: string; fileName: string; mimeType: string }
 
 const props = defineProps<{ kind: WorkKind }>()
@@ -114,7 +114,7 @@ onBeforeUnmount(() => {
 function title() { return props.kind === 'cleaning' ? `${t('calendar.cleaning')} · ${cleaning.value?.apartment.name ?? ''}` : task.value?.title ?? t('work.tasks') }
 function checklist() { return work.value?.checklist ?? [] }
 function cleanerNames() { return cleaning.value?.assignments.map(item => item.cleaner.name).join(', ') || t('work.notAssigned') }
-function draftBody(payload: ProgressPayload) { return { checklist: payload.checklist, comment: payload.comment, hasProblem: props.kind === 'task' ? payload.hasProblem : false, problemDescription: props.kind === 'task' ? payload.problemDescription : '', problemDetails: props.kind === 'task' ? payload.problemDetails : undefined, problems: props.kind === 'cleaning' ? payload.problems.map(problem => ({ id: problem.id, description: problem.description, details: problem.details })) : [], inventoryReports: props.kind === 'cleaning' && inventoryLoaded.value ? payload.inventoryReports : undefined } }
+function draftBody(payload: ProgressPayload) { return { checklist: payload.checklist, comment: payload.comment, hasProblem: props.kind === 'task' ? payload.hasProblem : false, problemDescription: props.kind === 'task' ? payload.problemDescription : '', problemDetails: props.kind === 'task' ? payload.problemDetails : undefined, ownerCostEur: props.kind === 'task' ? payload.ownerCostEur : undefined, problems: props.kind === 'cleaning' ? payload.problems.map(problem => ({ id: problem.id, description: problem.description, details: problem.details })) : [], inventoryReports: props.kind === 'cleaning' && inventoryLoaded.value ? payload.inventoryReports : undefined } }
 
 async function refreshAttachments() {
   if (props.kind === 'cleaning') { attachments.value = []; return }
@@ -279,7 +279,7 @@ function requestComplete() {
         <UButton v-if="showCleaningAcceptance" class="min-h-11 w-full justify-center" color="warning" :loading="acceptancePending" @click="acceptAssignedCleaning">{{ t('work.acceptCleaning') }}</UButton>
         <UButton v-else class="min-h-11 w-full justify-center" icon="i-lucide-play" :loading="startPending" @click="startAssignedCleaning">{{ t('work.startCleaning') }}</UButton>
       </div>
-      <WorkProgressForm :key="`${work.id}-${attachments.length}`" :kind="props.kind" :checklist="work.checklist" :comment="work.comment" :has-problem="work.hasProblem" :problem-description="work.problemDescription" :problem-details="taskProblemDetails" :problems="cleaning?.problems ?? []" :inventory-reports="inventoryReports" :attachments="attachments" :focus-consumable-id="focusConsumableId" :editable="canProgress" :inventory-editable="inventoryEditable" :can-approve-inventory-discrepancy="inventoryEditable" :show-checklist="!isSpecialist" :show-inventory="props.kind !== 'cleaning' || !isSpecialist" :can-complete="canComplete" :busy="pending" :error="error" :finish-hint="finishHint" @save="payload => saveProgress(payload)" @complete="payload => saveProgress(payload, true)" @save-inventory="saveInventoryOnly" @approve-inventory-discrepancy="requestInventoryDiscrepancyApproval">
+      <WorkProgressForm :key="`${work.id}-${attachments.length}`" :kind="props.kind" :checklist="work.checklist" :comment="work.comment" :has-problem="work.hasProblem" :problem-description="work.problemDescription" :problem-details="taskProblemDetails" :owner-cost-eur="task?.ownerCostEur" :problems="cleaning?.problems ?? []" :inventory-reports="inventoryReports" :attachments="attachments" :focus-consumable-id="focusConsumableId" :editable="canProgress" :inventory-editable="inventoryEditable" :can-approve-inventory-discrepancy="inventoryEditable" :show-checklist="props.kind === 'task' || !isSpecialist" :show-inventory="props.kind !== 'cleaning' || !isSpecialist" :can-complete="canComplete" :busy="pending" :error="error" :finish-hint="finishHint" @save="payload => saveProgress(payload)" @complete="payload => saveProgress(payload, true)" @save-inventory="saveInventoryOnly" @approve-inventory-discrepancy="requestInventoryDiscrepancyApproval">
         <template v-if="props.kind === 'cleaning' && canUpdateLinen" #after-checklist>
           <section class="progress-section">
             <UCheckbox :model-value="cleaning?.linenCollected" :label="t('work.linenCollected')" class="min-h-11 items-center font-medium" @update:model-value="updateLinen($event === true)" />
@@ -289,8 +289,17 @@ function requestComplete() {
           <UButton color="error" variant="soft" icon="i-lucide-trash-2" :aria-label="t('work.deleteCleaning')" @click="deleteOpen = true" />
           <UButton :to="`/work?cleaningId=${encodeURIComponent(id)}`" color="neutral" variant="soft" icon="i-lucide-pencil" :aria-label="t('work.editCleaning')" />
         </template>
+        <template v-if="props.kind === 'task' && canManage" #before-actions>
+          <div class="work-detail-manage-actions work-detail-manage-actions--task">
+            <div class="work-detail-manage-actions__start">
+              <UButton v-if="isAdministrator" type="button" color="error" variant="soft" icon="i-lucide-trash-2" class="work-detail-manage-action" :aria-label="t('work.delete')" @click="deleteOpen = true" />
+              <UButton v-if="!['completed', 'canceled'].includes(work.status)" type="button" color="neutral" variant="soft" icon="i-lucide-ban" class="work-detail-manage-action" :aria-label="t('work.cancelTask')" @click="cancelTask" />
+            </div>
+            <UButton :to="`/work?taskId=${encodeURIComponent(id)}`" color="neutral" variant="soft" icon="i-lucide-pencil" class="work-detail-manage-action" :aria-label="t('work.editTask')" />
+          </div>
+        </template>
       </WorkProgressForm>
-      <div v-if="canManage && (props.kind === 'task' || !canProgress)" class="work-detail-manage-actions"><UButton v-if="props.kind === 'cleaning'" :to="`/work?cleaningId=${encodeURIComponent(id)}`" color="neutral" variant="soft" icon="i-lucide-pencil" :aria-label="t('work.editCleaning')" /><UButton v-else :to="`/work?taskId=${encodeURIComponent(id)}`" color="neutral" variant="soft" icon="i-lucide-pencil">{{ t('work.editTask') }}</UButton><UButton v-if="props.kind === 'task' && !['completed', 'canceled'].includes(work.status)" color="neutral" variant="soft" icon="i-lucide-ban" @click="cancelTask">{{ t('work.cancelTask') }}</UButton><UButton v-if="isAdministrator" color="error" variant="soft" icon="i-lucide-trash-2" :aria-label="props.kind === 'cleaning' ? t('work.deleteCleaning') : undefined" @click="deleteOpen = true">{{ props.kind === 'cleaning' ? undefined : t('work.delete') }}</UButton></div>
+      <div v-if="canManage && props.kind === 'cleaning' && !canProgress" class="work-detail-manage-actions"><UButton :to="`/work?cleaningId=${encodeURIComponent(id)}`" color="neutral" variant="soft" icon="i-lucide-pencil" :aria-label="t('work.editCleaning')" /><UButton v-if="isAdministrator" color="error" variant="soft" icon="i-lucide-trash-2" :aria-label="t('work.deleteCleaning')" @click="deleteOpen = true" /></div>
     </template>
     <EmptyState v-else icon="i-lucide-search-x" :title="t('work.notFound')" :description="t('work.notFoundDescription')" />
     <UModal v-model:open="directionsOpen" :title="t('directions.title')">

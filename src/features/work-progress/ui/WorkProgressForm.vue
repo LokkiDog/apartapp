@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import type { FormErrorEvent } from '@nuxt/ui'
 import { createFormValidator, formatDateTime, useSubmitFormValidation } from '#fsd/shared/lib'
-import { PhotoFileInput } from '#fsd/shared/ui'
-import { workProgressInputSchema } from '@contracts/crm'
+import { MoneyInput, PhotoFileInput } from '#fsd/shared/ui'
+import { taskWorkProgressInputSchema } from '@contracts/crm'
 
 type ChecklistItem = { label: string; checked: boolean }
 type WorkAttachment = { id: string; fileName: string }
@@ -10,7 +10,7 @@ type CleaningProblemSource = { id: string; description: string; details: string;
 type CleaningProblemDraft = CleaningProblemSource & { photos: File[]; previews: Array<{ file: File; url: string }> }
 type InventoryReportSource = { id: string; reportedBy: { id: string; name: string }; reportedAt: string; appliedAt: string | null; approvedAt: string | null; approvedBy: { id: string; name: string } | null; usedQuantity: number; remainingQuantity: number; discrepancyQuantity: number; startingQuantity: number; expectedRemainingQuantity: number }
 type InventoryItem = { consumable: { id: string; name: string; unit: string }; autoWriteOffQuantity: number | null; quantity: number; usedQuantity: number; remainingQuantity: number; discrepancyQuantity: number; startingQuantity: number; expectedRemainingQuantity: number; report: InventoryReportSource | null; remainingTouched?: boolean }
-type ProgressPayload = { checklist: ChecklistItem[]; comment: string; hasProblem: boolean; problemDescription: string; problemDetails?: string; problems: Array<{ id: string; description: string; details?: string; photos: File[] }>; inventoryReports?: Array<{ consumableId: string; usedQuantity: number; remainingQuantity: number }>; photos: File[] }
+type ProgressPayload = { checklist: ChecklistItem[]; comment: string; hasProblem: boolean; problemDescription: string; problemDetails?: string; ownerCostEur?: number; problems: Array<{ id: string; description: string; details?: string; photos: File[] }>; inventoryReports?: Array<{ consumableId: string; usedQuantity: number; remainingQuantity: number }>; photos: File[] }
 const { t } = useI18n()
 
 const props = withDefaults(defineProps<{
@@ -20,6 +20,7 @@ const props = withDefaults(defineProps<{
   hasProblem?: boolean
   problemDescription?: string
   problemDetails?: string
+  ownerCostEur?: number
   problems?: CleaningProblemSource[]
   inventoryReports?: InventoryItem[]
   attachments?: Array<{ id: string; fileName: string }>
@@ -34,7 +35,7 @@ const props = withDefaults(defineProps<{
   busy?: boolean
   error?: string
   finishHint?: string
-}>(), { comment: '', hasProblem: false, problemDescription: '', problemDetails: '', problems: () => [], inventoryReports: () => [], attachments: () => [], focusConsumableId: '', editable: false, canComplete: false, inventoryEditable: false, canApproveInventoryDiscrepancy: false, showChecklist: true, showInventory: true, showCommentProblems: true, busy: false, error: '', finishHint: '' })
+}>(), { comment: '', hasProblem: false, problemDescription: '', problemDetails: '', ownerCostEur: 0, problems: () => [], inventoryReports: () => [], attachments: () => [], focusConsumableId: '', editable: false, canComplete: false, inventoryEditable: false, canApproveInventoryDiscrepancy: false, showChecklist: true, showInventory: true, showCommentProblems: true, busy: false, error: '', finishHint: '' })
 
 const emit = defineEmits<{ save: [payload: ProgressPayload]; complete: [payload: ProgressPayload]; saveInventory: [reports: NonNullable<ProgressPayload['inventoryReports']>]; approveInventoryDiscrepancy: [item: InventoryItem] }>()
 const checklist = ref<ChecklistItem[]>([])
@@ -42,6 +43,7 @@ const comment = ref('')
 const hasProblem = ref(false)
 const problemDescription = ref('')
 const problemDetails = ref('')
+const ownerCostEur = ref(0)
 const problems = ref<CleaningProblemDraft[]>([])
 const photos = ref<File[]>([])
 const photoPreviews = ref<Array<{ file: File; url: string }>>([])
@@ -55,22 +57,24 @@ const validationState = computed(() => ({
   hasProblem: hasProblem.value,
   problemDescription: problemDescription.value,
   problemDetails: problemDetails.value,
+  ownerCostEur: props.kind === 'task' ? ownerCostEur.value : undefined,
   problems: props.kind === 'cleaning' ? problems.value.map(problem => ({ id: problem.id, description: problem.description, details: problem.details })) : [],
   inventoryReports: props.kind === 'cleaning' ? inventoryReports.value.map(item => ({ consumableId: item.consumable.id, usedQuantity: item.usedQuantity, remainingQuantity: item.remainingQuantity })) : undefined
 }))
-const validateProgress = createFormValidator(workProgressInputSchema, t, {
+const validateProgress = createFormValidator(taskWorkProgressInputSchema, t, {
   validate: (state) => submitIntent.value === 'complete'
     ? (state as ProgressPayload).checklist.flatMap((item, index) => item.checked ? [] : [{ name: `checklist.${index}.checked`, message: t('work.incompleteHint') }])
     : []
 })
 
-watch(() => [props.checklist, props.comment, props.hasProblem, props.problemDescription, props.problemDetails, props.problems, props.inventoryReports], () => {
+watch(() => [props.checklist, props.comment, props.hasProblem, props.problemDescription, props.problemDetails, props.ownerCostEur, props.problems, props.inventoryReports], () => {
   clearProblemPhotoPreviews()
   checklist.value = props.checklist.map(item => ({ ...item }))
   comment.value = props.comment
   hasProblem.value = props.hasProblem
   problemDescription.value = props.problemDescription
   problemDetails.value = props.problemDetails
+  ownerCostEur.value = props.ownerCostEur
   problems.value = props.problems.map(problem => ({ ...problem, attachments: problem.attachments.map(attachment => ({ ...attachment })), photos: [], previews: [] }))
   inventoryReports.value = props.inventoryReports.map(item => ({ ...item, consumable: { ...item.consumable }, remainingTouched: false }))
 }, { immediate: true, deep: true })
@@ -103,6 +107,7 @@ function payload(): ProgressPayload {
     hasProblem: hasProblem.value,
     problemDescription: problemDescription.value,
     problemDetails: problemDetails.value,
+    ownerCostEur: props.kind === 'task' ? ownerCostEur.value : undefined,
     problems: props.kind === 'cleaning' ? problems.value.map(problem => ({ id: problem.id, description: problem.description, details: problem.details, photos: problem.photos })) : [],
     inventoryReports: props.kind === 'cleaning' ? inventoryReports.value.map(item => ({ consumableId: item.consumable.id, usedQuantity: Number(item.usedQuantity) || 0, remainingQuantity: Number(item.remainingQuantity) || 0 })) : undefined,
     photos: photos.value
@@ -157,6 +162,11 @@ onBeforeUnmount(() => { clearPhotoPreviews(); clearProblemPhotoPreviews() })
       <p v-if="finishHint" class="mb-3 text-sm font-medium text-amber-800">{{ finishHint }}</p>
       <div v-if="checklist.length" class="space-y-1"><UFormField v-for="(item, index) in checklist" :key="item.label" :name="`checklist.${index}.checked`" :error="false"><UCheckbox v-model="item.checked" :label="item.label" :disabled="!editable" class="min-h-11 items-center" /></UFormField></div>
       <p v-else class="text-sm text-[var(--color-muted)]">{{ t('progress.notConfiguredChecklist') }}</p>
+    </section>
+
+    <section v-if="kind === 'task'" class="progress-section">
+      <div class="progress-section__heading"><div><h2>{{ t('work.cost') }}</h2></div><UIcon name="i-lucide-euro" class="size-5 text-[var(--color-primary)]" /></div>
+      <UFormField name="ownerCostEur" :label="t('work.cost')" :error="false" class="w-full"><MoneyInput v-model="ownerCostEur" :disabled="!editable" class="w-full tabular-nums" /></UFormField>
     </section>
 
     <slot name="after-checklist" />
@@ -221,18 +231,14 @@ onBeforeUnmount(() => { clearPhotoPreviews(); clearProblemPhotoPreviews() })
       <PhotoFileInput :files="photos" :disabled="!editable" @select="choosePhotos" />
     </section>
 
-    <div v-if="editable || canComplete" class="work-progress-actions" :class="{ 'work-progress-actions--in-cleaning': kind === 'cleaning' }">
-      <template v-if="kind === 'cleaning'">
-        <div class="work-progress-actions__secondary"><slot name="actions-left" /></div>
-        <div class="work-progress-actions__primary">
-          <UButton v-if="editable" type="submit" color="neutral" variant="soft" icon="i-lucide-save" :loading="busy" @click="submitIntent = 'save'">{{ t('progress.save') }}</UButton>
-          <UButton v-if="canComplete" type="submit" icon="i-lucide-circle-check" :loading="busy" @click="submitIntent = 'complete'">{{ t('progress.complete') }}</UButton>
-        </div>
-      </template>
-      <template v-else>
+    <slot name="before-actions" />
+
+    <div v-if="editable || canComplete" class="work-progress-actions work-progress-actions--in-cleaning">
+      <div class="work-progress-actions__secondary"><slot v-if="kind === 'cleaning'" name="actions-left" /></div>
+      <div class="work-progress-actions__primary">
         <UButton v-if="editable" type="submit" color="neutral" variant="soft" icon="i-lucide-save" :loading="busy" @click="submitIntent = 'save'">{{ t('progress.save') }}</UButton>
         <UButton v-if="canComplete" type="submit" icon="i-lucide-circle-check" :loading="busy" @click="submitIntent = 'complete'">{{ t('progress.complete') }}</UButton>
-      </template>
+      </div>
     </div>
   </UForm>
 </template>

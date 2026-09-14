@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { apartmentInputSchema, apartmentTypeInputSchema, apartmentUpdateSchema, buildCleaningChecklist, cleaningAssignmentInputSchema, cleaningInputSchema, cleaningRouteUpdateSchema, cleaningTariffOverrideSchema, cleaningUpdateSchema, completionInputSchema, consumableInputSchema, hotelInputSchema, hotelReverseGeocodeQuerySchema, isApartmentOwnerEligible, specialServiceInputSchema, stayInputSchema, stayListQuerySchema, taskInputSchema, workProgressInputSchema } from '../shared/contracts/crm'
+import { apartmentInputSchema, apartmentTypeInputSchema, apartmentUpdateSchema, buildCleaningChecklist, cleaningAssignmentInputSchema, cleaningInputSchema, cleaningRouteUpdateSchema, cleaningTariffOverrideSchema, cleaningUpdateSchema, completionInputSchema, consumableInputSchema, hotelInputSchema, hotelReverseGeocodeQuerySchema, isApartmentOwnerEligible, specialServiceInputSchema, stayInputSchema, stayListQuerySchema, taskCompletionInputSchema, taskInputSchema, taskWorkProgressInputSchema, workProgressInputSchema } from '../shared/contracts/crm'
 import { formatEuroInput, parseEuroInput } from '../src/shared/lib/money'
 import { apartmentCalendarColor } from '../src/shared/lib/calendar'
 import { calculateFifoUsage } from '../server/modules/inventory/fifo'
@@ -231,6 +231,14 @@ describe('CRM contracts', () => {
     expect(cleaningAssignmentInputSchema.safeParse({ cleanerIds: ['00000000-0000-4000-8000-000000000001'], scheduledOn: '2026-01-10' }).success).toBe(true)
     expect(cleaningAssignmentInputSchema.safeParse({ cleanerIds: ['00000000-0000-4000-8000-000000000001'], scheduledOn: '2026-01-10T12:00:00Z' }).success).toBe(false)
     expect(taskInputSchema.safeParse({ apartmentId: '00000000-0000-4000-8000-000000000001', title: 'Проверить замок', dueOn: '2026-01-10' }).success).toBe(true)
+  })
+
+  it('accepts optional task costs from an executor and rounds them to cents', () => {
+    expect(taskWorkProgressInputSchema.parse({ checklist: [], ownerCostEur: 18.555 }).ownerCostEur).toBe(18.56)
+    expect(taskCompletionInputSchema.parse({ checklist: [], ownerCostEur: 0 }).ownerCostEur).toBe(0)
+    expect(taskWorkProgressInputSchema.parse({ checklist: [] }).ownerCostEur).toBeUndefined()
+    expect(taskCompletionInputSchema.safeParse({ checklist: [], ownerCostEur: -1 }).success).toBe(false)
+    expect(taskWorkProgressInputSchema.safeParse({ checklist: [], ownerCostEur: 10_000_000_000 }).success).toBe(false)
   })
 
   it('uses a stable calendar color for each apartment', () => {

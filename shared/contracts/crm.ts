@@ -213,6 +213,14 @@ export const workProgressInputSchema = z.object({
   }
 })
 
+export const taskCompletionInputSchema = completionInputSchema.and(z.object({
+  ownerCostEur: moneyEurSchema.optional()
+}))
+
+export const taskWorkProgressInputSchema = workProgressInputSchema.and(z.object({
+  ownerCostEur: moneyEurSchema.optional()
+}))
+
 export const cleaningInventoryReportInputSchema = z.object({
   reports: z.array(z.object({
     consumableId: z.uuid(),
