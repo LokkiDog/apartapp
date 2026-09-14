@@ -125,8 +125,7 @@ describe('specialist and linen collection', () => {
     expect(work).toContain('route.path === "/tasks" || route.query.tab === "tasks"')
     expect(work).toContain('<div v-if="!isSpecialist" class="work-tab-controls">')
     expect(work).toContain(":title=\"tab === 'tasks' ? t('work.tasks') : t('work.cleanings')\"")
-    expect(detail).toContain("props.kind === 'task' && isSpecialist.value")
-    expect(detail).toContain("? '/tasks'")
+    expect(detail).toContain("const taskListHref = computed(() => isSpecialist.value ? '/tasks' : '/work?tab=tasks')")
   })
 
   it('removes cleaner routing chrome from specialist cleaning lists', () => {

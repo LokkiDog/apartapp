@@ -7,7 +7,7 @@ import { formatDate, formatEuro } from '#fsd/shared/lib'
 import { canAccessWorkSection, useCurrentUser } from '#fsd/shared/auth'
 import { EmptyState, MetricTile, StatusBadge } from '#fsd/shared/ui'
 import { useNotificationState } from '#fsd/features/manage-notifications'
-import { activeCleaning, activeTask, currentDashboardMonth, dashboardMonthLabel, dateInDashboardMonth, isDashboardMonth, problemDashboardRecord, shiftDashboardMonth, sortDashboardRecords, stayInDashboardMonth, undatedDashboardRecord } from './model/dashboard-month'
+import { activeCleaning, activeDashboardTasks, activeTask, currentDashboardMonth, dashboardMonthLabel, dateInDashboardMonth, isDashboardMonth, problemDashboardRecord, shiftDashboardMonth, sortDashboardRecords, stayInDashboardMonth, undatedDashboardRecord } from './model/dashboard-month'
 import { useI18n } from 'vue-i18n'
 
 const currentUser = useCurrentUser()
@@ -18,7 +18,7 @@ const isSpecialist = computed(() => Boolean(currentUser.value?.roles.includes('s
 const isWorkerView = computed(() => Boolean(currentUser.value?.roles.includes('cleaner') && !isAdministrator.value) || isSpecialist.value)
 const isCleanerView = computed(() => Boolean(currentUser.value?.roles.includes('cleaner') && !isAdministrator.value))
 const canViewWork = computed(() => canAccessWorkSection(currentUser.value))
-const [{ data: stays, status: staysStatus }, { data: cleanings, refresh: refreshCleanings }, { data: tasks }, { data: problemSummary, refresh: refreshProblemSummary }] = await Promise.all([
+const [{ data: stays, status: staysStatus }, { data: cleanings, refresh: refreshCleanings }, { data: tasks, refresh: refreshTasks }, { data: problemSummary, refresh: refreshProblemSummary }] = await Promise.all([
   useAsyncData('dashboard-stays', () => isWorkerView.value ? Promise.resolve([]) : $fetch<Stay[]>('/api/stays'), { server: false, default: () => [], watch: [currentUser, isWorkerView] }),
   useAsyncData('dashboard-cleanings', () => canViewWork.value ? $fetch<Cleaning[]>('/api/cleanings') : Promise.resolve([]), { server: false, default: () => [], watch: [currentUser, canViewWork] }),
   useAsyncData('dashboard-tasks', () => canViewWork.value ? $fetch<Task[]>('/api/tasks') : Promise.resolve([]), { server: false, default: () => [], watch: [currentUser, canViewWork] }),
@@ -26,6 +26,9 @@ const [{ data: stays, status: staysStatus }, { data: cleanings, refresh: refresh
 ])
 watch(notificationState.cleaningRevision, () => {
   if (currentUser.value && canViewWork.value) void refreshCleanings()
+})
+watch(notificationState.revision, () => {
+  if (currentUser.value && canViewWork.value) void refreshTasks()
 })
 watch(notificationState.revision, () => { if (isAdministrator.value) void refreshProblemSummary() })
 const dashboardMonth = ref(currentDashboardMonth())
@@ -41,7 +44,7 @@ const upcoming = computed(() => (stays.value ?? []).filter(stay => stayInDashboa
   return leftDate.localeCompare(rightDate)
 }).slice(0, 5))
 const openCleanings = computed(() => sortDashboardRecords((cleanings.value ?? []).filter(item => activeCleaning(item.status) && dateInDashboardMonth(item.scheduledOn, dashboardMonth.value))))
-const openTasks = computed(() => sortDashboardRecords((tasks.value ?? []).filter(item => activeTask(item.status) && dateInDashboardMonth(item.dueOn, dashboardMonth.value))))
+const openTasks = computed(() => activeDashboardTasks(tasks.value ?? []))
 const undatedWork = computed(() => sortDashboardRecords([
   ...(tasks.value ?? []).filter(item => (activeTask(item.status) || item.hasProblem) && undatedDashboardRecord(item))
 ]))

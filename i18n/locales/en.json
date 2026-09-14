@@ -137,4 +137,5 @@
   ,"inventoryApproval": { "approveItem": "Approve discrepancy: {name}", "title": "Approve the actual stock?", "description": "The stock of {quantity} {unit} for “{name}” will be marked as verified. The original discrepancy will remain in history.", "confirm": "Approve", "approvedBy": "Verified by {name} · {date}", "administrator": "Administrator" }
   ,"calendarHistoryExtra": { "uncleanedTitle": "Without cleaning", "pastTitle": "Past bookings", "loadMorePast": "Show 10 more days", "pastEmpty": "No past bookings in this period" }
   ,"linenAction": { "collected": "Collected" }
+  ,"taskNotice": { "saved": "Changes saved", "completed": "Task completed" }
 }

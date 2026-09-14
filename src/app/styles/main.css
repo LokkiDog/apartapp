@@ -205,6 +205,20 @@ img {
   padding: 0 1rem;
   backdrop-filter: blur(16px);
 }
+.app-toast-viewport {
+  position: fixed !important;
+  top: calc(5rem + env(safe-area-inset-top)) !important;
+  z-index: 2147483647 !important;
+  isolation: isolate;
+}
+.task-save-toast {
+  background: var(--color-primary) !important;
+  color: #fff !important;
+}
+.task-save-toast [data-slot="title"],
+.task-save-toast [data-slot="icon"] {
+  color: #fff !important;
+}
 .app-topbar__actions {
   display: flex;
   margin-left: auto;

@@ -137,4 +137,5 @@
   ,"inventoryApproval": { "approveItem": "אישור הפער: {name}", "title": "לאשר את המלאי בפועל?", "description": "המלאי של {quantity} {unit} עבור „{name}” יסומן כמאומת. הפער המקורי יישמר בהיסטוריה.", "confirm": "אישור", "approvedBy": "אומת על ידי {name} · {date}", "administrator": "מנהל מערכת" }
   ,"calendarHistoryExtra": { "uncleanedTitle": "ללא ניקיון", "pastTitle": "הזמנות קודמות", "loadMorePast": "הצגת 10 ימים נוספים", "pastEmpty": "אין הזמנות קודמות בתקופה זו" }
   ,"linenAction": { "collected": "נאסף" }
+  ,"taskNotice": { "saved": "השינויים נשמרו", "completed": "המשימה הושלמה" }
 }

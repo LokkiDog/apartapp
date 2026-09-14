@@ -17,6 +17,13 @@ type WorkAttachment = { id: string; fileName: string; mimeType: string }
 
 const props = defineProps<{ kind: WorkKind }>()
 const { t } = useI18n()
+const toast = useToast()
+const taskToastUi = {
+  root: 'task-save-toast mx-auto min-h-10 w-fit max-w-full items-center gap-2 rounded-[10px] px-3 py-2 shadow-[var(--shadow-surface)] ring-0',
+  wrapper: 'w-auto flex-none',
+  title: 'text-sm font-medium leading-5',
+  icon: 'size-4'
+} as const
 const route = useRoute()
 const router = useRouter()
 const currentUser = useCurrentUser()
@@ -46,10 +53,12 @@ const coordinatesCopyError = ref('')
 let coordinatesCopyTimer: number | null = null
 const cameFromInventory = computed(() => props.kind === 'cleaning' && route.query.from === 'inventory')
 const focusConsumableId = computed(() => typeof route.query.focusConsumableId === 'string' ? route.query.focusConsumableId : '')
+const taskListHref = computed(() => isSpecialist.value ? '/tasks' : '/work?tab=tasks')
+const taskEditHref = computed(() => isSpecialist.value ? `/tasks?taskId=${encodeURIComponent(id)}` : `/work?tab=tasks&taskId=${encodeURIComponent(id)}`)
 const backHref = computed(() => cameFromInventory.value
   ? '/inventory'
-  : props.kind === 'task' && isSpecialist.value
-    ? '/tasks'
+  : props.kind === 'task'
+    ? taskListHref.value
     : '/work')
 const backLabel = computed(() => cameFromInventory.value ? t('inventoryDiscrepancy.back') : t('work.back'))
 
@@ -176,7 +185,17 @@ async function saveProgress(payload: ProgressPayload, complete = false) {
       finally { await refreshAttachments() }
     }
     await refresh()
-    if (complete && !error.value) await router.push('/work')
+    if (props.kind === 'task' && !error.value) {
+      toast.add({
+        title: t(complete ? 'taskNotice.completed' : 'taskNotice.saved'),
+        color: 'primary',
+        icon: 'i-lucide-check',
+        close: false,
+        duration: 2500,
+        ui: taskToastUi
+      })
+    }
+    if (complete && !error.value) await router.push(props.kind === 'task' ? taskListHref.value : '/work')
   } catch (cause: any) {
     error.value = cause?.data?.statusMessage ?? t('common.error')
   } finally { pending.value = false }
@@ -228,7 +247,7 @@ async function copyHotelCoordinates() {
 
 async function removeWork(problemDisposition?: 'preserve' | 'delete') {
   pending.value = true; error.value = ''
-  try { await $fetch(`/api/${props.kind}s/${id}`, { method: 'DELETE', ...(props.kind === 'cleaning' ? { body: { problemDisposition } } : {}) }); await router.push('/work') }
+  try { await $fetch(`/api/${props.kind}s/${id}`, { method: 'DELETE', ...(props.kind === 'cleaning' ? { body: { problemDisposition } } : {}) }); await router.push(props.kind === 'task' ? taskListHref.value : '/work') }
   catch (cause: any) {
     if (props.kind === 'cleaning' && (cause?.statusCode === 409 || cause?.status === 409) && cause?.data?.data?.problemCount) { deleteOpen.value = false; cleaningProblemDeleteOpen.value = true; return }
     error.value = cause?.data?.statusMessage ?? t('work.deleteError')
@@ -295,7 +314,7 @@ function requestComplete() {
               <UButton v-if="isAdministrator" type="button" color="error" variant="soft" icon="i-lucide-trash-2" class="work-detail-manage-action" :aria-label="t('work.delete')" @click="deleteOpen = true" />
               <UButton v-if="!['completed', 'canceled'].includes(work.status)" type="button" color="neutral" variant="soft" icon="i-lucide-ban" class="work-detail-manage-action" :aria-label="t('work.cancelTask')" @click="cancelTask" />
             </div>
-            <UButton :to="`/work?taskId=${encodeURIComponent(id)}`" color="neutral" variant="soft" icon="i-lucide-pencil" class="work-detail-manage-action" :aria-label="t('work.editTask')" />
+            <UButton :to="taskEditHref" color="neutral" variant="soft" icon="i-lucide-pencil" class="work-detail-manage-action" :aria-label="t('work.editTask')" />
           </div>
         </template>
       </WorkProgressForm>

@@ -213,4 +213,5 @@
   ,"inventoryApproval": { "approveItem": "Утвердить расхождение: {name}", "title": "Утвердить фактический остаток?", "description": "Для «{name}» остаток {quantity} {unit} будет отмечен как проверенный. Исходное расхождение сохранится в истории.", "confirm": "Утвердить", "approvedBy": "Проверено: {name} · {date}", "administrator": "Администратор" }
   ,"calendarHistoryExtra": { "uncleanedTitle": "Без уборки", "pastTitle": "Прошедшие", "loadMorePast": "Показать ещё 10 дней", "pastEmpty": "За этот период прошедших бронирований нет" }
   ,"linenAction": { "collected": "Забрал" }
+  ,"taskNotice": { "saved": "Изменения сохранены", "completed": "Задача завершена" }
 }

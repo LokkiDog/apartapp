@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { activeCleaning, activeTask, currentDashboardMonth, dateInDashboardMonth, isDashboardMonth, problemDashboardRecord, shiftDashboardMonth, sortDashboardRecords, stayInDashboardMonth, undatedDashboardRecord } from '../src/pages/dashboard/model/dashboard-month'
+import { activeCleaning, activeDashboardTasks, activeTask, currentDashboardMonth, dateInDashboardMonth, isDashboardMonth, problemDashboardRecord, shiftDashboardMonth, sortDashboardRecords, stayInDashboardMonth, undatedDashboardRecord } from '../src/pages/dashboard/model/dashboard-month'
 
 describe('dashboard month model', () => {
   it('validates and shifts calendar months across years', () => {
@@ -22,6 +22,16 @@ describe('dashboard month model', () => {
     expect(activeTask('completed')).toBe(false)
     expect(undatedDashboardRecord({ scheduledOn: null, dueOn: null })).toBe(true)
     expect(dateInDashboardMonth('2026-08-15', '2026-08')).toBe(true)
+  })
+
+  it('counts every active task regardless of its due date', () => {
+    const tasks = [
+      { status: 'open', dueOn: null },
+      { status: 'in_progress', dueOn: '2026-07-01' },
+      { status: 'completed', dueOn: '2026-08-01' },
+      { status: 'canceled', dueOn: null }
+    ]
+    expect(activeDashboardTasks(tasks)).toEqual(tasks.slice(0, 2))
   })
 
   it('shows dated problems for the selected month and sorts records', () => {

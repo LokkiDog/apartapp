@@ -783,6 +783,7 @@ function taskMenuItems(task: Task): DropdownMenuItem[] {
   const items: DropdownMenuItem[] = [
     {
       label: t("common.open"),
+      icon: "i-lucide-folder-open",
       onSelect: () => {
         void navigateTo(workHref("task", task.id));
       },
@@ -790,18 +791,18 @@ function taskMenuItems(task: Task): DropdownMenuItem[] {
   ];
   if (isAdministrator.value && !["completed", "canceled"].includes(task.status))
     items.push({
-      label: t("work.cancelTask"),
-      icon: "i-lucide-ban",
-      color: "error",
-      onSelect: () => {
-        void cancelTask(task.id);
-      },
+      label: t("common.edit"),
+      icon: "i-lucide-pencil",
+      onSelect: () => openEditTask(task),
     });
   if (isAdministrator.value && !["completed", "canceled"].includes(task.status))
     items.push({
-      label: t("work.editTask"),
-      icon: "i-lucide-pencil",
-      onSelect: () => openEditTask(task),
+      label: t("work.cancelTask"),
+      icon: "i-lucide-ban",
+      color: "warning",
+      onSelect: () => {
+        void cancelTask(task.id);
+      },
     });
   if (isAdministrator.value)
     items.push({
@@ -1675,14 +1676,14 @@ function taskMenuItems(task: Task): DropdownMenuItem[] {
                 ></span>{{ task.title }}
               </p>
               <p class="work-task-row__desktop-subtitle mt-1 truncate text-sm text-[var(--color-muted)]">
-                {{
-                  task.dueOn
-                    ? formatDate(task.dueOn)
-                    : t("work.noDeadline")
-                }}
-                · {{ task.assignee?.name ?? t("work.notAssigned") }} ·
-                {{ task.apartment.name }} ·
-                {{ task.apartment.hotel.name }}
+                <template v-if="task.dueOn">
+                  {{ formatDate(task.dueOn) }} ·
+                </template>
+                <template v-if="task.assignee">
+                  {{ task.assignee.name }} ·
+                </template>
+                {{ task.apartment.hotel.name }} ·
+                {{ task.apartment.name }}
               </p>
               <p
                 v-if="task.hasProblem"
@@ -1697,12 +1698,15 @@ function taskMenuItems(task: Task): DropdownMenuItem[] {
             class="work-task-row__metadata block rounded-lg p-1 -m-1 hover:bg-[var(--color-surface-muted)]"
           >
             <p class="truncate text-sm text-[var(--color-muted)]">
-              {{ task.apartment.name }} ·
-              <span :class="`work-task-row__due--${taskDueState(task)}`">
-                {{ task.dueOn ? formatDate(task.dueOn) : t("work.noDeadline") }}
-              </span>
-              <template v-if="isAdministrator">
-                · {{ task.assignee?.name ?? t("work.notAssigned") }}
+              {{ task.apartment.hotel.name }} ·
+              {{ task.apartment.name }}
+              <template v-if="task.dueOn">
+                · <span :class="`work-task-row__due--${taskDueState(task)}`">
+                  {{ formatDate(task.dueOn) }}
+                </span>
+              </template>
+              <template v-if="isAdministrator && task.assignee">
+                · {{ task.assignee.name }}
               </template>
             </p>
           </NuxtLink>
@@ -1781,7 +1785,7 @@ function taskMenuItems(task: Task): DropdownMenuItem[] {
                     ></span>{{ task.title }}
                   </p>
                   <p class="work-task-row__desktop-subtitle mt-1 truncate text-sm text-[var(--color-muted)]">
-                    {{ task.apartment.name }} · {{ task.apartment.hotel.name }}
+                    {{ task.apartment.hotel.name }} · {{ task.apartment.name }}
                   </p>
                   <p v-if="task.hasProblem" class="mt-1 truncate text-sm text-red-700">
                     {{ task.problemDescription }}
@@ -1793,6 +1797,7 @@ function taskMenuItems(task: Task): DropdownMenuItem[] {
                 class="work-task-row__metadata block rounded-lg p-1 -m-1 hover:bg-[var(--color-surface-muted)]"
               >
                 <p class="truncate text-sm text-[var(--color-muted)]">
+                  {{ task.apartment.hotel.name }} ·
                   {{ task.apartment.name }} ·
                   {{ formatDateTime(task.completedAt ?? task.updatedAt) }}
                 </p>

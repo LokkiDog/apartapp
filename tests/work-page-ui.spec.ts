@@ -19,6 +19,8 @@ describe('work page UI contracts', () => {
     const work = readFileSync('src/pages/work/WorkPage.vue', 'utf8')
     expect(dashboard).toContain('to="/work?tab=tasks"')
     expect(work).toContain('route.query.tab === "tasks" ? "tasks" : "cleanings"')
+    expect(dashboard).toContain('activeDashboardTasks(tasks.value ?? [])')
+    expect(dashboard).not.toContain('activeTask(item.status) && dateInDashboardMonth(item.dueOn, dashboardMonth.value)')
   })
 
   it('keeps task filters, sorting and final records in the task list history', () => {
@@ -49,6 +51,30 @@ describe('work page UI contracts', () => {
     expect(source).not.toContain('formatDate(task.completedAt ?? task.updatedAt)')
     expect(source).toContain("t('workExtra.noFilteredTasks')")
     expect(source).toContain("t('workExtra.noCurrentTasks')")
+  })
+
+  it('omits empty due date and assignee labels from task rows', () => {
+    const source = readFileSync('src/pages/work/WorkPage.vue', 'utf8')
+    expect(source).toContain('<template v-if="task.dueOn">')
+    expect(source).toContain('<template v-if="task.assignee">')
+    expect(source).toContain('<template v-if="isAdministrator && task.assignee">')
+    expect(source).not.toContain('task.dueOn ? formatDate(task.dueOn) : t("work.noDeadline")')
+    expect(source).not.toContain('task.assignee?.name ?? t("work.notAssigned")')
+  })
+
+  it('shows the hotel before the apartment in every task row', () => {
+    const source = readFileSync('src/pages/work/WorkPage.vue', 'utf8')
+    expect(source.match(/\{\{ task\.apartment\.hotel\.name \}\} ·\s+\{\{ task\.apartment\.name \}\}/g)).toHaveLength(4)
+  })
+
+  it('orders task menu actions and keeps cancellation as a warning', () => {
+    const source = readFileSync('src/pages/work/WorkPage.vue', 'utf8')
+    const taskMenu = source.slice(source.indexOf('function taskMenuItems'), source.indexOf('</script>'))
+    expect(taskMenu).toContain('label: t("common.open"),\n      icon: "i-lucide-folder-open"')
+    expect(taskMenu.indexOf('label: t("common.open")')).toBeLessThan(taskMenu.indexOf('label: t("common.edit")'))
+    expect(taskMenu.indexOf('label: t("common.edit")')).toBeLessThan(taskMenu.indexOf('label: t("work.cancelTask")'))
+    expect(taskMenu.indexOf('label: t("work.cancelTask")')).toBeLessThan(taskMenu.indexOf('label: t("work.delete")'))
+    expect(taskMenu).toContain('label: t("work.cancelTask"),\n      icon: "i-lucide-ban",\n      color: "warning"')
   })
 
   it('defines every literal translation key in all supported locales', () => {
@@ -208,7 +234,7 @@ describe('work page UI contracts', () => {
     expect(styles).toContain('.task-list-actions {\n  display: flex;\n  min-width: 0;\n  align-items: center;\n  justify-content: flex-end;')
     expect(styles).toContain('.work-cleaning-row__linen {\n  display: grid;\n  width: 2.75rem;\n  min-width: 2.75rem;')
     expect(source).toContain('class="work-task-row__desktop-subtitle mt-1 truncate text-sm text-[var(--color-muted)]"')
-    expect(source).toContain('<template v-if="isAdministrator">')
+    expect(source).toContain('<template v-if="isAdministrator && task.assignee">')
     expect(source).toContain('taskDueState(task)')
     expect(source).not.toContain('<UAlert\n            v-if="task.hasProblem"')
     expect(styles).toContain('.work-task-row {\n  display: grid;\n  grid-template-columns: minmax(0, 1fr) max-content;\n  grid-template-rows: auto auto;')
@@ -249,6 +275,39 @@ describe('work page UI contracts', () => {
     expect(taskDetail).toContain('`/api/${props.kind}s/${id}`')
     expect(taskEndpoint).toContain("const task = (await listTasks(actor)).find(item => item.id === taskId)")
     expect(taskEndpoint).toContain("statusCode: 404, statusMessage: 'Задача не найдена'")
+  })
+
+  it('returns task details to the tasks tab after navigation and mutations', () => {
+    const detail = readFileSync('src/features/work-detail/ui/WorkDetailPage.vue', 'utf8')
+    expect(detail).toContain("const taskListHref = computed(() => isSpecialist.value ? '/tasks' : '/work?tab=tasks')")
+    expect(detail).toContain("? taskListHref.value\n    : '/work')")
+    expect(detail).toContain("router.push(props.kind === 'task' ? taskListHref.value : '/work')")
+    expect(detail).toContain(':to="taskEditHref"')
+  })
+
+  it('shows a success toast only after a task save without photo errors', () => {
+    const app = readFileSync('app/app.vue', 'utf8')
+    const detail = readFileSync('src/features/work-detail/ui/WorkDetailPage.vue', 'utf8')
+    const styles = readFileSync('src/app/styles/main.css', 'utf8')
+    const locales = ['ru', 'en', 'he'].map(locale => JSON.parse(readFileSync(`i18n/locales/${locale}.json`, 'utf8')) as { taskNotice: Record<string, string> })
+    expect(app).toContain("position: 'top-center'")
+    expect(app).toContain('progress: false')
+    expect(app).toContain("portal: 'body'")
+    expect(app).toContain("viewport: 'app-toast-viewport'")
+    expect(app).toContain('<UApp :toaster="toasterDefaults">')
+    expect(detail).toContain('const toast = useToast()')
+    expect(detail).toContain("color: 'primary'")
+    expect(detail).toContain("icon: 'i-lucide-check'")
+    expect(detail).toContain('close: false')
+    expect(detail).toContain('duration: 2500')
+    expect(detail).toContain("min-h-10 w-fit max-w-full")
+    expect(detail).toContain('task-save-toast')
+    expect(detail).toContain("shadow-[var(--shadow-surface)]")
+    expect(styles).toContain('top: calc(5rem + env(safe-area-inset-top)) !important;')
+    expect(styles).toContain('z-index: 2147483647 !important;')
+    expect(styles).toContain('background: var(--color-primary) !important;')
+    expect(styles).toContain('color: #fff !important;')
+    expect(locales.every(locale => locale.taskNotice.saved && locale.taskNotice.completed)).toBe(true)
   })
 
   it('keeps work detail cards inside the mobile viewport', () => {

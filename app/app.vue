@@ -7,14 +7,22 @@ const overlayDefaults = {
   select: { content: { bodyLock: false } },
   selectMenu: { content: { bodyLock: false } }
 } as const
+const toasterDefaults = {
+  position: 'top-center',
+  progress: false,
+  portal: 'body',
+  ui: { viewport: 'app-toast-viewport' }
+} as const
 
 useHead(() => ({ htmlAttrs: i18nHead.value.htmlAttrs }))
 </script>
 
 <template>
-  <UTheme :props="overlayDefaults">
-    <VitePwaManifest />
-    <NuxtLayout><NuxtPage /></NuxtLayout>
-    <PwaInstallPrompt />
-  </UTheme>
+  <UApp :toaster="toasterDefaults">
+    <UTheme :props="overlayDefaults">
+      <VitePwaManifest />
+      <NuxtLayout><NuxtPage /></NuxtLayout>
+      <PwaInstallPrompt />
+    </UTheme>
+  </UApp>
 </template>

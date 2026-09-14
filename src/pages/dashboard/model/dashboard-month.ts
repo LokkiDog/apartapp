@@ -45,6 +45,10 @@ export function activeTask(status: string) {
   return ACTIVE_TASK_STATUSES.has(status)
 }
 
+export function activeDashboardTasks<T extends { status: string }>(tasks: T[]) {
+  return tasks.filter(task => activeTask(task.status))
+}
+
 export function datedDashboardRecord(record: DashboardMonthRecord, month: string) {
   return dateInDashboardMonth(record.scheduledOn ?? record.dueOn, month)
 }
