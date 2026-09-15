@@ -1,5 +1,5 @@
-import { and, asc, eq, gte, inArray, isNull, ne } from 'drizzle-orm'
-import { cleaningAssignmentInputSchema, cleaningInputSchema, cleaningLinenUpdateSchema, cleaningRouteUpdateSchema, cleaningTariffOverrideSchema, cleaningUpdateSchema, completionInputSchema, workProgressInputSchema } from '@contracts/crm'
+import { and, asc, desc, eq, gte, inArray, isNull, lt, ne, notInArray, or } from 'drizzle-orm'
+import { cleaningAssignmentInputSchema, cleaningInputSchema, cleaningLinenUpdateSchema, cleaningRouteUpdateSchema, cleaningTariffOverrideSchema, cleaningUpdateSchema, completionInputSchema, workProgressInputSchema, type WorkListQuery } from '@contracts/crm'
 import { canAccessAssignedWork, requireRole, requireWorkSectionAccess, type Actor } from '../../infrastructure/auth/actor'
 import { writeAuditLog } from '../../infrastructure/audit/log'
 import { db } from '../../infrastructure/database/client'
@@ -50,24 +50,70 @@ export async function createCleaning(actor: Actor, input: unknown) {
   return cleaning
 }
 
-export async function listCleanings(actor: Actor) {
+function cleaningCursor(value: string | undefined) {
+  if (!value) return null
+  const [scheduledOn, id, extra] = value.split('|')
+  if (extra || !scheduledOn?.match(/^\d{4}-\d{2}-\d{2}$/) || !id?.match(/^[0-9a-f-]{36}$/i)) {
+    throw createError({ statusCode: 400, statusMessage: 'Некорректный курсор' })
+  }
+  return { scheduledOn, id }
+}
+
+export async function listCleanings(actor: Actor, query: WorkListQuery = { view: 'all', limit: 50 }) {
   requireWorkSectionAccess(actor)
+  const today = sofiaToday()
+  const criteria = [eq(cleanings.organizationId, actor.organizationId)]
+  if (query.view === 'operational') {
+    criteria.push(or(
+      gte(cleanings.scheduledOn, today),
+      notInArray(cleanings.status, ['completed', 'canceled']),
+      and(eq(cleanings.status, 'completed'), eq(cleanings.linenCollected, false))
+    )!)
+  }
+  if (query.view === 'history') {
+    criteria.push(and(lt(cleanings.scheduledOn, today), inArray(cleanings.status, ['completed', 'canceled']))!)
+    const cursor = cleaningCursor(query.cursor)
+    if (cursor) {
+      criteria.push(or(
+        lt(cleanings.scheduledOn, cursor.scheduledOn),
+        and(eq(cleanings.scheduledOn, cursor.scheduledOn), lt(cleanings.id, cursor.id))
+      )!)
+    }
+  }
+  if (!actor.roles.includes('administrator') && !actor.roles.includes('specialist')) {
+    const assigned = await db.select({ cleaningId: cleaningAssignments.cleaningId })
+      .from(cleaningAssignments)
+      .where(eq(cleaningAssignments.cleanerId, actor.id))
+    if (!assigned.length) return query.view === 'history' ? { items: [], nextCursor: null } : []
+    criteria.push(inArray(cleanings.id, assigned.map(item => item.cleaningId)))
+  }
   const all = await db.query.cleanings.findMany({
-    where: eq(cleanings.organizationId, actor.organizationId),
-    with: { apartment: { with: { hotel: true, type: true, managerAssignments: { with: { manager: { columns: { id: true, name: true } } } } } }, assignments: { with: { cleaner: true } }, problems: true, guestPreparation: true, stay: true },
-    orderBy: (cleanings, { asc }) => [asc(cleanings.scheduledOn)]
+    where: and(...criteria),
+    with: { apartment: { with: { hotel: true, type: true, managerAssignments: { with: { manager: { columns: { id: true, name: true } } } } } }, assignments: { with: { cleaner: { columns: { id: true, name: true } } } }, problems: true, guestPreparation: true, stay: true },
+    orderBy: query.view === 'history' ? [desc(cleanings.scheduledOn), desc(cleanings.id)] : [asc(cleanings.scheduledOn), asc(cleanings.id)],
+    limit: query.view === 'history' ? query.limit + 1 : undefined
   })
-  const problemIds = all.flatMap(cleaning => cleaning.problems.map(problem => problem.id))
+  const hasNextPage = query.view === 'history' && all.length > query.limit
+  const page = hasNextPage ? all.slice(0, query.limit) : all
+  const problemIds = page.flatMap(cleaning => cleaning.problems.map(problem => problem.id))
   const problemAttachments = problemIds.length ? await db.select({ id: attachments.id, entityId: attachments.entityId, fileName: attachments.fileName }).from(attachments).where(and(eq(attachments.entityType, 'cleaning_problem'), inArray(attachments.entityId, problemIds))).orderBy(asc(attachments.createdAt), asc(attachments.id)) : []
-  const futureStays = await db.query.stays.findMany({
-    where: and(eq(stays.organizationId, actor.organizationId), gte(stays.checkInOn, sofiaToday())),
-    columns: { id: true, apartmentId: true, checkInOn: true, adultCount: true, childCount: true },
-    orderBy: [asc(stays.checkInOn)]
-  })
-  const linenPlan = (cleaning: (typeof all)[number]) => linenPlanForCleaningFromStays(cleaning, futureStays.filter(stay => stay.apartmentId === cleaning.apartmentId))
-  const serializeCleaning = (cleaning: (typeof all)[number]) => ({ ...cleaning, linenPlan: linenPlan(cleaning), problems: cleaning.problems.map(problem => ({ ...problem, attachments: problemAttachments.filter(attachment => attachment.entityId === problem.id) })), apartment: serializeApartment(cleaning.apartment) })
-  if (actor.roles.includes('administrator')) return all.map(serializeCleaning)
-  if (actor.roles.includes('specialist')) return all.map(cleaning => ({
+  const apartmentIds = [...new Set(page.map(item => item.apartmentId))]
+  const futureStays = apartmentIds.length
+    ? await db.query.stays.findMany({
+        where: and(eq(stays.organizationId, actor.organizationId), gte(stays.checkInOn, today), inArray(stays.apartmentId, apartmentIds)),
+        columns: { id: true, apartmentId: true, checkInOn: true, adultCount: true, childCount: true },
+        orderBy: [asc(stays.checkInOn)]
+      })
+    : []
+  const staysByApartment = new Map<string, typeof futureStays>()
+  for (const stay of futureStays) staysByApartment.set(stay.apartmentId, [...(staysByApartment.get(stay.apartmentId) ?? []), stay])
+  const attachmentsByProblem = new Map<string, typeof problemAttachments>()
+  for (const attachment of problemAttachments) attachmentsByProblem.set(attachment.entityId, [...(attachmentsByProblem.get(attachment.entityId) ?? []), attachment])
+  const linenPlan = (cleaning: (typeof page)[number]) => linenPlanForCleaningFromStays(cleaning, staysByApartment.get(cleaning.apartmentId) ?? [])
+  const serializeCleaning = (cleaning: (typeof page)[number]) => ({ ...cleaning, linenPlan: linenPlan(cleaning), problems: cleaning.problems.map(problem => ({ ...problem, attachments: attachmentsByProblem.get(problem.id) ?? [] })), apartment: serializeApartment(cleaning.apartment) })
+  let serialized
+  if (actor.roles.includes('administrator')) serialized = page.map(serializeCleaning)
+  else if (actor.roles.includes('specialist')) serialized = page.map(cleaning => ({
     id: cleaning.id,
     apartmentId: cleaning.apartmentId,
     status: cleaning.status,
@@ -99,11 +145,17 @@ export async function listCleanings(actor: Actor) {
       }
     }
   }))
-  return all.filter(cleaning => cleaning.assignments.some(item => item.cleanerId === actor.id)).map(cleaning => {
+  else serialized = page.map(cleaning => {
     const apartment = serializeApartment(cleaning.apartment)
     const safeStay = cleaning.stay ? (({ guestName: _guestName, guestPhone: _guestPhone, guestComment: _guestComment, cashAmountEur: _cashAmountEur, ...rest }) => rest)(cleaning.stay) : null
     return { ...serializeCleaning(cleaning), apartment, stay: safeStay, tariffSnapshot: { cleanerPoolEur: cleaning.tariffSnapshot.cleanerPoolEur } }
   })
+  if (query.view !== 'history') return serialized
+  const last = page.at(-1)
+  return {
+    items: serialized,
+    nextCursor: hasNextPage && last ? `${last.scheduledOn}|${last.id}` : null
+  }
 }
 
 export async function assignCleaners(actor: Actor, cleaningId: string, input: unknown) {

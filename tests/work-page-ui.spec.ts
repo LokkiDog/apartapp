@@ -19,7 +19,8 @@ describe('work page UI contracts', () => {
     const work = readFileSync('src/pages/work/WorkPage.vue', 'utf8')
     expect(dashboard).toContain('to="/work?tab=tasks"')
     expect(work).toContain('route.query.tab === "tasks" ? "tasks" : "cleanings"')
-    expect(dashboard).toContain('activeDashboardTasks(tasks.value ?? [])')
+    expect(dashboard).toContain('summary.value.tasks.activeCount')
+    expect(dashboard).toContain("$fetch<DashboardResponse>('/api/dashboard'")
     expect(dashboard).not.toContain('activeTask(item.status) && dateInDashboardMonth(item.dueOn, dashboardMonth.value)')
   })
 
@@ -28,7 +29,8 @@ describe('work page UI contracts', () => {
     expect(source).toContain('const taskStatusFilter = ref<TaskStatusFilter>("all")')
     expect(source).toContain('const taskSort = ref<TaskSort>("priority-desc")')
     expect(source).toContain('filterAndSortCurrentTasks(')
-    expect(source).toContain('historyTasks(tasks.value ?? [])')
+    expect(source).toContain('historyTasks(allTasks.value)')
+    expect(source).toContain('query: { view: "history", limit: 50, ...(taskHistoryCursor.value ? { cursor: taskHistoryCursor.value } : {}) }')
     expect(source).toContain(':items="taskSortMenuItems"')
     expect(source).toContain(':items="taskStatusFilterMenuItems"')
     expect(source).toContain(':content="{ align: \'start\' }"')
@@ -43,7 +45,7 @@ describe('work page UI contracts', () => {
     expect(source).not.toContain('task-history-button')
     expect(source).not.toContain('v-model="taskStatusFilter"')
     expect(source).not.toContain('v-model="taskSort"')
-    expect(source).toContain('taskHistoryOpen = !taskHistoryOpen')
+    expect(source).toContain('taskHistoryOpen.value = !taskHistoryOpen.value')
     expect(source).toContain('taskHistory.length')
     expect(source).toContain('v-for="task in filteredTasks"')
     expect(source).toContain('v-for="task in taskHistory"')
@@ -281,7 +283,8 @@ describe('work page UI contracts', () => {
 
     expect(taskPage).toContain('<WorkDetailPage kind="task" />')
     expect(taskDetail).toContain('`/api/${props.kind}s/${id}`')
-    expect(taskEndpoint).toContain("const task = (await listTasks(actor)).find(item => item.id === taskId)")
+    expect(taskEndpoint).toContain('const result = await listTasks(actor)')
+    expect(taskEndpoint).toContain('Array.isArray(result) ? result.find(item => item.id === taskId) : undefined')
     expect(taskEndpoint).toContain("statusCode: 404, statusMessage: 'Задача не найдена'")
   })
 

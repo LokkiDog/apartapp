@@ -13,7 +13,6 @@ import { DateRangeInput, EmptyState, MoneyInput, PageHeader } from '#fsd/shared/
 import StayCalendarPopover from './StayCalendarPopover.vue'
 import CalendarEventMarker from './CalendarEventMarker.vue'
 import StayBookingRow from './StayBookingRow.vue'
-import StayDetailsSlideover from './StayDetailsSlideover.vue'
 import ApartmentBookingsView from './ApartmentBookingsView.vue'
 import StayBookingsPanel from './StayBookingsPanel.vue'
 import { useI18n } from 'vue-i18n'
@@ -22,6 +21,8 @@ import { createCalendarEventMarkers } from './model/calendar-event-markers'
 import { bookingsForApartment, calendarRange as calendarPeriodRange, migrateCalendarView, type BookingView, type CalendarPeriod } from './model/calendar-view'
 import { createStayAgenda, filterStayAgenda, isPastStay, stayAgendaQueryFrom, stayHistoryQueryFrom, type StayAgendaStatus } from './model/stay-agenda'
 import { stayInputSchema } from '@contracts/crm'
+
+const LazyStayDetailsSlideover = defineAsyncComponent(() => import('./StayDetailsSlideover.vue'))
 
 type CalendarMember = { id: string; status: string; isVika: boolean }
 type StayForm = {
@@ -89,11 +90,18 @@ const showGuestDetails = computed(() => Boolean(user.value?.roles.some(role => [
 const showFinancialDetails = computed(() => Boolean(user.value?.roles.includes('administrator')))
 const canEditStays = computed(() => Boolean(user.value?.roles.some(role => ['administrator', 'manager'].includes(role))))
 
-const { data: hotels } = await useAsyncData('calendar-hotels', () => user.value ? $fetch<Hotel[]>('/api/hotels') : Promise.resolve([]), { server: false, default: () => [], watch: [user] })
-const { data: apartments, error: apartmentsError } = await useAsyncData('calendar-apartments', () => user.value ? $fetch<Apartment[]>('/api/apartments') : Promise.resolve([]), { server: false, default: () => [], watch: [user] })
 const isAdministrator = computed(() => Boolean(user.value?.roles.includes('administrator')))
-const { data: members } = await useAsyncData('calendar-users', () => isAdministrator.value ? $fetch<CalendarMember[]>('/api/users') : Promise.resolve([]), { server: false, default: () => [], watch: [user] })
-const { data: services } = await useAsyncData('calendar-services', () => user.value ? $fetch<SpecialServiceOption[]>('/api/special-services') : Promise.resolve([]), { server: false, default: () => [], watch: [user] })
+const [
+  { data: hotels },
+  { data: apartments, error: apartmentsError },
+  { data: members },
+  { data: services }
+] = await Promise.all([
+  useAsyncData('calendar-hotels', () => user.value ? $fetch<Hotel[]>('/api/hotels') : Promise.resolve([]), { server: false, default: () => [], watch: [user] }),
+  useAsyncData('calendar-apartments', () => user.value ? $fetch<Apartment[]>('/api/apartments') : Promise.resolve([]), { server: false, default: () => [], watch: [user] }),
+  useAsyncData('calendar-users', () => isAdministrator.value ? $fetch<CalendarMember[]>('/api/users') : Promise.resolve([]), { server: false, default: () => [], watch: [user] }),
+  useAsyncData('calendar-services', () => user.value ? $fetch<SpecialServiceOption[]>('/api/special-services') : Promise.resolve([]), { server: false, default: () => [], watch: [user] })
+])
 const vikaAccount = computed(() => (members.value ?? []).find(member => member.isVika) ?? null)
 watch(vikaAccount, account => { if (!account) onlyVika.value = false }, { immediate: true })
 const range = computed(() => calendarPeriodRange(calendarPeriod.value, cursor.value))
@@ -637,7 +645,7 @@ async function saveStay() {
       <span class="calendar-events-legend__item" role="listitem"><span class="calendar-events-legend__swatch calendar-events-legend__swatch--departure" aria-hidden="true" />{{ t('calendar.departures') }}</span>
     </div>
 
-    <StayDetailsSlideover v-model:open="detailsOpen" :stay="selectedStay" :can-edit="canEditStays" :can-manage-cleaning="Boolean(user?.roles.includes('administrator'))" :show-service-prices="showFinancialDetails" @edit="openEdit" />
+    <LazyStayDetailsSlideover v-if="detailsOpen" v-model:open="detailsOpen" :stay="selectedStay" :can-edit="canEditStays" :can-manage-cleaning="Boolean(user?.roles.includes('administrator'))" :show-service-prices="showFinancialDetails" @edit="openEdit" />
 
     <USlideover v-model:open="open" :title="editingStay ? t('calendar.editBooking') : t('calendar.newStay')" :modal="true" :overlay="true">
       <template #body>

@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNull, isNotNull } from 'drizzle-orm'
+import { and, asc, count, desc, eq, inArray, isNull, isNotNull } from 'drizzle-orm'
 import { randomUUID } from 'node:crypto'
 import { problemExpenseSchema, problemInputSchema, problemListQuerySchema, problemResolveWithTaskSchema, problemTaskInputSchema, problemUpdateSchema } from '@contracts/problem'
 import type { Actor } from '../../infrastructure/auth/actor'
@@ -64,8 +64,12 @@ export async function getProblem(actor: Actor, problemId: string) {
 
 export async function problemDashboard(actor: Actor) {
   requireRole(actor, 'administrator')
-  const rows = await db.query.cleaningProblems.findMany({ where: and(eq(cleaningProblems.organizationId, actor.organizationId), isNull(cleaningProblems.resolvedAt)), with: { apartment: { with: { hotel: true } } }, orderBy: [desc(cleaningProblems.createdAt)] })
-  return { openCount: rows.length, items: rows.slice(0, 4).map(row => ({ id: row.id, description: row.description, apartment: row.apartment })) }
+  const where = and(eq(cleaningProblems.organizationId, actor.organizationId), isNull(cleaningProblems.resolvedAt))
+  const [countRows, rows] = await Promise.all([
+    db.select({ value: count() }).from(cleaningProblems).where(where),
+    db.query.cleaningProblems.findMany({ where, with: { apartment: { with: { hotel: true } } }, orderBy: [desc(cleaningProblems.createdAt)], limit: 4 })
+  ])
+  return { openCount: Number(countRows[0]?.value ?? 0), items: rows.map(row => ({ id: row.id, description: row.description, apartment: row.apartment })) }
 }
 
 export async function createProblemTask(actor: Actor, problemId: string, input: unknown) {

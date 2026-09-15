@@ -131,6 +131,21 @@ export const stayListQuerySchema = z.object({
 
 export type StayListQuery = z.infer<typeof stayListQuerySchema>
 
+export const workListQuerySchema = z.object({
+  view: z.enum(['all', 'operational', 'history']).default('all'),
+  cursor: z.string().max(80).optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(50)
+}).strict()
+
+export type WorkListQuery = z.infer<typeof workListQuerySchema>
+export type PaginatedWorkList<T> = { items: T[]; nextCursor: string | null }
+
+export const notificationListQuerySchema = z.object({
+  paginated: z.union([z.literal('true'), z.literal('false'), z.boolean()]).transform(value => value === true || value === 'true').default(false),
+  cursor: z.string().max(80).optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(30)
+}).strict()
+
 export const cleaningAssignmentInputSchema = z.object({ cleanerIds: z.array(z.uuid()).min(1), scheduledOn: z.iso.date() })
 export const cleaningTariffOverrideSchema = withCalculatedTariff({ reason: z.string().trim().min(3).max(1000) })
 const cleaningChecklistSchema = z.array(z.object({ label: z.string().trim().min(1).max(200), checked: z.boolean() })).max(200)

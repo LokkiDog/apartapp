@@ -7,7 +7,8 @@ describe('task resolution review workflow', () => {
     const migration = readFileSync('server/infrastructure/database/migrations/0037_task_resolution_review.sql', 'utf8')
     expect(taskStatusSchema.parse('resolved')).toBe('resolved')
     expect(migration).toContain("ADD VALUE IF NOT EXISTS 'resolved'")
-    expect(migration).toContain('"status" IN (\'open\', \'in_progress\', \'resolved\')')
+    expect(migration).toContain('"status" NOT IN (\'completed\', \'canceled\')')
+    expect(migration).not.toContain('"status" IN (\'open\', \'in_progress\', \'resolved\')')
     expect(migration).not.toContain('UPDATE "tasks"')
   })
 

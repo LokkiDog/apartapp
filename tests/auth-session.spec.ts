@@ -19,8 +19,8 @@ const actor: Actor = {
 describe('authenticated session policy', () => {
   beforeEach(() => replaceUserSession.mockReset())
 
-  it('uses exactly ten days as the idle limit', () => {
-    expect(AUTH_SESSION_IDLE_MAX_AGE_SECONDS).toBe(10 * 24 * 60 * 60)
+  it('uses exactly seven days as the idle limit', () => {
+    expect(AUTH_SESSION_IDLE_MAX_AGE_SECONDS).toBe(7 * 24 * 60 * 60)
   })
 
   it('replaces the session with the current actor after activity', async () => {

@@ -21,10 +21,7 @@ import {
   PageHeader,
   StatusBadge,
 } from "#fsd/shared/ui";
-import {
-  CleaningFormSlideover,
-  type CleaningDraft,
-} from "#fsd/features/manage-cleaning";
+import type { CleaningDraft } from "#fsd/features/manage-cleaning";
 import {
   apartmentsForCleanings,
   buildCleaningPlan,
@@ -41,7 +38,13 @@ import {
   type TaskStatusFilter,
 } from "./model/task-list";
 import { useI18n } from "vue-i18n";
-import { taskInputSchema } from "@contracts/crm";
+import { taskInputSchema, type PaginatedWorkList } from "@contracts/crm";
+
+const LazyCleaningFormSlideover = defineAsyncComponent(() =>
+  import("#fsd/features/manage-cleaning").then(
+    (module) => module.CleaningFormSlideover,
+  ),
+);
 
 type WorkKind = "cleaning" | "task";
 type WorkToDelete = { kind: WorkKind; id: string; label: string };
@@ -65,13 +68,14 @@ const [
   { data: tasks, refresh: refreshTasks },
   { data: apartments },
   { data: stays },
+  { data: team },
 ] = await Promise.all([
-  useAsyncData("work-cleanings", () => $fetch<Cleaning[]>("/api/cleanings"), {
+  useAsyncData("work-cleanings", () => $fetch<Cleaning[]>("/api/cleanings", { query: { view: "operational" } }), {
     server: false,
     default: () => [],
     watch: [currentUser],
   }),
-  useAsyncData("work-tasks", () => $fetch<Task[]>("/api/tasks"), {
+  useAsyncData("work-tasks", () => $fetch<Task[]>("/api/tasks", { query: { view: "operational" } }), {
     server: false,
     default: () => [],
     watch: [currentUser],
@@ -92,27 +96,78 @@ const [
         : Promise.resolve([]),
     { server: false, default: () => [], watch: [currentUser] },
   ),
+  useAsyncData(
+    "work-team",
+    () =>
+      currentUser.value?.roles.includes("administrator")
+        ? $fetch<Array<{ id: string; name: string; roles: string[] }>>(
+            "/api/users/assignable",
+          )
+        : Promise.resolve([]),
+    { server: false, default: () => [], watch: [currentUser] },
+  ),
 ]);
-const { data: team } = await useAsyncData(
-  "work-team",
-  () =>
-    currentUser.value?.roles.includes("administrator")
-      ? $fetch<Array<{ id: string; name: string; roles: string[] }>>(
-          "/api/users/assignable",
-        )
-      : Promise.resolve([]),
-  { server: false, default: () => [], watch: [currentUser] },
-);
+const cleaningHistoryItems = ref<Cleaning[]>([]);
+const taskHistoryItems = ref<Task[]>([]);
+const cleaningHistoryCursor = ref<string | null | undefined>(undefined);
+const taskHistoryCursor = ref<string | null | undefined>(undefined);
+const cleaningHistoryLoading = ref(false);
+const taskHistoryLoading = ref(false);
+const allCleanings = computed(() => {
+  const items = new Map(cleaningHistoryItems.value.map(item => [item.id, item]));
+  for (const item of cleanings.value ?? []) items.set(item.id, item);
+  return [...items.values()];
+});
+const allTasks = computed(() => {
+  const items = new Map(taskHistoryItems.value.map(item => [item.id, item]));
+  for (const item of tasks.value ?? []) items.set(item.id, item);
+  return [...items.values()];
+});
+
+async function loadCleaningHistory() {
+  if (cleaningHistoryLoading.value || cleaningHistoryCursor.value === null) return;
+  cleaningHistoryLoading.value = true;
+  try {
+    const page = await $fetch<PaginatedWorkList<Cleaning>>("/api/cleanings", {
+      query: { view: "history", limit: 50, ...(cleaningHistoryCursor.value ? { cursor: cleaningHistoryCursor.value } : {}) },
+    });
+    const known = new Set(cleaningHistoryItems.value.map(item => item.id));
+    cleaningHistoryItems.value.push(...page.items.filter(item => !known.has(item.id)));
+    cleaningHistoryCursor.value = page.nextCursor;
+  } finally {
+    cleaningHistoryLoading.value = false;
+  }
+}
+
+async function loadTaskHistory() {
+  if (taskHistoryLoading.value || taskHistoryCursor.value === null) return;
+  taskHistoryLoading.value = true;
+  try {
+    const page = await $fetch<PaginatedWorkList<Task>>("/api/tasks", {
+      query: { view: "history", limit: 50, ...(taskHistoryCursor.value ? { cursor: taskHistoryCursor.value } : {}) },
+    });
+    const known = new Set(taskHistoryItems.value.map(item => item.id));
+    taskHistoryItems.value.push(...page.items.filter(item => !known.has(item.id)));
+    taskHistoryCursor.value = page.nextCursor;
+  } finally {
+    taskHistoryLoading.value = false;
+  }
+}
+
+async function toggleCleaningHistory() {
+  historyOpen.value = !historyOpen.value;
+  if (historyOpen.value && cleaningHistoryCursor.value === undefined) await loadCleaningHistory();
+}
+
+async function toggleTaskHistory() {
+  taskHistoryOpen.value = !taskHistoryOpen.value;
+  if (taskHistoryOpen.value && taskHistoryCursor.value === undefined) await loadTaskHistory();
+}
 
 watch(notificationState.cleaningRevision, () => {
   if (currentUser.value) {
     void refreshCleanings();
-    void refreshTasks();
   }
-});
-
-watch(notificationState.revision, () => {
-  if (currentUser.value) void refreshTasks();
 });
 watch(notificationState.taskRevision, () => {
   if (currentUser.value) void refreshTasks();
@@ -179,7 +234,7 @@ async function openCleaningFromQuery() {
   const taskId =
     typeof route.query.taskId === "string" ? route.query.taskId : null;
   if (cleaningId) {
-    let cleaning = (cleanings.value ?? []).find(
+    let cleaning = allCleanings.value.find(
       (item) => item.id === cleaningId,
     );
     if (!cleaning) {
@@ -193,7 +248,7 @@ async function openCleaningFromQuery() {
   } else if (stayId) {
     openCreateCleaning(stayId);
   } else if (taskId) {
-    const task = (tasks.value ?? []).find((item) => item.id === taskId);
+    const task = allTasks.value.find((item) => item.id === taskId);
     if (task) openEditTask(task);
   }
 }
@@ -211,8 +266,8 @@ function taskDueState(task: Task) {
   return "default";
 }
 const displayedCleanings = computed(() => isSpecialist.value && linenQueueOnly.value
-  ? (cleanings.value ?? []).filter(canCollectLinen)
-  : cleanings.value ?? []
+  ? allCleanings.value.filter(canCollectLinen)
+  : allCleanings.value
 );
 const cleaningPlan = computed(() =>
   buildCleaningPlan(
@@ -254,7 +309,7 @@ const apartmentPlan = computed(() =>
 const pendingAcceptanceCleanings = computed(() =>
   isAdministrator.value || isSpecialist.value || !currentUser.value?.id
     ? []
-    : unacceptedCleaningsForCleaner(cleanings.value ?? [], currentUser.value.id),
+    : unacceptedCleaningsForCleaner(allCleanings.value, currentUser.value.id),
 );
 
 const statusLabels = computed<Record<string, string>>(() => ({
@@ -367,15 +422,15 @@ const taskSortMenuItems = computed<DropdownMenuItem[]>(() =>
     },
   })),
 );
-const activeTasks = computed(() => currentTasks(tasks.value ?? []));
+const activeTasks = computed(() => currentTasks(allTasks.value));
 const filteredTasks = computed(() =>
   filterAndSortCurrentTasks(
-    tasks.value ?? [],
+    allTasks.value,
     taskStatusFilter.value,
     taskSort.value,
   ),
 );
-const taskHistory = computed(() => historyTasks(tasks.value ?? []));
+const taskHistory = computed(() => historyTasks(allTasks.value));
 
 function cleaningAmount(cleaning: Cleaning) {
   return (
@@ -913,7 +968,8 @@ function taskMenuItems(task: Task): DropdownMenuItem[] {
             color="neutral"
             variant="ghost"
             icon="i-lucide-history"
-            @click="historyOpen = !historyOpen"
+            :loading="cleaningHistoryLoading"
+            @click="toggleCleaningHistory"
             >{{
               historyOpen
                 ? `${t("common.hide")} ${t("common.history").toLocaleLowerCase()}`
@@ -1614,6 +1670,9 @@ function taskMenuItems(task: Task): DropdownMenuItem[] {
           <p v-else class="px-5 py-6 text-sm text-[var(--color-muted)] sm:px-6">
             {{ t("workExtra.historyEmpty") }}
           </p>
+          <div v-if="cleaningHistoryCursor" class="border-t border-[var(--color-line)] p-3 text-center">
+            <UButton color="neutral" variant="soft" :loading="cleaningHistoryLoading" @click="loadCleaningHistory">{{ t('common.more') }}</UButton>
+          </div>
         </section>
         <EmptyState
           v-if="!cleanings?.length"
@@ -1625,7 +1684,7 @@ function taskMenuItems(task: Task): DropdownMenuItem[] {
     </template>
 
     <template v-if="tab === 'tasks'">
-      <div v-if="tasks?.length" class="space-y-4">
+      <div v-if="tasks?.length || taskHistoryItems.length || taskHistoryCursor === undefined" class="space-y-4">
         <div class="task-list-controls">
           <UDropdownMenu
             :items="taskSortMenuItems"
@@ -1651,7 +1710,8 @@ function taskMenuItems(task: Task): DropdownMenuItem[] {
               variant="ghost"
               icon="i-lucide-history"
               :aria-pressed="taskHistoryOpen"
-              @click="taskHistoryOpen = !taskHistoryOpen"
+              :loading="taskHistoryLoading"
+              @click="toggleTaskHistory"
             >{{ taskHistoryOpen
               ? `${t('common.hide')} ${t('common.history').toLocaleLowerCase()}`
               : t('common.history') }}
@@ -1859,6 +1919,9 @@ function taskMenuItems(task: Task): DropdownMenuItem[] {
           <p v-else class="px-5 py-6 text-sm text-[var(--color-muted)] sm:px-6">
             {{ t('workExtra.taskHistoryEmpty') }}
           </p>
+          <div v-if="taskHistoryCursor" class="border-t border-[var(--color-line)] p-3 text-center">
+            <UButton color="neutral" variant="soft" :loading="taskHistoryLoading" @click="loadTaskHistory">{{ t('common.more') }}</UButton>
+          </div>
         </section>
       </div>
       <EmptyState
@@ -1951,7 +2014,8 @@ function taskMenuItems(task: Task): DropdownMenuItem[] {
       ></USlideover
     >
 
-    <CleaningFormSlideover
+    <LazyCleaningFormSlideover
+      v-if="cleaningOpen"
       v-model:open="cleaningOpen"
       :apartments="apartments ?? []"
       :stays="stays ?? []"

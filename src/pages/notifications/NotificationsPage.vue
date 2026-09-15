@@ -7,6 +7,7 @@ import { useI18n } from 'vue-i18n'
 
 type Notification = NotificationItem
 type Filter = 'all' | 'unread'
+type NotificationPage = { items: Notification[]; nextCursor: string | null }
 
 const currentUser = useCurrentUser()
 const { t, locale } = useI18n()
@@ -16,11 +17,19 @@ const filter = ref<Filter>('unread')
 const actionError = ref('')
 const itemPendingId = ref<string | null>(null)
 const markAllPending = ref(false)
-const { data: items, refresh, status, error: loadError } = await useAsyncData(
+const { data: firstPage, refresh, status, error: loadError } = await useAsyncData(
   'notifications',
-  () => currentUser.value ? $fetch<Notification[]>('/api/notifications') : Promise.resolve([]),
-  { server: false, default: () => [], watch: [currentUser] }
+  () => currentUser.value ? $fetch<NotificationPage>('/api/notifications', { query: { paginated: true, limit: 30 } }) : Promise.resolve({ items: [], nextCursor: null }),
+  { server: false, default: () => ({ items: [], nextCursor: null }), watch: [currentUser] }
 )
+const items = ref<Notification[]>([])
+const nextCursor = ref<string | null>(null)
+const loadMorePending = ref(false)
+watch(firstPage, page => {
+  const latestIds = new Set(page.items.map(item => item.id))
+  items.value = [...page.items, ...items.value.filter(item => !latestIds.has(item.id))]
+  nextCursor.value = page.nextCursor
+}, { immediate: true })
 
 const localeCode = computed(() => locale.value === 'he' ? 'he-IL' : locale.value === 'en' ? 'en-US' : 'ru-RU')
 const unreadCount = computed(() => items.value.filter(item => !item.readAt).length)
@@ -81,6 +90,19 @@ function markLocallyRead(ids: string[]) {
 async function retry() {
   actionError.value = ''
   await refresh()
+}
+
+async function loadMore() {
+  if (!nextCursor.value || loadMorePending.value) return
+  loadMorePending.value = true
+  try {
+    const page = await $fetch<NotificationPage>('/api/notifications', { query: { paginated: true, limit: 30, cursor: nextCursor.value } })
+    const known = new Set(items.value.map(item => item.id))
+    items.value.push(...page.items.filter(item => !known.has(item.id)))
+    nextCursor.value = page.nextCursor
+  } finally {
+    loadMorePending.value = false
+  }
 }
 
 async function read(item: Notification) {
@@ -183,6 +205,7 @@ watch(notificationState.revision, () => {
               </button>
             </div>
           </section>
+          <UButton v-if="nextCursor" block color="neutral" variant="soft" :loading="loadMorePending" @click="loadMore">{{ t('common.more') }}</UButton>
         </div>
 
         <EmptyState v-else-if="filter === 'unread'" icon="i-lucide-check-check" :title="t('notifications.emptyUnreadTitle')" :description="t('notifications.emptyUnreadDescription')" />

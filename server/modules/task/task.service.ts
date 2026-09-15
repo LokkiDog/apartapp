@@ -1,5 +1,5 @@
-import { and, eq } from 'drizzle-orm'
-import { taskCompletionInputSchema, taskInputSchema, taskUpdateSchema, taskWorkProgressInputSchema } from '@contracts/crm'
+import { and, desc, eq, inArray, lt, notInArray, or } from 'drizzle-orm'
+import { taskCompletionInputSchema, taskInputSchema, taskUpdateSchema, taskWorkProgressInputSchema, type WorkListQuery } from '@contracts/crm'
 import { requireRole, requireWorkSectionAccess, type Actor } from '../../infrastructure/auth/actor'
 import { writeAuditLog } from '../../infrastructure/audit/log'
 import { db } from '../../infrastructure/database/client'
@@ -36,15 +36,39 @@ async function syncTaskProblem(actor: Actor, task: { id: string, apartmentId: st
   return null
 }
 
-export async function listTasks(actor: Actor) {
+function taskCursor(value: string | undefined) {
+  if (!value) return null
+  const separator = value.lastIndexOf('|')
+  const updatedAt = new Date(value.slice(0, separator))
+  const id = value.slice(separator + 1)
+  if (separator < 0 || Number.isNaN(updatedAt.getTime()) || !id.match(/^[0-9a-f-]{36}$/i)) {
+    throw createError({ statusCode: 400, statusMessage: 'Некорректный курсор' })
+  }
+  return { updatedAt, id }
+}
+
+export async function listTasks(actor: Actor, query: WorkListQuery = { view: 'all', limit: 50 }) {
   requireWorkSectionAccess(actor)
+  const criteria = [eq(tasks.organizationId, actor.organizationId)]
+  if (!actor.roles.includes('administrator')) criteria.push(eq(tasks.assigneeId, actor.id))
+  if (query.view === 'operational') criteria.push(notInArray(tasks.status, ['completed', 'canceled']))
+  if (query.view === 'history') {
+    criteria.push(inArray(tasks.status, ['completed', 'canceled']))
+    const cursor = taskCursor(query.cursor)
+    if (cursor) criteria.push(or(lt(tasks.updatedAt, cursor.updatedAt), and(eq(tasks.updatedAt, cursor.updatedAt), lt(tasks.id, cursor.id)))!)
+  }
   const rows = await db.query.tasks.findMany({
-    where: eq(tasks.organizationId, actor.organizationId),
-    with: { apartment: { with: { hotel: true, managerAssignments: { with: { manager: { columns: { id: true, name: true } } } } } }, assignee: true },
-    orderBy: (tasks, { asc }) => [asc(tasks.dueOn)]
+    where: and(...criteria),
+    with: { apartment: { with: { hotel: true, managerAssignments: { with: { manager: { columns: { id: true, name: true } } } } } }, assignee: { columns: { id: true, name: true } } },
+    orderBy: query.view === 'history' ? [desc(tasks.updatedAt), desc(tasks.id)] : (tasks, { asc }) => [asc(tasks.dueOn)],
+    limit: query.view === 'history' ? query.limit + 1 : undefined
   })
-  if (actor.roles.includes('administrator')) return rows.map(task => ({ ...task, apartment: serializeApartment(task.apartment) }))
-  return rows.filter(task => task.assigneeId === actor.id).map(task => ({ ...task, apartment: serializeApartment(task.apartment) }))
+  const hasNextPage = query.view === 'history' && rows.length > query.limit
+  const page = hasNextPage ? rows.slice(0, query.limit) : rows
+  const serialized = page.map(task => ({ ...task, apartment: serializeApartment(task.apartment) }))
+  if (query.view !== 'history') return serialized
+  const last = page.at(-1)
+  return { items: serialized, nextCursor: hasNextPage && last ? `${last.updatedAt.toISOString()}|${last.id}` : null }
 }
 
 export async function createTask(actor: Actor, input: unknown) {

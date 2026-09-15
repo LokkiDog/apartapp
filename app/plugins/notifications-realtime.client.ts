@@ -14,6 +14,7 @@ export default defineNuxtPlugin(() => {
   let retryTimer: ReturnType<typeof setTimeout> | null = null
   let attempts = 0
   let stopped = false
+  let connectedOnce = false
 
   function clearRetry() {
     if (retryTimer) clearTimeout(retryTimer)
@@ -66,10 +67,14 @@ export default defineNuxtPlugin(() => {
     if (stopped || !user.value || socket?.readyState === WebSocket.OPEN || socket?.readyState === WebSocket.CONNECTING) return
     socket = new WebSocket(websocketUrl())
     socket.addEventListener('open', () => {
+      const reconnected = connectedOnce
+      connectedOnce = true
       attempts = 0
-      void notifications.refreshUnreadCount()
-      notifications.revision.value += 1
-      notifications.reconcileCleaningData()
+      if (reconnected) {
+        void notifications.refreshUnreadCount()
+        notifications.revision.value += 1
+        notifications.reconcileCleaningData()
+      }
     })
     socket.addEventListener('message', event => {
       try {
@@ -101,6 +106,7 @@ export default defineNuxtPlugin(() => {
       void connectAfterValidation()
     } else {
       stopped = true
+      connectedOnce = false
       close()
       notifications.unreadCount.value = 0
     }

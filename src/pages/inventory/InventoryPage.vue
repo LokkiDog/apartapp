@@ -16,11 +16,17 @@ if (user.value?.roles.includes('manager') && !user.value.roles.includes('adminis
 const tab = ref<'stocks' | 'catalog'>('stocks')
 const isAdministrator = computed(() => user.value?.roles.includes('administrator') ?? false)
 const selectedApartment = ref('')
-const { data: apartments } = await useAsyncData('inventory-apartments', () => user.value ? $fetch<Apartment[]>('/api/apartments') : Promise.resolve([]), { server: false, default: () => [], watch: [user] })
+const [
+  { data: apartments },
+  { data: consumables, refresh: refreshConsumables },
+  { data: discrepancies, refresh: refreshDiscrepancies }
+] = await Promise.all([
+  useAsyncData('inventory-apartments', () => user.value ? $fetch<Apartment[]>('/api/apartments') : Promise.resolve([]), { server: false, default: () => [], watch: [user] }),
+  useAsyncData('inventory-consumables', () => isAdministrator.value ? $fetch<Consumable[]>('/api/consumables') : Promise.resolve([] as Consumable[]), { server: false, default: () => [], watch: [isAdministrator] }),
+  useAsyncData('inventory-discrepancies', () => user.value?.roles.includes('administrator') ? $fetch<InventoryDiscrepancy[]>('/api/inventory/discrepancies') : Promise.resolve([]), { server: false, default: () => [], watch: [user] })
+])
 watchEffect(() => { if (!selectedApartment.value && apartments.value?.[0]) selectedApartment.value = apartments.value[0].id })
 const { data: stocks, refresh, status } = await useAsyncData('inventory-stocks', () => selectedApartment.value ? $fetch<Stock[]>(`/api/inventory/${selectedApartment.value}`) : Promise.resolve([]), { server: false, default: () => [], watch: [selectedApartment] })
-const { data: consumables, refresh: refreshConsumables } = await useAsyncData('inventory-consumables', () => isAdministrator.value ? $fetch<Consumable[]>('/api/consumables') : Promise.resolve([] as Consumable[]), { server: false, default: () => [], watch: [isAdministrator] })
-const { data: discrepancies, refresh: refreshDiscrepancies } = await useAsyncData('inventory-discrepancies', () => user.value?.roles.includes('administrator') ? $fetch<InventoryDiscrepancy[]>('/api/inventory/discrepancies') : Promise.resolve([]), { server: false, default: () => [], watch: [user] })
 const replenishOpen = ref(false), catalogOpen = ref(false), deleteOpen = ref(false), stockDeleteOpen = ref(false)
 const pending = ref(false), error = ref('')
 const approvalOpen = ref(false), approvalPending = ref(false), approvalError = ref('')

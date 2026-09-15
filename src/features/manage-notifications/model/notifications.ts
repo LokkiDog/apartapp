@@ -1,5 +1,11 @@
 import { useCleaningRealtimeState, useTaskRealtimeState, type CleaningChangeMessage, type TaskChangeMessage } from '#fsd/shared/realtime'
 
+let notificationRevisionTimer: ReturnType<typeof setTimeout> | null = null
+let cleaningRevisionTimer: ReturnType<typeof setTimeout> | null = null
+let taskRevisionTimer: ReturnType<typeof setTimeout> | null = null
+let pendingCleaningMessage: CleaningChangeMessage | null = null
+let pendingTaskMessage: TaskChangeMessage | null = null
+
 export type NotificationType = 'stay_changed' | 'work_assigned' | 'work_rescheduled' | 'work_canceled' | 'problem' | 'manager_expense_report_published' | 'cleaning_changed'
 export type { CleaningChangeMessage, TaskChangeMessage } from '#fsd/shared/realtime'
 
@@ -32,6 +38,34 @@ export function useNotificationState() {
   const taskRevision = taskRealtime.revision
   const lastTaskChange = taskRealtime.lastChange
 
+  function scheduleNotificationRevision() {
+    if (notificationRevisionTimer) return
+    notificationRevisionTimer = setTimeout(() => {
+      notificationRevisionTimer = null
+      revision.value += 1
+    }, 100)
+  }
+
+  function scheduleCleaningRevision(message: CleaningChangeMessage) {
+    pendingCleaningMessage = message
+    if (cleaningRevisionTimer) return
+    cleaningRevisionTimer = setTimeout(() => {
+      cleaningRevisionTimer = null
+      if (pendingCleaningMessage) cleaningRealtime.apply(pendingCleaningMessage)
+      pendingCleaningMessage = null
+    }, 100)
+  }
+
+  function scheduleTaskRevision(message: TaskChangeMessage) {
+    pendingTaskMessage = message
+    if (taskRevisionTimer) return
+    taskRevisionTimer = setTimeout(() => {
+      taskRevisionTimer = null
+      if (pendingTaskMessage) taskRealtime.apply(pendingTaskMessage)
+      pendingTaskMessage = null
+    }, 100)
+  }
+
   async function refreshUnreadCount() {
     try {
       const response = await $fetch<{ count: number }>('/api/notifications/unread-count')
@@ -44,15 +78,17 @@ export function useNotificationState() {
   function applyRealtimeMessage(message: NotificationRealtimeMessage) {
     if (message.type === 'notifications.heartbeat' || message.type === 'session.revoked') return
     if (message.type === 'cleaning.changed') {
-      cleaningRealtime.apply(message)
+      scheduleCleaningRevision(message)
       return
     }
     if (message.type === 'task.changed') {
-      taskRealtime.apply(message)
+      scheduleTaskRevision(message)
       return
     }
-    revision.value += 1
-    void refreshUnreadCount()
+    if (message.type === 'notification.created' && !message.notification.readAt) unreadCount.value += 1
+    if (message.type === 'notification.read') unreadCount.value = Math.max(0, unreadCount.value - 1)
+    if (message.type === 'notifications.read-all') unreadCount.value = 0
+    scheduleNotificationRevision()
   }
 
   function reconcileCleaningData() {

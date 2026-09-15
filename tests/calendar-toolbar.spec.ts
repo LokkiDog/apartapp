@@ -36,7 +36,7 @@ describe('calendar toolbar', () => {
 
     expect(page).toContain('v-if="bookingView === \'calendar\' && eventsOnly" class="calendar-events-legend"')
     expect(page.indexOf('class="calendar-events-legend"')).toBeGreaterThan(page.indexOf('class="calendar-month surface"'))
-    expect(page.indexOf('class="calendar-events-legend"')).toBeLessThan(page.indexOf('<StayDetailsSlideover'))
+    expect(page.indexOf('class="calendar-events-legend"')).toBeLessThan(page.indexOf('<LazyStayDetailsSlideover'))
     expect(page).toContain("t('calendar.arrivals')")
     expect(page).toContain("t('calendar.departures')")
     expect(styles).toContain('background: var(--calendar-arrival-bg)')

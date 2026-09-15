@@ -35,8 +35,10 @@ const report = ref<GlobalReportResponse | null>(null)
 const pending = ref(false)
 const error = ref('')
 
-const { data: hotels } = await useAsyncData('report-hotels', () => user.value ? $fetch<Hotel[]>('/api/hotels') : Promise.resolve([]), { server: false, default: () => [], watch: [user] })
-const { data: apartments, error: apartmentsError } = await useAsyncData('report-apartments', () => user.value ? $fetch<Apartment[]>('/api/apartments') : Promise.resolve([]), { server: false, default: () => [], watch: [user] })
+const [{ data: hotels }, { data: apartments, error: apartmentsError }] = await Promise.all([
+  useAsyncData('report-hotels', () => user.value ? $fetch<Hotel[]>('/api/hotels') : Promise.resolve([]), { server: false, default: () => [], watch: [user] }),
+  useAsyncData('report-apartments', () => user.value ? $fetch<Apartment[]>('/api/apartments') : Promise.resolve([]), { server: false, default: () => [], watch: [user] })
+])
 const scopeReady = computed(() => isPropertyScopeReady(filters))
 const tabs = computed<Array<{ value: ReportTab; label: string; icon: string }>>(() => [
   { value: 'summary', label: t('reports.summary'), icon: 'i-lucide-layout-dashboard' },

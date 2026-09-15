@@ -54,6 +54,18 @@ export default defineNuxtConfig({
     strict: true,
     typeCheck: true
   },
+  vite: {
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (id.includes('/pdfmake/build/pdfmake')) return 'pdfmake'
+            if (id.includes('/pdfmake/build/vfs_fonts')) return 'pdfmake-fonts'
+          }
+        }
+      }
+    }
+  },
   runtimeConfig: {
     session: {
       password: process.env.NUXT_SESSION_PASSWORD || '',
@@ -107,6 +119,8 @@ export default defineNuxtConfig({
     },
     injectManifest: {
       globPatterns: ['**/*.{js,css,html,ico,png,svg,webp}'],
+      globIgnores: ['**/pdfmake*.js'],
+      maximumFileSizeToCacheInBytes: 512 * 1024
     }
   }
 })

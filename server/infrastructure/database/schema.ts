@@ -183,7 +183,10 @@ export const cleanings = pgTable('cleanings', {
   completedAt: timestamp('completed_at', { withTimezone: true }),
   linenCollected: boolean('linen_collected').notNull().default(false),
   ...timestamps
-}, table => [index('cleaning_report_date_idx').on(table.organizationId, table.scheduledOn)])
+}, table => [
+  index('cleaning_report_date_idx').on(table.organizationId, table.scheduledOn),
+  index('cleaning_operational_list_idx').on(table.organizationId, table.status, table.scheduledOn)
+])
 
 export const cleaningAssignments = pgTable('cleaning_assignments', {
   cleaningId: uuid('cleaning_id').notNull().references(() => cleanings.id, { onDelete: 'cascade' }),
@@ -257,8 +260,10 @@ export const tasks = pgTable('tasks', {
   ...timestamps
 }, table => [
   check('task_owner_cost_nonnegative', sql`${table.ownerCostEur} >= 0`),
-  index('task_report_date_idx').on(table.organizationId, table.dueOn)
-  , index('task_problem_idx').on(table.problemId)
+  index('task_report_date_idx').on(table.organizationId, table.dueOn),
+  index('task_operational_list_idx').on(table.organizationId, table.status, table.dueOn),
+  index('task_assignee_operational_list_idx').on(table.organizationId, table.assigneeId, table.status, table.dueOn),
+  index('task_problem_idx').on(table.problemId)
 ])
 
 export const consumables = pgTable('consumables', {
@@ -375,7 +380,9 @@ export const notifications = pgTable('notifications', {
   href: text('href'),
   readAt: timestamp('read_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
-})
+}, table => [
+  index('notification_user_created_idx').on(table.organizationId, table.userId, table.createdAt)
+])
 
 export const managerExpenseReports = pgTable('manager_expense_reports', {
   id: uuid('id').primaryKey().defaultRandom(),

@@ -113,17 +113,17 @@ describe('cleaning realtime notifications', () => {
     const dashboard = readFileSync('src/pages/dashboard/DashboardPage.vue', 'utf8')
 
     expect(state).toContain("message.type === 'cleaning.changed'")
-    expect(state).toContain('cleaningRealtime.apply(message)')
+    expect(state).toContain('scheduleCleaningRevision(message)')
+    expect(state).toContain('cleaningRealtime.apply(pendingCleaningMessage)')
     expect(cleaningRealtime).toContain("| 'linen'")
     expect(cleaningRealtime).toContain('revision.value += 1')
     expect(plugin).toContain('notifications.reconcileCleaningData()')
     expect(work).toContain('watch(notificationState.cleaningRevision')
-    expect(work).toContain('watch(notificationState.revision')
-    expect(work).toContain('void refreshTasks()')
+    expect(work).not.toContain('watch(notificationState.revision')
     expect(detail).toContain('watch(cleaningRealtime.revision')
     expect(detail).toContain("change?.reason === 'deleted'")
     expect(calendar).toContain('watch(notificationState.cleaningRevision')
-    expect(dashboard).toContain('watch(notificationState.cleaningRevision')
+    expect(dashboard).toContain('notificationState.cleaningRevision')
   })
 
   it('adds the notification type with an additive numbered migration', () => {

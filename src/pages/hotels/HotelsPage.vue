@@ -4,29 +4,33 @@ import type { Hotel } from "#fsd/entities/hotel";
 import { useCurrentUser } from "#fsd/shared/auth";
 import { createFormValidator, useSubmitFormValidation } from "#fsd/shared/lib";
 import { EmptyState, PageHeader, StatusBadge } from "#fsd/shared/ui";
-import HotelLocationPicker from "./ui/HotelLocationPicker.vue";
 import { useI18n } from "vue-i18n";
 import { hotelInputSchema, type HotelInput } from "@contracts/crm";
 
+const LazyHotelLocationPicker = defineAsyncComponent(() =>
+  import("./ui/HotelLocationPicker.vue"),
+);
+
 const user = useCurrentUser();
 const { t } = useI18n();
-const {
-  data: hotels,
-  refresh,
-  status,
-} = await useAsyncData(
-  "hotels",
-  () => (user.value ? $fetch<Hotel[]>("/api/hotels") : Promise.resolve([])),
-  { server: false, default: () => [], watch: [user] },
-);
-const { data: apartments, refresh: refreshApartments } = await useAsyncData(
-  "hotel-apartment-counts",
-  () =>
-    user.value
-      ? $fetch<Array<{ id: string; hotel: { id: string } }>>("/api/apartments")
-      : Promise.resolve([]),
-  { server: false, default: () => [], watch: [user] },
-);
+const [
+  { data: hotels, refresh, status },
+  { data: apartments, refresh: refreshApartments },
+] = await Promise.all([
+  useAsyncData(
+    "hotels",
+    () => (user.value ? $fetch<Hotel[]>("/api/hotels") : Promise.resolve([])),
+    { server: false, default: () => [], watch: [user] },
+  ),
+  useAsyncData(
+    "hotel-apartment-counts",
+    () =>
+      user.value
+        ? $fetch<Array<{ id: string; hotel: { id: string } }>>("/api/apartments")
+        : Promise.resolve([]),
+    { server: false, default: () => [], watch: [user] },
+  ),
+]);
 const apartmentCount = (hotelId: string) =>
   (apartments.value ?? []).filter((apartment) => apartment.hotel.id === hotelId)
     .length;
@@ -341,7 +345,8 @@ function hotelMenuItems(hotel: Hotel): DropdownMenuItem[] {
               placeholder="Pine Trees"
           /></UFormField>
           <UFormField name="location" :label="t('hotels.location')">
-            <HotelLocationPicker
+            <LazyHotelLocationPicker
+              v-if="open"
               :latitude="form.latitude"
               :longitude="form.longitude"
               @update:location="updateLocation"

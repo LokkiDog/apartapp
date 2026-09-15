@@ -25,9 +25,10 @@ describe('task realtime updates', () => {
     const detail = readFileSync('src/features/work-detail/ui/WorkDetailPage.vue', 'utf8')
 
     expect(state).toContain("message.type === 'task.changed'")
-    expect(state).toContain('taskRealtime.apply(message)')
+    expect(state).toContain('scheduleTaskRevision(message)')
+    expect(state).toContain('taskRealtime.apply(pendingTaskMessage)')
     expect(work).toContain('watch(notificationState.taskRevision')
-    expect(dashboard).toContain('watch(notificationState.taskRevision')
+    expect(dashboard).toContain('notificationState.taskRevision')
     expect(detail).toContain('watch(taskRealtime.revision')
     expect(detail).toContain("change?.reason === 'deleted'")
   })

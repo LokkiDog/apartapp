@@ -1,13 +1,10 @@
 <script setup lang="ts">
-import Decimal from 'decimal.js'
-import type { Cleaning } from '#fsd/entities/cleaning'
-import type { Stay } from '#fsd/entities/stay'
-import type { Task } from '#fsd/entities/task'
+import type { DashboardCleaning, DashboardResponse, DashboardTask } from '@contracts/dashboard'
 import { formatDate, formatEuro } from '#fsd/shared/lib'
 import { canAccessWorkSection, useCurrentUser } from '#fsd/shared/auth'
 import { EmptyState, MetricTile, StatusBadge } from '#fsd/shared/ui'
 import { useNotificationState } from '#fsd/features/manage-notifications'
-import { activeCleaning, activeDashboardTasks, activeTask, currentDashboardMonth, dashboardMonthLabel, dateInDashboardMonth, isDashboardMonth, problemDashboardRecord, shiftDashboardMonth, sortDashboardRecords, stayInDashboardMonth, undatedDashboardRecord } from './model/dashboard-month'
+import { currentDashboardMonth, dashboardMonthLabel, isDashboardMonth, shiftDashboardMonth } from './model/dashboard-month'
 import { useI18n } from 'vue-i18n'
 
 const currentUser = useCurrentUser()
@@ -18,54 +15,49 @@ const isSpecialist = computed(() => Boolean(currentUser.value?.roles.includes('s
 const isWorkerView = computed(() => Boolean(currentUser.value?.roles.includes('cleaner') && !isAdministrator.value) || isSpecialist.value)
 const isCleanerView = computed(() => Boolean(currentUser.value?.roles.includes('cleaner') && !isAdministrator.value))
 const canViewWork = computed(() => canAccessWorkSection(currentUser.value))
-const [{ data: stays, status: staysStatus }, { data: cleanings, refresh: refreshCleanings }, { data: tasks, refresh: refreshTasks }, { data: problemSummary, refresh: refreshProblemSummary }] = await Promise.all([
-  useAsyncData('dashboard-stays', () => isWorkerView.value ? Promise.resolve([]) : $fetch<Stay[]>('/api/stays'), { server: false, default: () => [], watch: [currentUser, isWorkerView] }),
-  useAsyncData('dashboard-cleanings', () => canViewWork.value ? $fetch<Cleaning[]>('/api/cleanings') : Promise.resolve([]), { server: false, default: () => [], watch: [currentUser, canViewWork] }),
-  useAsyncData('dashboard-tasks', () => canViewWork.value ? $fetch<Task[]>('/api/tasks') : Promise.resolve([]), { server: false, default: () => [], watch: [currentUser, canViewWork] }),
-  useAsyncData('dashboard-problems', () => isAdministrator.value ? $fetch<{ openCount: number, items: Array<{ id: string, description: string, apartment: { name: string, hotel: { name: string } } }> }>('/api/problems/dashboard') : Promise.resolve({ openCount: 0, items: [] }), { server: false, default: () => ({ openCount: 0, items: [] }), watch: [currentUser, isAdministrator] })
-])
-watch(notificationState.cleaningRevision, () => {
-  if (currentUser.value && canViewWork.value) void refreshCleanings()
-})
-watch(notificationState.revision, () => {
-  if (currentUser.value && canViewWork.value) void refreshTasks()
-})
-watch(notificationState.taskRevision, () => {
-  if (currentUser.value && canViewWork.value) void refreshTasks()
-})
-watch(notificationState.revision, () => { if (isAdministrator.value) void refreshProblemSummary() })
 const dashboardMonth = ref(currentDashboardMonth())
+const monthStorageKey = 'aparts.dashboard.month'
+if (import.meta.client) {
+  const storedMonth = sessionStorage.getItem(monthStorageKey)
+  if (isDashboardMonth(storedMonth)) dashboardMonth.value = storedMonth
+}
+const emptyDashboard = (): DashboardResponse => ({
+  stays: { count: 0, items: [] },
+  cleanings: { count: 0, items: [], cleanerPoolEur: 0 },
+  tasks: { activeCount: 0, undatedItems: [] },
+  problems: { openCount: 0, items: [] }
+})
+const { data: summary, status: summaryStatus, refresh } = await useAsyncData(
+  'dashboard-summary',
+  () => currentUser.value
+    ? $fetch<DashboardResponse>('/api/dashboard', { query: { month: dashboardMonth.value } })
+    : Promise.resolve(emptyDashboard()),
+  { server: false, default: emptyDashboard, watch: [currentUser, dashboardMonth] }
+)
+watch(
+  [notificationState.cleaningRevision, notificationState.taskRevision, notificationState.revision],
+  () => { if (currentUser.value) void refresh() }
+)
 const monthLabel = computed(() => {
   const label = dashboardMonthLabel(dashboardMonth.value, locale.value === 'he' ? 'he-IL' : locale.value === 'en' ? 'en-US' : 'ru-RU')
   return label.charAt(0).toUpperCase() + label.slice(1)
 })
 const currentMonth = computed(() => currentDashboardMonth())
-const monthStorageKey = 'aparts.dashboard.month'
-const upcoming = computed(() => (stays.value ?? []).filter(stay => stayInDashboardMonth(stay, dashboardMonth.value)).sort((left, right) => {
-  const leftDate = dateInDashboardMonth(left.checkInOn, dashboardMonth.value) ? left.checkInOn : left.checkOutOn
-  const rightDate = dateInDashboardMonth(right.checkInOn, dashboardMonth.value) ? right.checkInOn : right.checkOutOn
-  return leftDate.localeCompare(rightDate)
-}).slice(0, 5))
-const openCleanings = computed(() => sortDashboardRecords((cleanings.value ?? []).filter(item => activeCleaning(item.status) && dateInDashboardMonth(item.scheduledOn, dashboardMonth.value))))
-const openTasks = computed(() => activeDashboardTasks(tasks.value ?? []))
-const undatedWork = computed(() => sortDashboardRecords([
-  ...(tasks.value ?? []).filter(item => (activeTask(item.status) || item.hasProblem) && undatedDashboardRecord(item))
-]))
-const dashboardProblemCount = computed(() => problemSummary.value.openCount)
-const cleanerPool = computed(() => Number(openCleanings.value.reduce((sum, item) => sum.plus(item.tariffSnapshot.cleanerPoolEur ?? 0), new Decimal(0)).toDecimalPlaces(2)))
+const upcoming = computed(() => summary.value.stays.items)
+const openCleanings = computed(() => summary.value.cleanings.items)
+const openTaskCount = computed(() => summary.value.tasks.activeCount)
+const undatedWork = computed(() => summary.value.tasks.undatedItems)
+const problemSummary = computed(() => summary.value.problems)
+const dashboardProblemCount = computed(() => summary.value.problems.openCount)
+const cleanerPool = computed(() => summary.value.cleanings.cleanerPoolEur)
 const statusLabel = computed<Record<string, string>>(() => ({ unassigned: t('work.statusUnassigned'), assigned: t('work.statusAssigned'), in_progress: t('work.statusProgress'), resolved: t('taskReview.resolved'), open: t('work.statusOpen') }))
-
-if (import.meta.client) {
-  const storedMonth = sessionStorage.getItem(monthStorageKey)
-  if (isDashboardMonth(storedMonth)) dashboardMonth.value = storedMonth
-}
 
 watch(dashboardMonth, value => {
   if (import.meta.client) sessionStorage.setItem(monthStorageKey, value)
 })
 function shiftMonth(amount: number) { dashboardMonth.value = shiftDashboardMonth(dashboardMonth.value, amount) }
 function resetMonth() { dashboardMonth.value = currentMonth.value }
-function dashboardWorkHref(work: Cleaning | Task) { return 'title' in work ? `/tasks/${encodeURIComponent(work.id)}` : `/cleanings/${encodeURIComponent(work.id)}` }
+function dashboardWorkHref(work: DashboardCleaning | DashboardTask) { return 'dueOn' in work ? `/tasks/${encodeURIComponent(work.id)}` : `/cleanings/${encodeURIComponent(work.id)}` }
 </script>
 
 <template>
@@ -82,13 +74,13 @@ function dashboardWorkHref(work: Cleaning | Task) { return 'title' in work ? `/t
       </div>
     </div>
 
-    <div v-if="staysStatus === 'pending'" class="grid" :class="isWorkerView ? 'dashboard-worker-metrics' : 'grid-cols-2 gap-3 lg:grid-cols-4'">
+    <div v-if="summaryStatus === 'pending'" class="grid" :class="isWorkerView ? 'dashboard-worker-metrics' : 'grid-cols-2 gap-3 lg:grid-cols-4'">
       <USkeleton v-for="item in isCleanerView ? 3 : isWorkerView ? 2 : 4" :key="item" class="h-28 rounded-2xl" />
     </div>
     <div v-else class="grid" :class="isWorkerView ? 'dashboard-worker-metrics' : 'grid-cols-2 gap-3 lg:grid-cols-4'">
-      <NuxtLink v-if="!isWorkerView" to="/calendar" class="dashboard-metric-link"><MetricTile :label="t('dashboard.bookings')" :value="upcoming.length" icon="i-lucide-log-in" /></NuxtLink>
-      <NuxtLink v-if="canViewWork" to="/work" class="dashboard-metric-link"><MetricTile :label="t('dashboard.cleanings')" :value="openCleanings.length" icon="i-lucide-broom" /></NuxtLink>
-      <NuxtLink v-if="canViewWork" to="/work?tab=tasks" class="dashboard-metric-link"><MetricTile :label="t('dashboard.tasks')" :value="openTasks.length" icon="i-lucide-clipboard-check" /></NuxtLink>
+      <NuxtLink v-if="!isWorkerView" to="/calendar" class="dashboard-metric-link"><MetricTile :label="t('dashboard.bookings')" :value="summary.stays.count" icon="i-lucide-log-in" /></NuxtLink>
+      <NuxtLink v-if="canViewWork" to="/work" class="dashboard-metric-link"><MetricTile :label="t('dashboard.cleanings')" :value="summary.cleanings.count" icon="i-lucide-broom" /></NuxtLink>
+      <NuxtLink v-if="canViewWork" to="/work?tab=tasks" class="dashboard-metric-link"><MetricTile :label="t('dashboard.tasks')" :value="openTaskCount" icon="i-lucide-clipboard-check" /></NuxtLink>
       <NuxtLink v-if="isAdministrator" to="/problems" class="dashboard-metric-link"><MetricTile :label="t('dashboard.problems')" :value="dashboardProblemCount" icon="i-lucide-triangle-alert" :tone="dashboardProblemCount ? 'danger' : 'neutral'" /></NuxtLink>
       <MetricTile v-if="isCleanerView" :label="t('dashboard.pool')" :value="formatEuro(cleanerPool)" icon="i-lucide-wallet" />
     </div>
