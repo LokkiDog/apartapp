@@ -6,14 +6,19 @@ describe('page loading performance contracts', () => {
   it('loads locale catalogs lazily and keeps oversized export chunks out of the PWA precache', () => {
     const i18n = readFileSync('i18n/i18n.config.ts', 'utf8')
     const nuxt = readFileSync('nuxt.config.ts', 'utf8')
+    const pdf = readFileSync('src/pages/statement/lib/manager-expense-pdf.ts', 'utf8')
 
     expect(i18n).not.toContain("from './locales/")
     expect(i18n).not.toContain('messages:')
     expect(nuxt).toContain("file: 'ru.json'")
     expect(nuxt).toContain("file: 'en.json'")
     expect(nuxt).toContain("file: 'he.json'")
-    expect(nuxt).toContain("globIgnores: ['**/pdfmake*.js']")
-    expect(nuxt).toContain('maximumFileSizeToCacheInBytes: 512 * 1024')
+    expect(nuxt).toContain("chunk.name === 'pdfmake' || chunk.name === 'vfs_fonts'")
+    expect(nuxt).toContain("globIgnores: ['**/pdfmake*.js', '**/vfs_fonts*.js']")
+    expect(nuxt).toContain('maximumFileSizeToCacheInBytes: 1024 * 1024')
+    expect(pdf).toContain("import('pdfmake/build/pdfmake.js')")
+    expect(pdf).toContain("import('pdfmake/build/vfs_fonts.js')")
+    expect(pdf).not.toMatch(/^import (?!type).*from ['"]pdfmake/m)
   })
 
   it('loads independent page resources concurrently and defers closed heavy panels', () => {

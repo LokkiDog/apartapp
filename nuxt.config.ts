@@ -56,6 +56,15 @@ export default defineNuxtConfig({
   },
   vite: {
     build: {
+      rolldownOptions: {
+        output: {
+          chunkFileNames(chunk) {
+            return chunk.name === 'pdfmake' || chunk.name === 'vfs_fonts'
+              ? '_nuxt/[name].[hash].js'
+              : '_nuxt/[hash].js'
+          }
+        }
+      },
       rollupOptions: {
         output: {
           manualChunks(id) {
@@ -119,8 +128,8 @@ export default defineNuxtConfig({
     },
     injectManifest: {
       globPatterns: ['**/*.{js,css,html,ico,png,svg,webp}'],
-      globIgnores: ['**/pdfmake*.js'],
-      maximumFileSizeToCacheInBytes: 512 * 1024
+      globIgnores: ['**/pdfmake*.js', '**/vfs_fonts*.js'],
+      maximumFileSizeToCacheInBytes: 1024 * 1024
     }
   }
 })
