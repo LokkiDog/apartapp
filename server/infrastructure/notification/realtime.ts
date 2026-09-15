@@ -4,6 +4,7 @@ export type NotificationRealtimeMessage =
   | { type: 'notifications.read-all'; readAt: string }
   | { type: 'notifications.heartbeat' }
   | { type: 'cleaning.changed'; cleaningId: string; reason: 'created' | 'updated' | 'accepted' | 'started' | 'progress' | 'inventory' | 'tariff' | 'route' | 'completed' | 'deleted' | 'linen'; occurredAt: string }
+  | { type: 'task.changed'; taskId: string; reason: 'created' | 'updated' | 'started' | 'progress' | 'resolved' | 'completed' | 'returned' | 'deleted'; occurredAt: string }
   | { type: 'session.revoked'; reason: 'archived' }
 
 type NotificationPeer = { id: string; send: (data: NotificationRealtimeMessage) => void }

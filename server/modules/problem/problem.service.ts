@@ -12,6 +12,7 @@ import { cleaningProblemSummary } from '../cleaning/cleaning-problem'
 import { canBeWorkAssignee } from '../work/work-policy'
 import { deleteWorkRecord } from '../work/work-record.service'
 import { administratorsForOrganization, notifyUsers } from '../../infrastructure/notification/publish'
+import { publishTaskChange } from '../task/task-events'
 
 function today() { return new Date().toISOString().slice(0, 10) }
 
@@ -37,7 +38,7 @@ async function serializeProblems(actor: Actor, rows: Awaited<ReturnType<typeof d
     expenses: expenseRows.filter(item => item.problemId === problem.id),
     totalExpenseEur: expenseRows.filter(item => item.problemId === problem.id).reduce((sum, item) => sum + Number(item.amountEur), 0),
     solutionTasks: solutionRows.filter(task => task.problemId === problem.id),
-    activeSolutionTask: solutionRows.find(task => task.problemId === problem.id && ['open', 'in_progress'].includes(task.status)) ?? null
+    activeSolutionTask: solutionRows.find(task => task.problemId === problem.id && ['open', 'in_progress', 'resolved'].includes(task.status)) ?? null
   }))
 }
 
@@ -72,12 +73,13 @@ export async function createProblemTask(actor: Actor, problemId: string, input: 
   const data = problemTaskInputSchema.parse(input)
   const problem = await requireProblem(actor, problemId)
   if (problem.resolvedAt) throw createError({ statusCode: 409, statusMessage: 'Сначала переоткройте проблему' })
-  const active = await db.query.tasks.findFirst({ where: and(eq(tasks.problemId, problemId), inArray(tasks.status, ['open', 'in_progress'])) })
+  const active = await db.query.tasks.findFirst({ where: and(eq(tasks.problemId, problemId), inArray(tasks.status, ['open', 'in_progress', 'resolved'])) })
   if (active) throw createError({ statusCode: 409, statusMessage: 'Для проблемы уже назначена активная задача' })
   const assignee = await db.query.users.findFirst({ where: and(eq(users.id, data.assigneeId), eq(users.organizationId, actor.organizationId), eq(users.status, 'active')) })
   if (!assignee || !canBeWorkAssignee(assignee.roles)) throw createError({ statusCode: 400, statusMessage: 'Исполнитель должен быть активным исполнителем, специалистом или администратором' })
   const [task] = await db.insert(tasks).values({ ...data, organizationId: actor.organizationId, apartmentId: problem.apartmentId, problemId, createdById: actor.id }).returning()
   if (!task) throw createError({ statusCode: 500, statusMessage: 'Не удалось создать задачу' })
+  await publishTaskChange({ actor, taskId: task.id, assigneeIds: [task.assigneeId], reason: 'created' })
   await notifyUsers({ organizationId: actor.organizationId, userIds: [data.assigneeId], type: 'work_assigned', title: 'Назначена задача', body: task.title, href: `/tasks/${task.id}` })
   return getProblem(actor, problemId)
 }
@@ -108,10 +110,16 @@ export async function resolveProblem(actor: Actor, problemId: string, input: unk
   const data = problemResolveWithTaskSchema.parse(input)
   const problem = await requireProblem(actor, problemId)
   if (problem.resolvedAt) return getProblem(actor, problemId)
-  const active = await db.query.tasks.findFirst({ where: and(eq(tasks.problemId, problemId), inArray(tasks.status, ['open', 'in_progress'])) })
+  const active = await db.query.tasks.findFirst({ where: and(eq(tasks.problemId, problemId), inArray(tasks.status, ['open', 'in_progress', 'resolved'])) })
   if (active && !data.taskDisposition) throw createError({ statusCode: 409, statusMessage: 'Выберите, отменить или удалить связанную задачу' })
-  if (active?.id && data.taskDisposition === 'delete') await deleteWorkRecord('task', active.id)
-  if (active?.id && data.taskDisposition === 'cancel') await db.update(tasks).set({ status: 'canceled', problemId: null, updatedAt: new Date() }).where(eq(tasks.id, active.id))
+  if (active?.id && data.taskDisposition === 'delete') {
+    await deleteWorkRecord('task', active.id)
+    await publishTaskChange({ actor, taskId: active.id, assigneeIds: [active.assigneeId], reason: 'deleted' })
+  }
+  if (active?.id && data.taskDisposition === 'cancel') {
+    await db.update(tasks).set({ status: 'canceled', updatedAt: new Date() }).where(eq(tasks.id, active.id))
+    await publishTaskChange({ actor, taskId: active.id, assigneeIds: [active.assigneeId], reason: 'updated' })
+  }
   await db.update(cleaningProblems).set({ resolvedAt: new Date(), resolvedById: actor.id, resolutionComment: data.resolutionComment, updatedAt: new Date() }).where(eq(cleaningProblems.id, problemId))
   await writeAuditLog({ organizationId: actor.organizationId, actorId: actor.id, action: 'problem.resolved', entityType: 'cleaning_problem', entityId: problemId })
   return getProblem(actor, problemId)
@@ -149,8 +157,11 @@ export async function reopenProblem(actor: Actor, problemId: string) {
 export async function deleteProblem(actor: Actor, problemId: string) {
   requireRole(actor, 'administrator')
   const problem = await requireProblem(actor, problemId)
-  const solutionTaskIds = await db.select({ id: tasks.id }).from(tasks).where(and(eq(tasks.organizationId, actor.organizationId), eq(tasks.problemId, problemId)))
-  for (const task of solutionTaskIds) await deleteWorkRecord('task', task.id)
+  const solutionTasks = await db.select({ id: tasks.id, assigneeId: tasks.assigneeId }).from(tasks).where(and(eq(tasks.organizationId, actor.organizationId), eq(tasks.problemId, problemId)))
+  for (const task of solutionTasks) {
+    await deleteWorkRecord('task', task.id)
+    await publishTaskChange({ actor, taskId: task.id, assigneeIds: [task.assigneeId], reason: 'deleted' })
+  }
   const storageKeys = await db.transaction(async tx => {
     const rows = await tx.select({ storageKey: attachments.storageKey }).from(attachments).where(and(eq(attachments.organizationId, actor.organizationId), eq(attachments.entityType, 'cleaning_problem'), eq(attachments.entityId, problemId)))
     await tx.delete(attachments).where(and(eq(attachments.entityType, 'cleaning_problem'), eq(attachments.entityId, problemId)))
@@ -158,7 +169,10 @@ export async function deleteProblem(actor: Actor, problemId: string) {
     return rows.map((row: { storageKey: string }) => row.storageKey)
   })
   if (problem.cleaningId) await refreshCleaningProblemSummary(actor.organizationId, problem.cleaningId)
-  if (problem.sourceTaskId) await db.update(tasks).set({ hasProblem: false, problemDescription: '', problemDetails: '', updatedAt: new Date() }).where(eq(tasks.id, problem.sourceTaskId))
+  if (problem.sourceTaskId) {
+    const [sourceTask] = await db.update(tasks).set({ hasProblem: false, problemDescription: '', problemDetails: '', updatedAt: new Date() }).where(eq(tasks.id, problem.sourceTaskId)).returning({ id: tasks.id, assigneeId: tasks.assigneeId })
+    if (sourceTask) await publishTaskChange({ actor, taskId: sourceTask.id, assigneeIds: [sourceTask.assigneeId], reason: 'updated' })
+  }
   await Promise.allSettled(storageKeys.map(key => fileStorage.remove(key)))
   await writeAuditLog({ organizationId: actor.organizationId, actorId: actor.id, action: 'problem.deleted', entityType: 'cleaning_problem', entityId: problemId })
   return { ok: true }

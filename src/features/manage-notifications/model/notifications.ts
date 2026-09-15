@@ -1,7 +1,7 @@
-import { useCleaningRealtimeState, type CleaningChangeMessage } from '#fsd/shared/realtime'
+import { useCleaningRealtimeState, useTaskRealtimeState, type CleaningChangeMessage, type TaskChangeMessage } from '#fsd/shared/realtime'
 
 export type NotificationType = 'stay_changed' | 'work_assigned' | 'work_rescheduled' | 'work_canceled' | 'problem' | 'manager_expense_report_published' | 'cleaning_changed'
-export type { CleaningChangeMessage } from '#fsd/shared/realtime'
+export type { CleaningChangeMessage, TaskChangeMessage } from '#fsd/shared/realtime'
 
 export type NotificationItem = {
   id: string
@@ -19,14 +19,18 @@ export type NotificationRealtimeMessage =
   | { type: 'notifications.read-all'; readAt: string }
   | { type: 'notifications.heartbeat' }
   | CleaningChangeMessage
+  | TaskChangeMessage
   | { type: 'session.revoked'; reason: 'archived' }
 
 export function useNotificationState() {
   const unreadCount = useState('notification-unread-count', () => 0)
   const revision = useState('notification-revision', () => 0)
   const cleaningRealtime = useCleaningRealtimeState()
+  const taskRealtime = useTaskRealtimeState()
   const cleaningRevision = cleaningRealtime.revision
   const lastCleaningChange = cleaningRealtime.lastChange
+  const taskRevision = taskRealtime.revision
+  const lastTaskChange = taskRealtime.lastChange
 
   async function refreshUnreadCount() {
     try {
@@ -41,6 +45,10 @@ export function useNotificationState() {
     if (message.type === 'notifications.heartbeat' || message.type === 'session.revoked') return
     if (message.type === 'cleaning.changed') {
       cleaningRealtime.apply(message)
+      return
+    }
+    if (message.type === 'task.changed') {
+      taskRealtime.apply(message)
       return
     }
     revision.value += 1
@@ -59,5 +67,5 @@ export function useNotificationState() {
     unreadCount.value = 0
   }
 
-  return { unreadCount, revision, cleaningRevision, lastCleaningChange, refreshUnreadCount, applyRealtimeMessage, reconcileCleaningData, markRead, markAllRead }
+  return { unreadCount, revision, cleaningRevision, lastCleaningChange, taskRevision, lastTaskChange, refreshUnreadCount, applyRealtimeMessage, reconcileCleaningData, markRead, markAllRead }
 }

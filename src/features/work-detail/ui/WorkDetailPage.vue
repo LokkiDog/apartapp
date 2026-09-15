@@ -5,9 +5,9 @@ import type { Task } from '#fsd/entities/task'
 import { useCurrentUser } from '#fsd/shared/auth'
 import { formatDate, formatDateTime, formatEuro } from '#fsd/shared/lib'
 import { useI18n } from 'vue-i18n'
-import { ConfirmActionModal, DeleteConfirmModal, PageHeader, StatusBadge } from '#fsd/shared/ui'
+import { ConfirmActionModal, DeleteConfirmModal, EmptyState, PageHeader, StatusBadge } from '#fsd/shared/ui'
 import { WorkProgressForm } from '#fsd/features/work-progress'
-import { useCleaningRealtimeState } from '#fsd/shared/realtime'
+import { useCleaningRealtimeState, useTaskRealtimeState } from '#fsd/shared/realtime'
 
 type WorkKind = 'cleaning' | 'task'
 type InventoryReportSource = { id: string; reportedBy: { id: string; name: string }; reportedAt: string; appliedAt: string | null; approvedAt: string | null; approvedBy: { id: string; name: string } | null; usedQuantity: number; remainingQuantity: number; discrepancyQuantity: number; startingQuantity: number; expectedRemainingQuantity: number }
@@ -28,6 +28,7 @@ const route = useRoute()
 const router = useRouter()
 const currentUser = useCurrentUser()
 const cleaningRealtime = useCleaningRealtimeState()
+const taskRealtime = useTaskRealtimeState()
 const id = String(route.params.id)
 const isAdministrator = computed(() => Boolean(currentUser.value?.roles.includes('administrator')))
 const isSpecialist = computed(() => Boolean(currentUser.value?.roles.includes('specialist')))
@@ -92,13 +93,14 @@ const showCleaningAcceptance = computed(() => canAcceptCleaning.value)
 const canStartCleaning = computed(() => Boolean(cleaning.value && !isSpecialist.value && cleaning.value.status === 'assigned' && (isAdministrator.value || Boolean(currentCleaningAssignment.value?.acceptedAt))))
 const canProgress = computed(() => Boolean(work.value && (props.kind === 'cleaning'
   ? !isSpecialist.value && work.value.status === 'in_progress' && (isAdministrator.value || Boolean(currentCleaningAssignment.value?.acceptedAt))
-  : !['completed', 'canceled'].includes(work.value.status) && (isAdministrator.value || assignedToCurrent.value))))
-const canComplete = computed(() => canProgress.value)
+  : (['open', 'in_progress'].includes(work.value.status) && (isAdministrator.value || assignedToCurrent.value)) || (work.value.status === 'resolved' && isAdministrator.value))))
+const canComplete = computed(() => Boolean(props.kind === 'task' && task.value?.status === 'resolved' && isAdministrator.value) || canProgress.value)
+const taskCompleteLabel = computed(() => task.value?.status === 'resolved' ? t('taskReview.close') : t('progress.complete'))
 const inventoryEditable = computed(() => Boolean(isAdministrator.value && cleaning.value?.status === 'completed'))
 const canManage = computed(() => isAdministrator.value)
 const canUpdateLinen = computed(() => Boolean(cleaning.value && (isAdministrator.value || isSpecialist.value || assignedToCurrent.value)))
-const statusLabels = computed<Record<string, string>>(() => ({ unassigned: t('work.statusUnassigned'), assigned: t('work.statusAssigned'), in_progress: t('work.statusProgress'), completed: t('work.statusCompleted'), canceled: t('work.statusCanceled'), open: t('work.statusOpen') }))
-const statusTones: Record<string, 'neutral' | 'success' | 'warning' | 'danger' | 'info'> = { unassigned: 'warning', assigned: 'info', in_progress: 'warning', completed: 'success', canceled: 'neutral', open: 'info' }
+const statusLabels = computed<Record<string, string>>(() => ({ unassigned: t('work.statusUnassigned'), assigned: t('work.statusAssigned'), in_progress: t('work.statusProgress'), resolved: t('taskReview.resolved'), completed: props.kind === 'task' ? t('taskReview.closed') : t('work.statusCompleted'), canceled: t('work.statusCanceled'), open: t('work.statusOpen') }))
+const statusTones: Record<string, 'neutral' | 'success' | 'warning' | 'danger' | 'info'> = { unassigned: 'warning', assigned: 'info', in_progress: 'warning', resolved: 'warning', completed: 'success', canceled: 'neutral', open: 'info' }
 
 watch(cleaningRealtime.revision, async () => {
   if (props.kind !== 'cleaning') return
@@ -108,6 +110,15 @@ watch(cleaningRealtime.revision, async () => {
   await refresh()
   const statusCode = (workLoadError.value as { statusCode?: number; status?: number } | null)?.statusCode ?? (workLoadError.value as { status?: number } | null)?.status
   if (statusCode === 403 || statusCode === 404) await navigateTo('/work')
+})
+watch(taskRealtime.revision, async () => {
+  if (props.kind !== 'task') return
+  const change = taskRealtime.lastChange.value
+  if (change && change.taskId !== id) return
+  if (change?.reason === 'deleted') { await navigateTo(taskListHref.value); return }
+  await refresh()
+  const statusCode = (workLoadError.value as { statusCode?: number; status?: number } | null)?.statusCode ?? (workLoadError.value as { status?: number } | null)?.status
+  if (statusCode === 403 || statusCode === 404) await navigateTo(taskListHref.value)
 })
 
 watch([cleaning, status], async () => {
@@ -186,8 +197,9 @@ async function approveInventoryDiscrepancy() {
 async function saveProgress(payload: ProgressPayload, complete = false) {
   pending.value = true; error.value = ''; finishHint.value = ''
   try {
+    const closingTask = complete && props.kind === 'task' && task.value?.status === 'resolved'
     if (!complete) await $fetch(`/api/${props.kind}s/${id}/progress`, { method: 'PUT', body: draftBody(payload) })
-    else await $fetch(`/api/${props.kind}s/${id}/complete`, { method: 'POST', body: draftBody(payload) })
+    else await $fetch(closingTask ? `/api/tasks/${id}/close` : `/api/${props.kind}s/${id}/complete`, { method: 'POST', body: draftBody(payload) })
     const hasPhotos = props.kind === 'cleaning' ? payload.problems.some(problem => problem.photos.length) : payload.photos.length > 0
     if (hasPhotos) {
       try { props.kind === 'cleaning' ? await uploadProblemPhotos(payload.problems) : await uploadPhotos(payload.photos) }
@@ -197,7 +209,7 @@ async function saveProgress(payload: ProgressPayload, complete = false) {
     await refresh()
     if (props.kind === 'task' && !error.value) {
       toast.add({
-        title: t(complete ? 'taskNotice.completed' : 'taskNotice.saved'),
+        title: t(complete ? closingTask ? 'taskReview.closedNotice' : 'taskReview.resolvedNotice' : 'taskNotice.saved'),
         color: 'primary',
         icon: 'i-lucide-check',
         close: false,
@@ -270,6 +282,12 @@ async function cancelTask() {
   catch (cause: any) { error.value = cause?.data?.statusMessage ?? t('work.cancelError') }
   finally { pending.value = false }
 }
+async function returnTaskToWork() {
+  pending.value = true; error.value = ''
+  try { await $fetch(`/api/tasks/${id}/return-to-work`, { method: 'POST' }); await refresh() }
+  catch (cause: any) { error.value = cause?.data?.statusMessage ?? t('common.error') }
+  finally { pending.value = false }
+}
 function requestComplete() {
   if (!work.value) return
   const incomplete = work.value.checklist.some(item => !item.checked)
@@ -294,6 +312,10 @@ function requestComplete() {
         <div><p class="detail-label">{{ t('work.date') }}</p><p class="font-semibold">{{ 'scheduledOn' in work ? formatDate(work.scheduledOn) : task?.dueOn ? formatDate(task.dueOn) : t('work.noDeadline') }}</p></div>
         <div><p class="detail-label">{{ t('work.assignee') }}</p><p class="font-semibold">{{ props.kind === 'cleaning' ? cleanerNames() : task?.assignee?.name ?? t('work.notAssigned') }}</p></div>
         <div><p class="detail-label">{{ t('work.apartment') }}</p><p class="font-semibold">{{ work.apartment.name }}</p></div>
+        <div v-if="props.kind === 'task' && isAdministrator && task?.problemId" class="col-span-full">
+          <p class="detail-label">{{ t('problems.linkedProblem') }}</p>
+          <UButton :to="`/problems?problemId=${encodeURIComponent(task.problemId)}`" color="neutral" variant="soft" class="mt-1 min-h-11 active:scale-[0.96] transition-transform">{{ t('taskProblem.open') }}</UButton>
+        </div>
         <div v-if="props.kind === 'cleaning' && cleaning?.startedAt"><p class="detail-label">{{ t('work.startedAt') }}</p><p class="font-semibold">{{ formatDateTime(cleaning.startedAt) }}</p></div>
         <div v-if="props.kind === 'cleaning' && cleaning?.completedAt"><p class="detail-label">{{ t('work.completedAt') }}</p><p class="font-semibold">{{ formatDateTime(cleaning.completedAt) }}</p></div>
         <div v-if="props.kind === 'cleaning' && cleaning?.apartment.instructions.trim()" class="col-span-2 sm:col-span-3">
@@ -313,15 +335,22 @@ function requestComplete() {
         <UButton v-if="showCleaningAcceptance" class="min-h-11 w-full justify-center" color="warning" :loading="acceptancePending" @click="acceptAssignedCleaning">{{ t('work.acceptCleaning') }}</UButton>
         <UButton v-else class="min-h-11 w-full justify-center" icon="i-lucide-play" :loading="startPending" @click="startAssignedCleaning">{{ t('work.startCleaning') }}</UButton>
       </div>
-      <WorkProgressForm :key="`${work.id}-${attachments.length}`" :kind="props.kind" :checklist="work.checklist" :comment="work.comment" :has-problem="work.hasProblem" :problem-description="work.problemDescription" :problem-details="taskProblemDetails" :owner-cost-eur="task?.ownerCostEur" :problems="cleaning?.problems ?? []" :inventory-reports="inventoryReports" :attachments="attachments" :focus-consumable-id="focusConsumableId" :editable="canProgress" :inventory-editable="inventoryEditable" :can-approve-inventory-discrepancy="inventoryEditable" :show-checklist="props.kind === 'task' || !isSpecialist" :show-inventory="props.kind !== 'cleaning' || !isSpecialist" :can-complete="canComplete" :busy="pending" :error="error" :finish-hint="finishHint" @save="payload => saveProgress(payload)" @complete="payload => saveProgress(payload, true)" @save-inventory="saveInventoryOnly" @approve-inventory-discrepancy="requestInventoryDiscrepancyApproval">
+      <WorkProgressForm :key="`${work.id}-${attachments.length}`" :kind="props.kind" :checklist="work.checklist" :comment="work.comment" :has-problem="work.hasProblem" :problem-description="work.problemDescription" :problem-details="taskProblemDetails" :owner-cost-eur="task?.ownerCostEur" :problems="cleaning?.problems ?? []" :inventory-reports="inventoryReports" :attachments="attachments" :focus-consumable-id="focusConsumableId" :editable="canProgress" :inventory-editable="inventoryEditable" :can-approve-inventory-discrepancy="inventoryEditable" :show-checklist="props.kind === 'task' || !isSpecialist" :show-inventory="props.kind !== 'cleaning' || !isSpecialist" :can-complete="canComplete" :complete-label="props.kind === 'task' ? taskCompleteLabel : undefined" :save-icon-only="props.kind === 'task' && task?.status === 'resolved'" :save-position="props.kind === 'task' && task?.status === 'resolved' ? 'left' : 'primary'" :center-actions="props.kind === 'task' && isAdministrator && task?.status === 'resolved'" :busy="pending" :error="error" :finish-hint="finishHint" @save="payload => saveProgress(payload)" @complete="payload => saveProgress(payload, true)" @save-inventory="saveInventoryOnly" @approve-inventory-discrepancy="requestInventoryDiscrepancyApproval">
         <template v-if="props.kind === 'cleaning' && canUpdateLinen" #after-checklist>
           <section class="progress-section">
             <UCheckbox :model-value="cleaning?.linenCollected" :label="t('work.linenCollected')" class="min-h-11 items-center font-medium" @update:model-value="updateLinen($event === true)" />
           </section>
         </template>
-        <template v-if="props.kind === 'cleaning' && canManage" #actions-left>
-          <UButton color="error" variant="soft" icon="i-lucide-trash-2" :aria-label="t('work.deleteCleaning')" @click="deleteOpen = true" />
-          <UButton :to="`/work?cleaningId=${encodeURIComponent(id)}`" color="neutral" variant="soft" icon="i-lucide-pencil" :aria-label="t('work.editCleaning')" />
+        <template v-if="props.kind === 'cleaning' && canManage" #before-actions>
+          <div class="work-detail-manage-actions work-detail-manage-actions--task">
+            <div class="work-detail-manage-actions__start">
+              <UButton type="button" color="error" variant="soft" icon="i-lucide-trash-2" class="work-detail-manage-action" :aria-label="t('work.deleteCleaning')" @click="deleteOpen = true" />
+            </div>
+            <UButton :to="`/work?cleaningId=${encodeURIComponent(id)}`" color="neutral" variant="soft" icon="i-lucide-pencil" class="work-detail-manage-action" :aria-label="t('work.editCleaning')" />
+          </div>
+        </template>
+        <template v-if="props.kind === 'task' && isAdministrator && task?.status === 'resolved'" #actions-center>
+          <UButton type="button" color="warning" variant="soft" icon="i-lucide-rotate-ccw" class="transition-transform active:scale-[0.96]" :loading="pending" @click="returnTaskToWork">{{ t('taskReview.returnToWork') }}</UButton>
         </template>
         <template v-if="props.kind === 'task' && canManage" #before-actions>
           <div class="work-detail-manage-actions work-detail-manage-actions--task">
@@ -333,7 +362,6 @@ function requestComplete() {
           </div>
         </template>
       </WorkProgressForm>
-      <div v-if="canManage && props.kind === 'cleaning' && !canProgress" class="work-detail-manage-actions"><UButton :to="`/work?cleaningId=${encodeURIComponent(id)}`" color="neutral" variant="soft" icon="i-lucide-pencil" :aria-label="t('work.editCleaning')" /><UButton v-if="isAdministrator" color="error" variant="soft" icon="i-lucide-trash-2" :aria-label="t('work.deleteCleaning')" @click="deleteOpen = true" /></div>
     </template>
     <EmptyState v-else icon="i-lucide-search-x" :title="t('work.notFound')" :description="t('work.notFoundDescription')" />
     <UModal v-model:open="directionsOpen" :title="t('directions.title')">

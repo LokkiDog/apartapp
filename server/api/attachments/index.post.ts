@@ -7,6 +7,7 @@ import { fileStorage } from '../../infrastructure/storage/local'
 import { validateUploadedImage } from '../../modules/attachment/image-upload'
 import { requireAcceptedCleaningAssignment } from '../../modules/cleaning/cleaning-acceptance'
 import { publishCleaningChangeForId } from '../../modules/cleaning/cleaning-events'
+import { publishTaskChange } from '../../modules/task/task-events'
 
 const allowedTypes = new Set(['cleaning_problem', 'cleaning', 'task', 'apartment'])
 export default defineEventHandler(async event => {
@@ -56,5 +57,9 @@ export default defineEventHandler(async event => {
   await fileStorage.put(storageKey, file.data)
   const attachment = (await db.insert(attachments).values({ organizationId: actor.organizationId, entityType: storedEntityType, entityId: storedEntityId, fileName, mimeType, storageKey, uploadedById: actor.id }).returning())[0]
   if (cleaningIdForRealtime) await publishCleaningChangeForId(actor, cleaningIdForRealtime, 'progress')
+  if (entityType === 'task') {
+    const task = await db.query.tasks.findFirst({ where: and(eq(tasks.id, entityId), eq(tasks.organizationId, actor.organizationId)) })
+    if (task) await publishTaskChange({ actor, taskId: task.id, assigneeIds: [task.assigneeId], reason: 'progress' })
+  }
   return attachment
 })

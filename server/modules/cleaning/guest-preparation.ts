@@ -5,6 +5,7 @@ import { db } from '../../infrastructure/database/client'
 import { apartments, cleaningGuestPreparations, cleaningProblems, cleanings, stays, tasks } from '../../infrastructure/database/schema'
 import { administratorsForOrganization, notifyUsers } from '../../infrastructure/notification/publish'
 import { publishCleaningChangeForId } from './cleaning-events'
+import { publishTaskChange } from '../task/task-events'
 import { sofiaToday } from './checklist-template'
 
 type StaySnapshot = { id: string; checkInOn: string; adultCount: number; childCount: number }
@@ -94,10 +95,11 @@ function problemCopy(apartmentName: string, prepared: LinenPlanEntry, current: L
 
 async function cancelActiveProblemTasks(actor: Actor, problemId: string) {
   const active = await db.query.tasks.findMany({
-    where: and(eq(tasks.organizationId, actor.organizationId), eq(tasks.problemId, problemId), inArray(tasks.status, ['open', 'in_progress']))
+    where: and(eq(tasks.organizationId, actor.organizationId), eq(tasks.problemId, problemId), inArray(tasks.status, ['open', 'in_progress', 'resolved']))
   })
   if (!active.length) return
-  await db.update(tasks).set({ status: 'canceled', problemId: null, updatedAt: new Date() }).where(inArray(tasks.id, active.map(task => task.id)))
+  await db.update(tasks).set({ status: 'canceled', updatedAt: new Date() }).where(inArray(tasks.id, active.map(task => task.id)))
+  await Promise.all(active.map(task => publishTaskChange({ actor, taskId: task.id, assigneeIds: [task.assigneeId], reason: 'updated' })))
   await Promise.all(active.filter(task => task.assigneeId).map(task => notifyUsers({
     organizationId: actor.organizationId,
     userIds: [task.assigneeId!],

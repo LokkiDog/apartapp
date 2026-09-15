@@ -11,24 +11,26 @@ describe('task list', () => {
     task({ id: 'open-normal', title: 'Beta', status: 'open', priority: 'normal', dueOn: '2026-09-12' }),
     task({ id: 'progress-urgent', title: 'Alpha', status: 'in_progress', priority: 'urgent', dueOn: '2026-09-20' }),
     task({ id: 'open-high-undated', title: 'Gamma', status: 'open', priority: 'high' }),
+    task({ id: 'resolved', title: 'Delta', status: 'resolved', priority: 'normal', dueOn: '2026-09-10' }),
     task({ id: 'completed', status: 'completed', completedAt: '2026-09-14T10:00:00.000Z' }),
     task({ id: 'canceled', status: 'canceled', updatedAt: '2026-09-15T10:00:00.000Z' }),
   ]
 
   it('separates active tasks from completed and canceled history', () => {
-    expect(currentTasks(tasks).map(item => item.id)).toEqual(['open-normal', 'progress-urgent', 'open-high-undated'])
+    expect(currentTasks(tasks).map(item => item.id)).toEqual(['open-normal', 'progress-urgent', 'open-high-undated', 'resolved'])
     expect(historyTasks(tasks).map(item => item.id)).toEqual(['canceled', 'completed'])
   })
 
   it('filters the current list by status', () => {
     expect(filterAndSortCurrentTasks(tasks, 'open', 'priority-desc').map(item => item.id)).toEqual(['open-high-undated', 'open-normal'])
     expect(filterAndSortCurrentTasks(tasks, 'in_progress', 'priority-desc').map(item => item.id)).toEqual(['progress-urgent'])
+    expect(filterAndSortCurrentTasks(tasks, 'resolved', 'priority-desc').map(item => item.id)).toEqual(['resolved'])
   })
 
   it('sorts every supported order and keeps undated tasks after dated tasks', () => {
-    expect(filterAndSortCurrentTasks(tasks, 'all', 'priority-desc').map(item => item.id)).toEqual(['progress-urgent', 'open-high-undated', 'open-normal'])
-    expect(filterAndSortCurrentTasks(tasks, 'all', 'priority-asc').map(item => item.id)).toEqual(['open-normal', 'open-high-undated', 'progress-urgent'])
-    expect(filterAndSortCurrentTasks(tasks, 'all', 'due-asc').map(item => item.id)).toEqual(['open-normal', 'progress-urgent', 'open-high-undated'])
-    expect(filterAndSortCurrentTasks(tasks, 'all', 'due-desc').map(item => item.id)).toEqual(['progress-urgent', 'open-normal', 'open-high-undated'])
+    expect(filterAndSortCurrentTasks(tasks, 'all', 'priority-desc').map(item => item.id)).toEqual(['progress-urgent', 'open-high-undated', 'resolved', 'open-normal'])
+    expect(filterAndSortCurrentTasks(tasks, 'all', 'priority-asc').map(item => item.id)).toEqual(['resolved', 'open-normal', 'open-high-undated', 'progress-urgent'])
+    expect(filterAndSortCurrentTasks(tasks, 'all', 'due-asc').map(item => item.id)).toEqual(['resolved', 'open-normal', 'progress-urgent', 'open-high-undated'])
+    expect(filterAndSortCurrentTasks(tasks, 'all', 'due-desc').map(item => item.id)).toEqual(['progress-urgent', 'open-normal', 'resolved', 'open-high-undated'])
   })
 })

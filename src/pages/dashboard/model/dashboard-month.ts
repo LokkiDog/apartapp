@@ -6,7 +6,7 @@ export type DashboardMonthRecord = {
 
 const MONTH_PATTERN = /^\d{4}-(0[1-9]|1[0-2])$/
 const ACTIVE_CLEANING_STATUSES = new Set(['unassigned', 'assigned', 'in_progress'])
-const ACTIVE_TASK_STATUSES = new Set(['open', 'in_progress'])
+const ACTIVE_TASK_STATUSES = new Set(['open', 'in_progress', 'resolved'])
 
 export function isDashboardMonth(value: unknown): value is string {
   return typeof value === 'string' && MONTH_PATTERN.test(value)

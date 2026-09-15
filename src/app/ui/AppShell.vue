@@ -19,6 +19,7 @@ const userSession = useUserSession();
 const moreOpen = ref(false);
 const logoutPending = ref(false);
 const mobileNavigationReady = ref(false);
+const notificationsReady = ref(false);
 const isSpecialistNavigation = computed(() =>
   Boolean(
     user.value?.roles.includes("specialist") &&
@@ -33,6 +34,7 @@ const { isLoading: isPageLoading } = useLoadingIndicator({
 
 onMounted(() => {
   mobileNavigationReady.value = true;
+  notificationsReady.value = true;
 });
 
 const work = computed<NavItem[]>(() => [
@@ -266,7 +268,7 @@ async function logout() {
               :aria-label="$t('common.notifications')"
             />
             <span
-              v-if="notifications.unreadCount.value"
+              v-if="notificationsReady && notifications.unreadCount.value"
               class="pointer-events-none absolute top-0 right-0 grid size-4 place-items-center rounded-full bg-error text-[11px] font-bold leading-none tabular-nums shadow-[0_0_0_2px_var(--color-canvas)]"
               style="color: #fff; top: 4px; right: 6px"
               >{{ unreadBadge }}</span

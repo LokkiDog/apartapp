@@ -48,7 +48,7 @@ type WorkToDelete = { kind: WorkKind; id: string; label: string };
 
 const currentUser = useCurrentUser();
 const notificationState = useNotificationState();
-const { t } = useI18n();
+const { t, locale } = useI18n();
 const route = useRoute();
 const tab = ref<"cleanings" | "tasks">(
   route.path === "/tasks" || route.query.tab === "tasks" ? "tasks" : "cleanings",
@@ -112,6 +112,9 @@ watch(notificationState.cleaningRevision, () => {
 });
 
 watch(notificationState.revision, () => {
+  if (currentUser.value) void refreshTasks();
+});
+watch(notificationState.taskRevision, () => {
   if (currentUser.value) void refreshTasks();
 });
 
@@ -201,7 +204,7 @@ onMounted(() => {
 const today = localDate();
 
 function taskDueState(task: Task) {
-  if (!task.dueOn || ["completed", "canceled"].includes(task.status))
+  if (!task.dueOn || ["resolved", "completed", "canceled"].includes(task.status))
     return "default";
   if (task.dueOn < today) return "overdue";
   if (task.dueOn === today) return "today";
@@ -262,6 +265,13 @@ const statusLabels = computed<Record<string, string>>(() => ({
   canceled: t("work.statusCanceled"),
   open: t("work.statusOpen"),
 }));
+const taskStatusLabels = computed<Record<string, string>>(() => ({
+  open: t("work.statusOpen"),
+  in_progress: t("work.statusProgress"),
+  resolved: t("taskReview.resolved"),
+  completed: t("taskReview.closed"),
+  canceled: t("work.statusCanceled"),
+}));
 const statusTones: Record<
   string,
   "neutral" | "success" | "warning" | "danger" | "info"
@@ -269,6 +279,7 @@ const statusTones: Record<
   unassigned: "warning",
   assigned: "info",
   in_progress: "warning",
+  resolved: "warning",
   completed: "success",
   canceled: "neutral",
   open: "info",
@@ -286,12 +297,17 @@ const taskStatusFilterOptions = computed<
   {
     value: "open",
     icon: "i-lucide-circle",
-    label: statusLabels.value.open ?? "",
+    label: taskStatusLabels.value.open ?? "",
   },
   {
     value: "in_progress",
     icon: "i-lucide-loader-circle",
-    label: statusLabels.value.in_progress ?? "",
+    label: taskStatusLabels.value.in_progress ?? "",
+  },
+  {
+    value: "resolved",
+    icon: "i-lucide-circle-check",
+    label: taskStatusLabels.value.resolved ?? "",
   },
 ]);
 const taskSortOptions = computed<
@@ -417,15 +433,22 @@ function cleanerNames(cleaning: Cleaning) {
     t("work.notAssigned")
   );
 }
-function guestCountLabel(cleaning: Cleaning) {
-  const count =
-    (cleaning.stay?.adultCount ?? 0) + (cleaning.stay?.childCount ?? 0);
-  if (!cleaning.stay) return t("work.noStay");
-  return `${count} ${t("common.guestsPlural", count)}`;
+function futureArrivalLabel(cleaning: Cleaning) {
+  const current = cleaning.linenPlan?.current;
+  if (!current) return "";
+  const forms = t("common.guestsPlural").split("|").map((form) => form.trim());
+  const plural = new Intl.PluralRules(locale.value).select(current.guestCount);
+  const formIndex = forms.length === 3
+    ? plural === "one" ? 0 : plural === "few" ? 1 : 2
+    : plural === "one" ? 0 : 1;
+  const guests = `${current.guestCount} ${forms[formIndex] ?? forms[forms.length - 1]}`;
+  return current.source === "booking" && current.checkInOn
+    ? `${guests} · ${formatDate(current.checkInOn)}`
+    : guests;
 }
 function cleaningSubtitle(cleaning: Cleaning) {
   if (isSpecialist.value) return cleaning.apartment.hotel.name;
-  return `${cleaning.apartment.hotel.name} · ${guestCountLabel(cleaning)}`;
+  return `${cleaning.apartment.hotel.name} · ${futureArrivalLabel(cleaning)}`;
 }
 function canCollectLinen(cleaning: Cleaning) {
   return isSpecialist.value && ['in_progress', 'completed'].includes(cleaning.status) && !cleaning.linenCollected;
@@ -1086,53 +1109,55 @@ function taskMenuItems(task: Task): DropdownMenuItem[] {
                         class="work-route-cleaning-row__urgent-separator"
                         aria-hidden="true"
                         > · </span
-                      >{{ cleaning.apartment.name
-                      }}<span
-                        class="work-route-cleaning-row__mobile-hotel"
-                        > · {{ cleaning.apartment.hotel.name }}</span
-                      >
+                      >{{ cleaning.apartment.name }}
                     </p>
-                    <p v-if="!isSpecialist" class="truncate text-sm text-[var(--color-muted)]">
-                      <span class="work-route-cleaning-row__mobile-subtitle">{{ guestCountLabel(cleaning) }}</span
-                      ><span class="work-route-cleaning-row__desktop-subtitle">{{ cleaningSubtitle(cleaning) }}</span>
-                    </p>
+                    <p v-if="!isSpecialist" class="work-route-cleaning-row__desktop-subtitle truncate text-sm text-[var(--color-muted)]">{{ cleaningSubtitle(cleaning) }}</p>
                     <p v-else class="hidden truncate text-sm text-[var(--color-muted)] sm:block">
                       {{ cleaning.apartment.hotel.name }}
                     </p>
                     <p
                       v-if="cleaning.hasProblem"
-                      class="mt-1 truncate text-sm text-red-700"
+                      class="work-route-cleaning-row__desktop-problem mt-1 truncate text-sm text-red-700"
                     >
                       {{ cleaning.problemDescription }}
                     </p>
                   </div>
-                  <span class="work-cleaning-row__linen"><LinenStatusControl v-if="isAdministrator || isSpecialist" :started-at="cleaning.startedAt" :collected="cleaning.linenCollected" :editable="canCollectLinen(cleaning)" @toggle="toggleLinen(cleaning, $event)" /></span>
-                  <span
-                    v-if="isSpecialist"
-                    class="work-cleaning-status-dot"
-                    :data-tone="statusTones[cleaning.status] ?? 'neutral'"
-                    role="img"
-                    :aria-label="cleaningStatusLabel(cleaning)"
-                    :title="cleaningStatusLabel(cleaning)"
-                  />
-                  <StatusBadge
-                    v-if="!isSpecialist && shouldShowCleaningStatus(cleaning)"
-                    :label="cleaningStatusLabel(cleaning)"
-                    :tone="awaitingCleaningAcceptance(cleaning) ? 'warning' : statusTones[cleaning.status] ?? 'neutral'"
-                  />
-                  <UButton v-if="canAcceptCleaning(cleaning)" color="primary" variant="soft" size="xs" class="h-6 min-h-6 px-2" :loading="pending" @click.stop="acceptCleaning(cleaning)">{{ t('work.accept') }}</UButton>
-                  <UDropdownMenu
-                    v-if="!isSpecialist && cleaningMenuItems(cleaning).length"
-                    :items="cleaningMenuItems(cleaning)"
-                    :content="{ align: 'end' }"
-                    :modal="false"
-                    ><UButton
-                      color="neutral"
-                      variant="ghost"
-                      icon="i-lucide-ellipsis-vertical"
-                      :aria-label="t('workExtra.cleaningActions')"
-                      class="min-h-11 min-w-11 active:scale-[0.96] transition-transform"
-                  /></UDropdownMenu>
+                  <div class="work-route-cleaning-row__metadata">
+                    <p v-if="!isSpecialist" class="truncate text-sm text-[var(--color-muted)]">{{ cleaningSubtitle(cleaning) }}</p>
+                    <p v-else class="truncate text-sm text-[var(--color-muted)]">{{ cleaning.apartment.hotel.name }}</p>
+                    <p v-if="cleaning.hasProblem" class="mt-1 truncate text-sm text-red-700">{{ cleaning.problemDescription }}</p>
+                  </div>
+                  <div class="work-route-cleaning-row__primary-actions">
+                    <span v-if="(isAdministrator || isSpecialist) && (canCollectLinen(cleaning) || cleaning.startedAt || cleaning.linenCollected)" class="work-cleaning-row__linen work-route-cleaning-row__linen"><LinenStatusControl :started-at="cleaning.startedAt" :collected="cleaning.linenCollected" :editable="canCollectLinen(cleaning)" @toggle="toggleLinen(cleaning, $event)" /></span>
+                    <span
+                      v-if="isSpecialist"
+                      class="work-cleaning-status-dot"
+                      :data-tone="statusTones[cleaning.status] ?? 'neutral'"
+                      role="img"
+                      :aria-label="cleaningStatusLabel(cleaning)"
+                      :title="cleaningStatusLabel(cleaning)"
+                    />
+                    <StatusBadge
+                      v-if="!isSpecialist && shouldShowCleaningStatus(cleaning)"
+                      :label="cleaningStatusLabel(cleaning)"
+                      :tone="awaitingCleaningAcceptance(cleaning) ? 'warning' : statusTones[cleaning.status] ?? 'neutral'"
+                    />
+                  </div>
+                  <div class="work-route-cleaning-row__secondary-actions">
+                    <UButton v-if="canAcceptCleaning(cleaning)" class="work-route-cleaning-row__accept h-6 min-h-6 px-2" color="primary" variant="soft" size="xs" :loading="pending" @click.stop="acceptCleaning(cleaning)">{{ t('work.accept') }}</UButton>
+                    <UDropdownMenu
+                      v-if="!isSpecialist && cleaningMenuItems(cleaning).length"
+                      :items="cleaningMenuItems(cleaning)"
+                      :content="{ align: 'end' }"
+                      :modal="false"
+                      ><UButton
+                        class="work-route-cleaning-row__menu active:scale-[0.96] transition-transform"
+                        color="neutral"
+                        variant="ghost"
+                        icon="i-lucide-ellipsis-vertical"
+                        :aria-label="t('workExtra.cleaningActions')"
+                    /></UDropdownMenu>
+                  </div>
                   <div
                     v-if="isAdministrator"
                     class="work-route-order-controls hidden sm:flex"
@@ -1268,47 +1293,48 @@ function taskMenuItems(task: Task): DropdownMenuItem[] {
                         class="work-route-cleaning-row__urgent-separator"
                         aria-hidden="true"
                         > · </span
-                      >{{ cleaning.apartment.name
-                      }}<span
-                        class="work-route-cleaning-row__mobile-hotel"
-                        > · {{ cleaning.apartment.hotel.name }}</span
-                      >
+                      >{{ cleaning.apartment.name }}
                     </p>
-                    <p v-if="!isSpecialist" class="truncate text-sm text-[var(--color-muted)]">
-                      <span class="work-route-cleaning-row__mobile-subtitle">{{ guestCountLabel(cleaning) }}</span
-                      ><span class="work-route-cleaning-row__desktop-subtitle">{{ cleaningSubtitle(cleaning) }}</span>
-                    </p>
+                    <p v-if="!isSpecialist" class="work-route-cleaning-row__desktop-subtitle truncate text-sm text-[var(--color-muted)]">{{ cleaningSubtitle(cleaning) }}</p>
                     <p v-else class="hidden truncate text-sm text-[var(--color-muted)] sm:block">
                       {{ cleaning.apartment.hotel.name }}
                     </p>
                   </div>
-                  <span class="work-cleaning-row__linen"><LinenStatusControl v-if="isAdministrator || isSpecialist" :started-at="cleaning.startedAt" :collected="cleaning.linenCollected" :editable="canCollectLinen(cleaning)" @toggle="toggleLinen(cleaning, $event)" /></span>
-                  <span
-                    v-if="isSpecialist"
-                    class="work-cleaning-status-dot"
-                    :data-tone="statusTones[cleaning.status] ?? 'neutral'"
-                    role="img"
-                    :aria-label="cleaningStatusLabel(cleaning)"
-                    :title="cleaningStatusLabel(cleaning)"
-                  />
-                  <StatusBadge
-                    v-if="!isSpecialist && shouldShowCleaningStatus(cleaning)"
-                    :label="cleaningStatusLabel(cleaning)"
-                    :tone="awaitingCleaningAcceptance(cleaning) ? 'warning' : statusTones[cleaning.status] ?? 'neutral'"
-                  />
-                  <UButton v-if="canAcceptCleaning(cleaning)" color="primary" variant="soft" size="xs" class="h-6 min-h-6 px-2" :loading="pending" @click.stop="acceptCleaning(cleaning)">{{ t('work.accept') }}</UButton>
-                  <UDropdownMenu
-                    v-if="!isSpecialist && cleaningMenuItems(cleaning).length"
-                    :items="cleaningMenuItems(cleaning)"
-                    :content="{ align: 'end' }"
-                    :modal="false"
-                    ><UButton
-                      color="neutral"
-                      variant="ghost"
-                      icon="i-lucide-ellipsis-vertical"
-                      :aria-label="t('workExtra.cleaningActions')"
-                      class="min-h-11 min-w-11 active:scale-[0.96] transition-transform"
-                  /></UDropdownMenu>
+                  <div class="work-route-cleaning-row__metadata">
+                    <p v-if="!isSpecialist" class="truncate text-sm text-[var(--color-muted)]">{{ cleaningSubtitle(cleaning) }}</p>
+                    <p v-else class="truncate text-sm text-[var(--color-muted)]">{{ cleaning.apartment.hotel.name }}</p>
+                  </div>
+                  <div class="work-route-cleaning-row__primary-actions">
+                    <span v-if="(isAdministrator || isSpecialist) && (canCollectLinen(cleaning) || cleaning.startedAt || cleaning.linenCollected)" class="work-cleaning-row__linen work-route-cleaning-row__linen"><LinenStatusControl :started-at="cleaning.startedAt" :collected="cleaning.linenCollected" :editable="canCollectLinen(cleaning)" @toggle="toggleLinen(cleaning, $event)" /></span>
+                    <span
+                      v-if="isSpecialist"
+                      class="work-cleaning-status-dot"
+                      :data-tone="statusTones[cleaning.status] ?? 'neutral'"
+                      role="img"
+                      :aria-label="cleaningStatusLabel(cleaning)"
+                      :title="cleaningStatusLabel(cleaning)"
+                    />
+                    <StatusBadge
+                      v-if="!isSpecialist && shouldShowCleaningStatus(cleaning)"
+                      :label="cleaningStatusLabel(cleaning)"
+                      :tone="awaitingCleaningAcceptance(cleaning) ? 'warning' : statusTones[cleaning.status] ?? 'neutral'"
+                    />
+                  </div>
+                  <div class="work-route-cleaning-row__secondary-actions">
+                    <UButton v-if="canAcceptCleaning(cleaning)" class="work-route-cleaning-row__accept h-6 min-h-6 px-2" color="primary" variant="soft" size="xs" :loading="pending" @click.stop="acceptCleaning(cleaning)" >{{ t('work.accept') }}</UButton>
+                    <UDropdownMenu
+                      v-if="!isSpecialist && cleaningMenuItems(cleaning).length"
+                      :items="cleaningMenuItems(cleaning)"
+                      :content="{ align: 'end' }"
+                      :modal="false"
+                      ><UButton
+                        class="work-route-cleaning-row__menu active:scale-[0.96] transition-transform"
+                        color="neutral"
+                        variant="ghost"
+                        icon="i-lucide-ellipsis-vertical"
+                        :aria-label="t('workExtra.cleaningActions')"
+                    /></UDropdownMenu>
+                  </div>
                   <div
                     v-if="isAdministrator"
                     class="work-route-order-controls hidden sm:flex"
@@ -1661,6 +1687,7 @@ function taskMenuItems(task: Task): DropdownMenuItem[] {
           v-for="task in filteredTasks"
           :key="task.id"
           class="work-task-row group items-center gap-3"
+          :class="{ 'work-task-row--resolved': isAdministrator && task.status === 'resolved' }"
           @click="openTaskCard($event, task)"
         >
           <div class="work-task-row__content">
@@ -1722,7 +1749,7 @@ function taskMenuItems(task: Task): DropdownMenuItem[] {
             "
           /><StatusBadge
             class="work-task-row__status"
-            :label="statusLabels[task.status] ?? ''"
+            :label="taskStatusLabels[task.status] ?? ''"
             :tone="statusTones[task.status] ?? 'neutral'"
           />
           <div
@@ -1809,7 +1836,7 @@ function taskMenuItems(task: Task): DropdownMenuItem[] {
               />
               <StatusBadge
                 class="work-task-row__status"
-                :label="statusLabels[task.status] ?? ''"
+                :label="taskStatusLabels[task.status] ?? ''"
                 :tone="statusTones[task.status] ?? 'neutral'"
               />
               <div v-if="taskMenuItems(task).length" class="work-task-row__menu">

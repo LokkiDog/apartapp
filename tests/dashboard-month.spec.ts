@@ -19,6 +19,7 @@ describe('dashboard month model', () => {
     expect(activeCleaning('assigned')).toBe(true)
     expect(activeCleaning('completed')).toBe(false)
     expect(activeTask('open')).toBe(true)
+    expect(activeTask('resolved')).toBe(true)
     expect(activeTask('completed')).toBe(false)
     expect(undatedDashboardRecord({ scheduledOn: null, dueOn: null })).toBe(true)
     expect(dateInDashboardMonth('2026-08-15', '2026-08')).toBe(true)
@@ -28,10 +29,11 @@ describe('dashboard month model', () => {
     const tasks = [
       { status: 'open', dueOn: null },
       { status: 'in_progress', dueOn: '2026-07-01' },
+      { status: 'resolved', dueOn: '2026-08-01' },
       { status: 'completed', dueOn: '2026-08-01' },
       { status: 'canceled', dueOn: null }
     ]
-    expect(activeDashboardTasks(tasks)).toEqual(tasks.slice(0, 2))
+    expect(activeDashboardTasks(tasks)).toEqual(tasks.slice(0, 3))
   })
 
   it('shows dated problems for the selected month and sorts records', () => {

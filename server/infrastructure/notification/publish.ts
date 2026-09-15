@@ -15,7 +15,7 @@ function copyForLocale(copy: LocalizedCopy, locale: AppLocale) {
 export async function notifyUsers(input: {
   organizationId: string
   userIds: string[]
-  type: 'stay_changed' | 'work_assigned' | 'work_rescheduled' | 'work_canceled' | 'problem' | 'manager_expense_report_published' | 'cleaning_changed'
+  type: 'stay_changed' | 'work_assigned' | 'work_rescheduled' | 'work_canceled' | 'problem' | 'manager_expense_report_published' | 'cleaning_changed' | 'task_resolved' | 'task_returned'
   title: LocalizedCopy
   body: LocalizedCopy
   href: string | null

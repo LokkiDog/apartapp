@@ -10,6 +10,7 @@ export default defineNuxtConfig({
   },
   modules: ['@nuxt/ui', 'nuxt-auth-utils', '@vite-pwa/nuxt', '@nuxtjs/i18n'],
   i18n: {
+    baseUrl: process.env.NUXT_PUBLIC_APP_URL || 'http://localhost:3000',
     defaultLocale: 'ru',
     strategy: 'no_prefix',
     langDir: 'locales',

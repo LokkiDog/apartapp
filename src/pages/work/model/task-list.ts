@@ -1,6 +1,6 @@
 import type { Task } from '#fsd/entities/task'
 
-export type TaskStatusFilter = 'all' | 'open' | 'in_progress'
+export type TaskStatusFilter = 'all' | 'open' | 'in_progress' | 'resolved'
 export type TaskSort = 'priority-desc' | 'priority-asc' | 'due-asc' | 'due-desc'
 
 const finalStatuses = new Set(['completed', 'canceled'])

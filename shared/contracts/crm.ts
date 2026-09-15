@@ -13,7 +13,7 @@ export type AppLocale = z.infer<typeof appLocaleSchema>
 export const hotelStatusSchema = z.enum(['active', 'archived'])
 export const apartmentStatusSchema = z.enum(['active', 'inactive', 'archived'])
 export const cleaningStatusSchema = z.enum(['unassigned', 'assigned', 'in_progress', 'completed', 'canceled'])
-export const taskStatusSchema = z.enum(['open', 'in_progress', 'completed', 'canceled'])
+export const taskStatusSchema = z.enum(['open', 'in_progress', 'resolved', 'completed', 'canceled'])
 export const taskPrioritySchema = z.enum(['low', 'normal', 'high', 'urgent'])
 export const inventoryMovementSchema = z.enum(['replenishment', 'usage', 'adjustment_in', 'adjustment_out'])
 

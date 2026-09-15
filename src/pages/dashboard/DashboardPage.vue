@@ -30,6 +30,9 @@ watch(notificationState.cleaningRevision, () => {
 watch(notificationState.revision, () => {
   if (currentUser.value && canViewWork.value) void refreshTasks()
 })
+watch(notificationState.taskRevision, () => {
+  if (currentUser.value && canViewWork.value) void refreshTasks()
+})
 watch(notificationState.revision, () => { if (isAdministrator.value) void refreshProblemSummary() })
 const dashboardMonth = ref(currentDashboardMonth())
 const monthLabel = computed(() => {
@@ -50,7 +53,7 @@ const undatedWork = computed(() => sortDashboardRecords([
 ]))
 const dashboardProblemCount = computed(() => problemSummary.value.openCount)
 const cleanerPool = computed(() => Number(openCleanings.value.reduce((sum, item) => sum.plus(item.tariffSnapshot.cleanerPoolEur ?? 0), new Decimal(0)).toDecimalPlaces(2)))
-const statusLabel = computed<Record<string, string>>(() => ({ unassigned: t('work.statusUnassigned'), assigned: t('work.statusAssigned'), in_progress: t('work.statusProgress'), open: t('work.statusOpen') }))
+const statusLabel = computed<Record<string, string>>(() => ({ unassigned: t('work.statusUnassigned'), assigned: t('work.statusAssigned'), in_progress: t('work.statusProgress'), resolved: t('taskReview.resolved'), open: t('work.statusOpen') }))
 
 if (import.meta.client) {
   const storedMonth = sessionStorage.getItem(monthStorageKey)

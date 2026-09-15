@@ -2529,23 +2529,72 @@ img {
 }
 .work-route-cleaning-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) max-content max-content 2.75rem;
-  padding-inline: 0.5rem;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  grid-template-rows: auto auto;
+  column-gap: 0.75rem;
+  row-gap: 0.125rem;
+  margin-inline: -1.25rem;
+  min-height: 2.75rem;
+  padding: 0.375rem;
 }
 .work-route-cleaning-row--specialist {
-  grid-template-columns: minmax(0, 1fr) max-content 0.75rem;
+  grid-template-columns: minmax(0, 1fr) max-content;
 }
 .work-route-cleaning-row__position {
   display: none;
 }
 .work-route-cleaning-row__content {
+  grid-column: 1;
+  grid-row: 1;
+  align-self: end;
   min-width: 0;
+}
+.work-route-cleaning-row__metadata {
+  grid-column: 1;
+  grid-row: 2;
+  align-self: start;
+  min-width: 0;
+}
+.work-route-cleaning-row__desktop-problem {
+  display: none;
+}
+.work-route-cleaning-row__primary-actions {
+  display: flex;
+  grid-column: 2;
+  grid-row: 1;
+  align-items: center;
+  gap: 0.25rem;
+  align-self: start;
+  justify-self: end;
+}
+.work-route-cleaning-row__secondary-actions {
+  display: flex;
+  grid-column: 2;
+  grid-row: 2;
+  align-items: center;
+  gap: 0.25rem;
+  align-self: end;
+  justify-self: end;
+}
+.work-route-cleaning-row__linen {
+  width: auto;
+  min-width: 0;
+  min-height: 1.75rem;
+}
+.work-route-cleaning-row__menu {
+  width: 2rem !important;
+  min-width: 2rem !important;
+  max-width: 2rem !important;
+  height: 1.75rem !important;
+  min-height: 1.75rem !important;
+  max-height: 1.75rem !important;
+  padding-block: 0 !important;
 }
 .work-cleaning-row__linen {
   display: grid;
   width: 2.75rem;
   min-width: 2.75rem;
-  min-height: 2.75rem;
+  /* min-height: 2.75rem; */
   place-items: center;
 }
 .work-cleaning-row__linen:has(.linen-status-button) {
@@ -2602,6 +2651,14 @@ img {
   transition-property: background-color;
   transition-duration: 160ms;
   transition-timing-function: ease;
+}
+.work-task-row--resolved {
+  background-color: color-mix(in srgb, #fef3c7 78%, transparent);
+  box-shadow: inset 3px 0 0 #d97706;
+}
+.work-task-row--resolved:hover,
+.work-task-row--resolved:focus-within {
+  background-color: color-mix(in srgb, #fef3c7 92%, transparent);
 }
 .work-task-row__content {
   grid-column: 1;
@@ -2760,6 +2817,18 @@ img {
   }
   .work-route-cleaning-row__content {
     flex: 1 1 0%;
+    grid-column: auto;
+    grid-row: auto;
+  }
+  .work-route-cleaning-row__metadata {
+    display: none;
+  }
+  .work-route-cleaning-row__primary-actions,
+  .work-route-cleaning-row__secondary-actions {
+    display: contents;
+  }
+  .work-route-cleaning-row__desktop-problem {
+    display: block;
   }
   .work-route-cleaning-row__urgent-dot,
   .work-route-cleaning-row__mobile-hotel,
@@ -2767,9 +2836,28 @@ img {
     display: none;
   }
   .work-route-cleaning-row__urgent-text,
-  .work-route-cleaning-row__urgent-separator,
-  .work-route-cleaning-row__desktop-subtitle {
+  .work-route-cleaning-row__urgent-separator {
     display: inline;
+  }
+  .work-route-cleaning-row__desktop-subtitle {
+    display: block;
+  }
+  .work-route-cleaning-row__linen {
+    width: 2.75rem;
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+  }
+  .work-route-cleaning-row__linen:has(.linen-status-button) {
+    width: auto;
+    min-width: max-content;
+  }
+  .work-route-cleaning-row__menu {
+    width: 2.75rem !important;
+    min-width: 2.75rem !important;
+    max-width: 2.75rem !important;
+    height: 2.75rem !important;
+    min-height: 2.75rem !important;
+    max-height: 2.75rem !important;
   }
   .work-task-row {
     grid-template-columns: minmax(0, 1fr) 9rem 10rem 2.75rem;
@@ -4475,21 +4563,41 @@ html[dir="rtl"] .dashboard-page-header__actions {
 .problem-detail-actions.work-progress-actions--in-cleaning {
   width: 100%;
 }
+.problem-detail-content {
+  padding-bottom: 5rem;
+}
 .problem-detail-section + .problem-detail-section {
   border-top: 1px solid color-mix(in srgb, var(--color-line) 82%, transparent);
   padding-top: 1.5rem;
 }
 .work-progress-actions__secondary,
+.work-progress-actions__center,
 .work-progress-actions__primary {
   display: flex;
   align-items: center;
   gap: 0.5rem;
 }
-.work-progress-actions__secondary:empty {
+.work-progress-actions__secondary:empty,
+.work-progress-actions__center:empty {
   display: none;
 }
 .work-progress-actions__primary {
   margin-left: auto;
+}
+.work-progress-actions--centered {
+  display: grid;
+  width: 100%;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+}
+.work-progress-actions--centered .work-progress-actions__secondary {
+  justify-self: start;
+}
+.work-progress-actions--centered .work-progress-actions__center {
+  justify-self: center;
+}
+.work-progress-actions--centered .work-progress-actions__primary {
+  justify-self: end;
+  margin-left: 0;
 }
 .work-progress-actions--in-cleaning button,
 .work-progress-actions--in-cleaning a {
@@ -4626,11 +4734,54 @@ html[dir="rtl"] .dashboard-page-header__actions {
     box-shadow: 0 -8px 24px rgba(35, 64, 52, 0.08);
     backdrop-filter: blur(12px);
   }
-  .problem-detail-actions.work-progress-actions--in-cleaning {
+  .work-progress-actions--in-cleaning.work-progress-actions--complete-only .work-progress-actions__primary {
+    justify-content: flex-end;
+  }
+  .work-progress-actions--in-cleaning.work-progress-actions--centered {
     position: fixed;
     z-index: 24;
     right: 0;
     bottom: calc(3.9rem + env(safe-area-inset-bottom));
+    left: 0;
+    width: 100%;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 2fr);
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    border-top: 1px solid var(--color-line);
+    background: rgb(255 255 255 / 0.94);
+    box-shadow: 0 -8px 24px rgba(35, 64, 52, 0.08);
+    backdrop-filter: blur(12px);
+  }
+  .work-progress-actions--in-cleaning.work-progress-actions--centered .work-progress-actions__secondary,
+  .work-progress-actions--in-cleaning.work-progress-actions--centered .work-progress-actions__center,
+  .work-progress-actions--in-cleaning.work-progress-actions--centered .work-progress-actions__primary {
+    position: static;
+    width: auto;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    backdrop-filter: none;
+  }
+  .work-progress-actions--in-cleaning.work-progress-actions--centered .work-progress-actions__secondary {
+    justify-self: start;
+    flex-wrap: nowrap;
+  }
+  .work-progress-actions--in-cleaning.work-progress-actions--centered .work-progress-actions__center {
+    justify-self: center;
+    flex-wrap: nowrap;
+  }
+  .work-progress-actions--in-cleaning.work-progress-actions--centered .work-progress-actions__primary {
+    justify-self: end;
+    flex-wrap: nowrap;
+  }
+  .problem-detail-actions.work-progress-actions--in-cleaning {
+    position: fixed;
+    z-index: 24;
+    right: 0;
+    bottom: 0;
     left: 0;
     width: 100%;
     flex-wrap: nowrap;

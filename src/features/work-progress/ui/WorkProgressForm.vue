@@ -27,6 +27,10 @@ const props = withDefaults(defineProps<{
   focusConsumableId?: string
   editable?: boolean
   canComplete?: boolean
+  completeLabel?: string
+  saveIconOnly?: boolean
+  savePosition?: 'left' | 'primary'
+  centerActions?: boolean
   inventoryEditable?: boolean
   showChecklist?: boolean
   showInventory?: boolean
@@ -35,7 +39,7 @@ const props = withDefaults(defineProps<{
   busy?: boolean
   error?: string
   finishHint?: string
-}>(), { comment: '', hasProblem: false, problemDescription: '', problemDetails: '', ownerCostEur: 0, problems: () => [], inventoryReports: () => [], attachments: () => [], focusConsumableId: '', editable: false, canComplete: false, inventoryEditable: false, canApproveInventoryDiscrepancy: false, showChecklist: true, showInventory: true, showCommentProblems: true, busy: false, error: '', finishHint: '' })
+}>(), { comment: '', hasProblem: false, problemDescription: '', problemDetails: '', ownerCostEur: 0, problems: () => [], inventoryReports: () => [], attachments: () => [], focusConsumableId: '', editable: false, canComplete: false, completeLabel: '', saveIconOnly: false, savePosition: 'primary', centerActions: false, inventoryEditable: false, canApproveInventoryDiscrepancy: false, showChecklist: true, showInventory: true, showCommentProblems: true, busy: false, error: '', finishHint: '' })
 
 const emit = defineEmits<{ save: [payload: ProgressPayload]; complete: [payload: ProgressPayload]; saveInventory: [reports: NonNullable<ProgressPayload['inventoryReports']>]; approveInventoryDiscrepancy: [item: InventoryItem] }>()
 const checklist = ref<ChecklistItem[]>([])
@@ -233,11 +237,19 @@ onBeforeUnmount(() => { clearPhotoPreviews(); clearProblemPhotoPreviews() })
 
     <slot name="before-actions" />
 
-    <div v-if="editable || canComplete" class="work-progress-actions work-progress-actions--in-cleaning">
-      <div class="work-progress-actions__secondary"><slot v-if="kind === 'cleaning'" name="actions-left" /></div>
+    <div v-if="editable || canComplete" class="work-progress-actions work-progress-actions--in-cleaning" :class="{ 'work-progress-actions--centered': centerActions, 'work-progress-actions--complete-only': canComplete && !editable }">
+      <div class="work-progress-actions__secondary">
+        <UButton v-if="editable && savePosition === 'left'" type="submit" color="neutral" variant="soft" icon="i-lucide-save" :aria-label="t('progress.save')" :loading="busy" @click="submitIntent = 'save'">
+          <span v-if="!saveIconOnly">{{ t('progress.save') }}</span>
+        </UButton>
+        <slot name="actions-left" />
+      </div>
+      <div class="work-progress-actions__center"><slot name="actions-center" /></div>
       <div class="work-progress-actions__primary">
-        <UButton v-if="editable" type="submit" color="neutral" variant="soft" icon="i-lucide-save" :loading="busy" @click="submitIntent = 'save'">{{ t('progress.save') }}</UButton>
-        <UButton v-if="canComplete" type="submit" icon="i-lucide-circle-check" :loading="busy" @click="submitIntent = 'complete'">{{ t('progress.complete') }}</UButton>
+        <UButton v-if="editable && savePosition === 'primary'" type="submit" color="neutral" variant="soft" icon="i-lucide-save" :aria-label="t('progress.save')" :loading="busy" @click="submitIntent = 'save'">
+          <span v-if="!saveIconOnly">{{ t('progress.save') }}</span>
+        </UButton>
+        <UButton v-if="canComplete" type="submit" icon="i-lucide-circle-check" :loading="busy" @click="submitIntent = 'complete'">{{ completeLabel || t('progress.complete') }}</UButton>
       </div>
     </div>
   </UForm>
