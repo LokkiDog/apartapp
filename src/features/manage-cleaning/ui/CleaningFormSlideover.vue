@@ -19,6 +19,7 @@ export type CleaningDraft = {
   apartmentId: string;
   stayId: string | null;
   cleanerIds: string[];
+  cashAssigneeId: string | null;
   scheduledOn: string;
   isUrgent: boolean;
   urgencyOverride: boolean | null;
@@ -54,6 +55,7 @@ const form = reactive<CleaningDraft>({
   apartmentId: "",
   stayId: null,
   cleanerIds: [],
+  cashAssigneeId: null,
   scheduledOn: "",
   isUrgent: false,
   urgencyOverride: null,
@@ -73,6 +75,7 @@ function validate(state: unknown) {
   if (tariffChanged.value && form.reason.trim().length < 3) {
     errors.push({ name: "reason", message: t("validation.tariffReason") });
   }
+  if (needsCashAssignee.value && !form.cashAssigneeId) errors.push({ name: 'cashAssigneeId', message: 'Выберите ответственного за наличные' });
   return errors;
 }
 const tariffOpen = ref(false);
@@ -92,6 +95,10 @@ const tariffChanged = computed(() => {
 const selectedStay = computed(() =>
   props.stays.find((stay) => stay.id === form.stayId),
 );
+const needsCashAssignee = computed(() => Boolean(selectedStay.value && Number(selectedStay.value.cashAmountEur ?? 0) > 0 && form.cleanerIds.length));
+const cashAssigneeOptions = computed(() => props.team
+  .filter(member => member.roles.some(role => ['cleaner', 'specialist', 'administrator'].includes(role)))
+  .map(member => ({ label: member.name, value: member.id })));
 const automaticUrgent = computed(() => {
   if (!form.apartmentId || !form.scheduledOn) return false;
   return props.stays.some(stay => stay.apartmentId === form.apartmentId && stay.checkOutOn === form.scheduledOn)
@@ -177,6 +184,7 @@ function reset() {
     apartmentId: cleaning?.apartmentId ?? stay?.apartmentId ?? "",
     stayId,
     cleanerIds: cleaning?.assignments.map((item) => item.cleanerId) ?? [],
+    cashAssigneeId: cleaning?.cashAssigneeId ?? null,
     scheduledOn: cleaning?.scheduledOn ?? stay?.checkOutOn ?? "",
     isUrgent: cleaning?.isUrgent ?? false,
     urgencyOverride: cleaning?.urgencyOverride ?? null,
@@ -207,6 +215,7 @@ watch(
   (value) => {
     if (value) reset();
   },
+  { immediate: true },
 );
 watch(
   () => form.stayId,
@@ -390,6 +399,10 @@ function submit() {
                 class="flex-1"
                 aria-hidden="true" /></template></USelectMenu
         ></UFormField>
+        <UFormField v-if="needsCashAssignee" name="cashAssigneeId" :label="t('cash.responsible')" required>
+          <USelect :model-value="form.cashAssigneeId ?? undefined" :items="cashAssigneeOptions" class="w-full" @update:model-value="form.cashAssigneeId = $event || null" />
+          <template #hint><span class="tabular-nums">{{ formatEuro(selectedStay?.cashAmountEur ?? 0) }}</span></template>
+        </UFormField>
         <section class="rounded-2xl border border-[var(--color-line)] px-4 py-3">
           <div class="flex items-center justify-between gap-3">
             <UCheckbox :model-value="effectiveUrgent" :label="t('work.urgentCleaning')" class="min-h-11 items-center font-medium" @update:model-value="setUrgency(Boolean($event))" />

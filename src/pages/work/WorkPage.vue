@@ -38,7 +38,7 @@ import {
   type TaskStatusFilter,
 } from "./model/task-list";
 import { useI18n } from "vue-i18n";
-import { taskInputSchema, type PaginatedWorkList } from "@contracts/crm";
+import { taskCreateInputSchema, type PaginatedWorkList } from "@contracts/crm";
 
 const LazyCleaningFormSlideover = defineAsyncComponent(() =>
   import("#fsd/features/manage-cleaning").then(
@@ -61,13 +61,14 @@ const linenQueueOnly = ref(true);
 const historyOpen = ref(false);
 const taskHistoryOpen = ref(false);
 const taskStatusFilter = ref<TaskStatusFilter>("all");
+const cashOnly = ref(false);
 const taskSort = ref<TaskSort>("priority-desc");
 const laterOpen = ref(false);
 const [
   { data: cleanings, refresh: refreshCleanings },
   { data: tasks, refresh: refreshTasks },
   { data: apartments },
-  { data: stays },
+  { data: stays, pending: staysPending },
   { data: team },
 ] = await Promise.all([
   useAsyncData("work-cleanings", () => $fetch<Cleaning[]>("/api/cleanings", { query: { view: "operational" } }), {
@@ -193,16 +194,26 @@ const taskForm = reactive({
   dueOn: "",
   ownerCostEur: 0 as number | null,
   checklist: [] as Array<{ label: string; checked: boolean }>,
+  category: 'general' as 'general' | 'cash',
+  expectedAmountEur: 0 as number | null,
+  reportIncluded: true,
 });
 const taskValidation = useSubmitFormValidation();
 const taskValidationState = computed(() => ({
   ...taskForm,
   assigneeId:
-    taskForm.assigneeId === "unassigned" ? null : taskForm.assigneeId,
-  dueOn: taskForm.dueOn || null,
+    taskForm.assigneeId === "unassigned" ? (taskForm.category === 'cash' ? '' : null) : taskForm.assigneeId,
+  dueOn: taskForm.category === 'cash' ? taskForm.dueOn : taskForm.dueOn || null,
   ownerCostEur: taskForm.ownerCostEur ?? 0,
 }));
-const validateTask = createFormValidator(taskInputSchema, t);
+const validateTask = createFormValidator(taskCreateInputSchema, t);
+watch(() => taskForm.category, category => {
+  if (category === 'cash') {
+    taskForm.title = 'Получить наличные';
+    taskForm.ownerCostEur = 0;
+    taskForm.checklist = [];
+  }
+});
 
 const cleaningOpen = ref(false);
 const editingCleaning = ref<Cleaning | null>(null);
@@ -246,6 +257,7 @@ async function openCleaningFromQuery() {
     }
     if (cleaning) openEditCleaning(cleaning);
   } else if (stayId) {
+    if (staysPending.value || !(stays.value ?? []).some((stay) => stay.id === stayId)) return;
     openCreateCleaning(stayId);
   } else if (taskId) {
     const task = allTasks.value.find((item) => item.id === taskId);
@@ -255,6 +267,9 @@ async function openCleaningFromQuery() {
 onMounted(() => {
   void openCleaningFromQuery();
 });
+watch([stays, staysPending, isAdministrator], () => {
+  if (!cleaningOpen.value) void openCleaningFromQuery();
+}, { deep: true });
 
 const today = localDate();
 
@@ -428,7 +443,7 @@ const filteredTasks = computed(() =>
     allTasks.value,
     taskStatusFilter.value,
     taskSort.value,
-  ),
+  ).filter(task => !cashOnly.value || task.category === 'cash'),
 );
 const taskHistory = computed(() => historyTasks(allTasks.value));
 
@@ -661,6 +676,9 @@ function resetTaskForm() {
     dueOn: "",
     ownerCostEur: 0,
     checklist: [],
+    category: 'general',
+    expectedAmountEur: 0,
+    reportIncluded: true,
   });
 }
 
@@ -683,6 +701,9 @@ function openEditTask(task: Task) {
     dueOn: task.dueOn ?? "",
     ownerCostEur: task.ownerCostEur ?? 0,
     checklist: task.checklist.map((item) => ({ ...item })),
+    category: task.category,
+    expectedAmountEur: task.cash?.expectedAmountEur ?? 0,
+    reportIncluded: task.cash?.reportIncluded ?? true,
   });
   taskValidation.reset();
   error.value = "";
@@ -699,6 +720,7 @@ async function saveTask() {
       ownerCostEur: payload.ownerCostEur ?? 0,
       assigneeId: assigneeId === "unassigned" ? null : assigneeId,
       dueOn: taskForm.dueOn || null,
+      ...(taskForm.category === 'cash' ? { expectedAmountEur: taskForm.expectedAmountEur ?? 0, reportIncluded: taskForm.reportIncluded, assigneeId: assigneeId === 'unassigned' ? undefined : assigneeId, dueOn: taskForm.dueOn || undefined } : {}),
     };
     if (editingTask.value)
       await $fetch(`/api/tasks/${editingTask.value.id}`, {
@@ -1704,6 +1726,7 @@ function taskMenuItems(task: Task): DropdownMenuItem[] {
             </UButton>
           </UDropdownMenu>
           <div class="task-list-actions">
+            <UButton color="neutral" :variant="cashOnly ? 'soft' : 'ghost'" icon="i-lucide-banknote" class="min-h-11 active:scale-[0.96] transition-transform" :aria-pressed="cashOnly" @click="cashOnly = !cashOnly">{{ t('cash.category') }}</UButton>
             <UButton
               class="work-history-button"
               color="neutral"
@@ -1755,6 +1778,7 @@ function taskMenuItems(task: Task): DropdownMenuItem[] {
               :to="workHref('task', task.id)"
               class="block rounded-lg p-1 -m-1 hover:bg-[var(--color-surface-muted)]"
               ><p class="truncate font-semibold">
+                <UBadge v-if="task.category === 'cash'" color="primary" variant="soft" size="xs" class="mr-2 align-middle">{{ t('cash.category') }}</UBadge>
                 <span
                   role="img"
                   :aria-label="priorityLabels[task.priority] ?? ''"
@@ -1963,10 +1987,12 @@ function taskMenuItems(task: Task): DropdownMenuItem[] {
               :apartments="apartments ?? []"
               :disabled="Boolean(editingTask && editingTask.status !== 'open')"
               /></UFormField
+          ><UFormField v-if="!editingTask" name="category" label="Категория"
+            ><USelect v-model="taskForm.category" :items="[{ label: t('cash.regularTask'), value: 'general' }, { label: t('cash.category'), value: 'cash' }]" class="w-full" /></UFormField
           ><UFormField name="title" :label="t('workExtra.taskTitle')"
-            ><UInput v-model="taskForm.title" /></UFormField
-          ><UFormField name="description" :label="t('workExtra.taskDescription')"
-            ><UTextarea v-model="taskForm.description" /></UFormField
+            ><UInput v-model="taskForm.title" :disabled="taskForm.category === 'cash'" /></UFormField
+          ><UFormField name="description" :label="t('workExtra.taskDescription')" class="w-full"
+            ><UTextarea v-model="taskForm.description" class="w-full" /></UFormField
           ><UFormField name="priority" :label="t('workExtra.taskPriority')"
             ><USelect
               v-model="taskForm.priority"
@@ -1987,7 +2013,10 @@ function taskMenuItems(task: Task): DropdownMenuItem[] {
                   .map((member) => ({ label: member.name, value: member.id })),
               ]"
               class="w-full" /></UFormField
-          ><UFormField v-if="isAdministrator" name="ownerCostEur" :label="t('workExtra.ownerCost')"
+          ><UFormField v-if="taskForm.category === 'cash'" name="expectedAmountEur" :label="t('cash.expected')" required
+            ><MoneyInput v-model="taskForm.expectedAmountEur" /></UFormField
+          ><UCheckbox v-if="taskForm.category === 'cash'" v-model="taskForm.reportIncluded" name="reportIncluded" :label="t('cash.includeReport')" class="w-full" />
+          <UFormField v-if="isAdministrator" name="ownerCostEur" :label="t('workExtra.ownerCost')"
             ><MoneyInput v-model="taskForm.ownerCostEur" /></UFormField
           ><UFormField name="dueOn" :label="t('workExtra.dueDate')"
             ><DateInput v-model="taskForm.dueOn" /></UFormField

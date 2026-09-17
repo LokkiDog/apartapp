@@ -4,13 +4,14 @@ import { stayInputSchema, type StayListQuery } from '@contracts/crm'
 import { canManageApartment, isAssignedToApartment, managedApartmentIds, requireRole, type Actor } from '../../infrastructure/auth/actor'
 import { writeAuditLog } from '../../infrastructure/audit/log'
 import { db } from '../../infrastructure/database/client'
-import { apartmentManagers, cleaningAssignments, cleanings, financialEntries, inventoryLots, inventoryMovements, specialServices, stayServices, stays, users } from '../../infrastructure/database/schema'
+import { apartmentManagers, cashTaskDetails, cleaningAssignments, cleanings, financialEntries, inventoryLots, inventoryMovements, specialServices, stayServices, stays, users } from '../../infrastructure/database/schema'
 import { administratorsForOrganization, notifyUsers } from '../../infrastructure/notification/publish'
 import { createFinancialEntry } from '../finance/finance.service'
 import { serializeApartment } from '../apartment/apartment-view'
 import { buildStayServiceSnapshot } from './stay-service-snapshot'
 import { refreshAutomaticCleaningUrgency } from '../cleaning/cleaning-urgency'
 import { reconcileCleaningGuestPreparation } from '../cleaning/guest-preparation'
+import { syncCashTasksForStay } from '../task/cash-task.service'
 
 async function assertNoOverlap(organizationId: string, apartmentId: string, checkInOn: string, checkOutOn: string, exceptId?: string) {
   const criteria = [eq(stays.organizationId, organizationId), eq(stays.apartmentId, apartmentId), lt(stays.checkInOn, checkOutOn), gt(stays.checkOutOn, checkInOn)]
@@ -49,15 +50,27 @@ export async function listStays(actor: Actor, query: StayListQuery = {}) {
   if (query.to) criteria.push(lt(stays.checkInOn, query.to))
   if (query.apartmentIds) criteria.push(inArray(stays.apartmentId, query.apartmentIds))
   const rows = await db.query.stays.findMany({ where: and(...criteria), with: { apartment: { with: { hotel: true, managerAssignments: { with: { manager: { columns: { id: true, name: true } } } } } }, services: true, cleaning: { columns: { id: true, status: true, scheduledOn: true } } }, orderBy: (stays, { asc }) => [asc(stays.checkInOn)] })
+  const cashTaskRows = rows.length
+    ? await db.select({ stayId: cashTaskDetails.stayId, collectedAt: cashTaskDetails.collectedAt })
+        .from(cashTaskDetails)
+        .where(and(eq(cashTaskDetails.organizationId, actor.organizationId), inArray(cashTaskDetails.stayId, rows.map(stay => stay.id))))
+    : []
+  const cashTaskStateByStayId = new Map<string, 'pending' | 'collected'>()
+  for (const cashTask of cashTaskRows) {
+    if (!cashTask.stayId) continue
+    if (cashTask.collectedAt) cashTaskStateByStayId.set(cashTask.stayId, 'collected')
+    else if (!cashTaskStateByStayId.has(cashTask.stayId)) cashTaskStateByStayId.set(cashTask.stayId, 'pending')
+  }
   const managedIds = actor.roles.includes('administrator') ? null : new Set(await managedApartmentIds(actor) ?? [])
   return rows
     .filter(stay => (!managedIds || managedIds.has(stay.apartmentId)) && (!query.hotelId || stay.apartment.hotelId === query.hotelId))
     .map(stay => {
       const apartment = serializeApartment(stay.apartment)
       const hasCleaning = Boolean(stay.cleaning?.id)
-      if (actor.roles.includes('administrator')) return { ...stay, apartment, hasCleaning }
+      const cashTaskState = cashTaskStateByStayId.get(stay.id) ?? 'none'
+      if (actor.roles.includes('administrator')) return { ...stay, apartment, hasCleaning, cashTaskState }
       const { cleaning: _cleaning, ...safeStay } = stay
-      return { ...safeStay, apartment, hasCleaning }
+      return { ...safeStay, apartment, hasCleaning, cashTaskState }
     })
 }
 
@@ -125,6 +138,7 @@ export async function updateStay(actor: Actor, stayId: string, input: unknown) {
   await writeAuditLog({ organizationId: actor.organizationId, actorId: actor.id, action: 'stay.updated', entityType: 'stay', entityId: stayId })
   await refreshAutomaticCleaningUrgency(actor.organizationId, existing.apartmentId, [existing.checkInOn, existing.checkOutOn, data.checkInOn, data.checkOutOn])
   await reconcileCleaningGuestPreparation(actor, existing.apartmentId)
+  await syncCashTasksForStay(actor, stayId)
   if (actor.roles.includes('manager')) await notifyUsers({ organizationId: actor.organizationId, userIds: await administratorsForOrganization(actor.organizationId), type: 'stay_changed', title: 'Заезд изменен', body: 'Собственник изменил заезд', href: '/calendar' })
   return updated
 }
@@ -133,6 +147,7 @@ export async function deleteStay(actor: Actor, stayId: string) {
   requireRole(actor, 'administrator')
   const stay = await db.query.stays.findFirst({ where: and(eq(stays.id, stayId), eq(stays.organizationId, actor.organizationId)), with: { services: true } })
   if (!stay) throw createError({ statusCode: 404, statusMessage: 'Заезд не найден' })
+  await syncCashTasksForStay(actor, stayId)
   await db.transaction(async tx => {
     const cleaning = await tx.query.cleanings.findFirst({ where: eq(cleanings.stayId, stayId) })
     if (cleaning) {

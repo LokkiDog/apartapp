@@ -47,7 +47,7 @@ function menuItems(stay: Stay): DropdownMenuItem[][] {
     <div class="stay-agenda-item__content">
       <div class="stay-agenda-item__title-row">
         <p class="stay-agenda-item__apartment">{{ stay.apartment.name }} <span>· {{ stay.apartment.hotel.name }}</span></p>
-        <span class="stay-agenda-item__title-meta"><span class="stay-agenda-item__guest-count">{{ guestBreakdownLabel(stay) }}</span><StayServiceIcons :services="stay.services" /></span>
+        <span class="stay-agenda-item__title-meta"><span class="stay-agenda-item__guest-count">{{ guestBreakdownLabel(stay) }}</span><StayServiceIcons :services="stay.services" :cash-amount-eur="stay.cashAmountEur" :cash-task-state="stay.cashTaskState" /></span>
       </div>
       <p class="stay-agenda-item__meta">
         <span class="stay-agenda-item__guest-details">{{ guestBreakdownLabel(stay) }}</span>
@@ -66,7 +66,7 @@ function menuItems(stay: Stay): DropdownMenuItem[][] {
     <div class="apartment-bookings__item-content">
       <div class="apartment-bookings__item-title">
         <span class="apartment-bookings__booking-dates"><span class="apartment-bookings__booking-dates-full">{{ formatDate(stay.checkInOn) }} → {{ formatDate(stay.checkOutOn) }}</span><span class="apartment-bookings__booking-dates-compact">{{ compactDate(stay.checkInOn) }} → {{ compactDate(stay.checkOutOn) }}</span></span>
-        <span class="apartment-bookings__item-meta"><span class="apartment-bookings__guest-count">{{ guestBreakdownLabel(stay) }}</span><StayServiceIcons :services="stay.services" /></span>
+        <span class="apartment-bookings__item-meta"><span class="apartment-bookings__guest-count">{{ guestBreakdownLabel(stay) }}</span><StayServiceIcons :services="stay.services" :cash-amount-eur="stay.cashAmountEur" :cash-task-state="stay.cashTaskState" /></span>
       </div>
       <p v-if="commentLabel(stay) || cashLabel(stay)" class="apartment-bookings__details">
         <span v-if="commentLabel(stay)" class="apartment-bookings__comment">{{ commentLabel(stay) }}</span>

@@ -9,6 +9,7 @@ export interface Stay {
   guestPhone?: string
   guestComment?: string
   cashAmountEur?: number | null
+  cashTaskState?: 'none' | 'pending' | 'collected'
   apartmentId: string
   apartment: { name: string; hotel: { name: string } }
   hasCleaning: boolean

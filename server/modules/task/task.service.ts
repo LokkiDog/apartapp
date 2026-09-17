@@ -1,9 +1,9 @@
 import { and, desc, eq, inArray, lt, notInArray, or } from 'drizzle-orm'
-import { taskCompletionInputSchema, taskInputSchema, taskUpdateSchema, taskWorkProgressInputSchema, type WorkListQuery } from '@contracts/crm'
+import { taskCompletionInputSchema, taskCreateInputSchema, taskUpdateSchema, taskWorkProgressInputSchema, type WorkListQuery } from '@contracts/crm'
 import { requireRole, requireWorkSectionAccess, type Actor } from '../../infrastructure/auth/actor'
 import { writeAuditLog } from '../../infrastructure/audit/log'
 import { db } from '../../infrastructure/database/client'
-import { apartments, cleaningProblems, financialEntries, inventoryMovements, tasks, users } from '../../infrastructure/database/schema'
+import { apartments, cashTaskDetails, cleaningProblems, financialEntries, inventoryMovements, tasks, users } from '../../infrastructure/database/schema'
 import { administratorsForOrganization, notifyUsers } from '../../infrastructure/notification/publish'
 import { createFinancialEntry } from '../finance/finance.service'
 import { deleteWorkRecord } from '../work/work-record.service'
@@ -59,7 +59,7 @@ export async function listTasks(actor: Actor, query: WorkListQuery = { view: 'al
   }
   const rows = await db.query.tasks.findMany({
     where: and(...criteria),
-    with: { apartment: { with: { hotel: true, managerAssignments: { with: { manager: { columns: { id: true, name: true } } } } } }, assignee: { columns: { id: true, name: true } } },
+    with: { apartment: { with: { hotel: true, managerAssignments: { with: { manager: { columns: { id: true, name: true } } } } } }, assignee: { columns: { id: true, name: true } }, cash: true },
     orderBy: query.view === 'history' ? [desc(tasks.updatedAt), desc(tasks.id)] : (tasks, { asc }) => [asc(tasks.dueOn)],
     limit: query.view === 'history' ? query.limit + 1 : undefined
   })
@@ -73,13 +73,15 @@ export async function listTasks(actor: Actor, query: WorkListQuery = { view: 'al
 
 export async function createTask(actor: Actor, input: unknown) {
   requireRole(actor, 'administrator')
-  const data = taskInputSchema.parse(input)
+  const data = taskCreateInputSchema.parse(input)
   if (data.assigneeId) {
     const assignee = await db.query.users.findFirst({ where: and(eq(users.id, data.assigneeId), eq(users.organizationId, actor.organizationId), eq(users.status, 'active')) })
     if (!assignee || !canBeWorkAssignee(assignee.roles)) throw createError({ statusCode: 400, statusMessage: 'Исполнитель должен быть активным исполнителем, специалистом или администратором' })
   }
-  const [task] = await db.insert(tasks).values({ ...data, organizationId: actor.organizationId, createdById: actor.id }).returning()
+  const { expectedAmountEur, reportIncluded, ...taskData } = data.category === 'cash' ? data : { ...data, expectedAmountEur: undefined, reportIncluded: undefined }
+  const [task] = await db.insert(tasks).values({ ...taskData, organizationId: actor.organizationId, createdById: actor.id }).returning()
   if (!task) throw createError({ statusCode: 500, statusMessage: 'Не удалось создать задачу' })
+  if (data.category === 'cash') await db.insert(cashTaskDetails).values({ taskId: task.id, organizationId: actor.organizationId, expectedAmountEur: expectedAmountEur!, reportIncluded: reportIncluded!, reportOccurredOn: null })
   await publishTaskChange({ actor, taskId: task.id, assigneeIds: [task.assigneeId], reason: 'created' })
   if (data.assigneeId) await notifyUsers({ organizationId: actor.organizationId, userIds: [data.assigneeId], type: 'work_assigned', title: 'Назначена задача', body: task.title, href: `/tasks/${task.id}` })
   return task
@@ -90,6 +92,7 @@ export async function completeTask(actor: Actor, taskId: string, input: unknown)
   const data = taskCompletionInputSchema.parse(input)
   const task = await db.query.tasks.findFirst({ where: and(eq(tasks.id, taskId), eq(tasks.organizationId, actor.organizationId)) })
   if (!task) throw createError({ statusCode: 404, statusMessage: 'Задача не найдена' })
+  if (task.category === 'cash') throw createError({ statusCode: 409, statusMessage: 'Для наличных используйте действие «Наличные забраны»' })
   if (!['open', 'in_progress'].includes(task.status)) throw createError({ statusCode: 409, statusMessage: 'Задачу нельзя завершить в текущем статусе' })
   if (!actor.roles.includes('administrator') && task.assigneeId !== actor.id) throw createError({ statusCode: 403, statusMessage: 'Задача не назначена вам' })
   const completeChecklist = task.checklist.every(required => data.checklist.some(item => item.label === required.label && item.checked))
@@ -113,6 +116,7 @@ export async function closeTask(actor: Actor, taskId: string, input: unknown) {
   const data = taskCompletionInputSchema.parse(input)
   const task = await db.query.tasks.findFirst({ where: and(eq(tasks.id, taskId), eq(tasks.organizationId, actor.organizationId)) })
   if (!task) throw createError({ statusCode: 404, statusMessage: 'Задача не найдена' })
+  if (task.category === 'cash') throw createError({ statusCode: 409, statusMessage: 'Для наличных используйте действие «Наличные получены»' })
   if (task.status !== 'resolved') throw createError({ statusCode: 409, statusMessage: 'Закрыть можно только решенную задачу' })
   const completeChecklist = task.checklist.every(required => data.checklist.some(item => item.label === required.label && item.checked))
   if (!completeChecklist || data.checklist.some(item => !item.checked)) throw createError({ statusCode: 400, statusMessage: 'Завершите обязательный чек-лист' })
@@ -186,6 +190,10 @@ export async function deleteTask(actor: Actor, taskId: string) {
   requireRole(actor, 'administrator')
   const task = await db.query.tasks.findFirst({ where: and(eq(tasks.id, taskId), eq(tasks.organizationId, actor.organizationId)) })
   if (!task) throw createError({ statusCode: 404, statusMessage: 'Задача не найдена' })
+  if (task.category === 'cash') {
+    const cash = await db.query.cashTaskDetails.findFirst({ where: eq(cashTaskDetails.taskId, taskId) })
+    if (cash?.collectedAt) throw createError({ statusCode: 409, statusMessage: 'После получения наличных задачу нельзя удалить' })
+  }
   await deleteWorkRecord('task', taskId)
   await writeAuditLog({ organizationId: actor.organizationId, actorId: actor.id, action: 'task.deleted', entityType: 'task', entityId: taskId })
   await publishTaskChange({ actor, taskId, assigneeIds: [task.assigneeId], reason: 'deleted' })

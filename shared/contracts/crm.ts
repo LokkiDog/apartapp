@@ -14,6 +14,7 @@ export const hotelStatusSchema = z.enum(['active', 'archived'])
 export const apartmentStatusSchema = z.enum(['active', 'inactive', 'archived'])
 export const cleaningStatusSchema = z.enum(['unassigned', 'assigned', 'in_progress', 'completed', 'canceled'])
 export const taskStatusSchema = z.enum(['open', 'in_progress', 'resolved', 'completed', 'canceled'])
+export const taskCategorySchema = z.enum(['general', 'cash'])
 export const taskPrioritySchema = z.enum(['low', 'normal', 'high', 'urgent'])
 export const inventoryMovementSchema = z.enum(['replenishment', 'usage', 'adjustment_in', 'adjustment_out'])
 
@@ -153,6 +154,7 @@ export const cleaningInputSchema = withCalculatedTariff({
   apartmentId: z.uuid(),
   stayId: z.uuid().nullable().optional(),
   cleanerIds: z.array(z.uuid()).default([]),
+  cashAssigneeId: z.uuid().nullable().optional(),
   scheduledOn: z.iso.date(),
   isUrgent: z.boolean().optional(),
   urgencyOverride: z.boolean().nullable().optional(),
@@ -160,6 +162,7 @@ export const cleaningInputSchema = withCalculatedTariff({
 })
 export const cleaningUpdateSchema = withCalculatedTariff({
   cleanerIds: z.array(z.uuid()).default([]),
+  cashAssigneeId: z.uuid().nullable().optional(),
   scheduledOn: z.iso.date(),
   isUrgent: z.boolean().optional(),
   urgencyOverride: z.boolean().nullable().optional(),
@@ -255,6 +258,23 @@ export const taskInputSchema = z.object({
   ownerCostEur: moneyEurSchema.default(0),
   checklist: z.array(z.object({ label: z.string().min(1), checked: z.boolean() })).default([])
 })
+
+export const cashTaskInputSchema = taskInputSchema.extend({
+  category: z.literal('cash'),
+  assigneeId: z.uuid(),
+  dueOn: z.iso.date(),
+  expectedAmountEur: moneyEurSchema,
+  reportIncluded: z.boolean().default(true)
+})
+
+export const taskCreateInputSchema = z.union([
+  taskInputSchema.extend({ category: z.literal('general').optional() }),
+  cashTaskInputSchema
+])
+
+export const cashTaskCollectSchema = z.object({ amountEur: moneyEurSchema })
+export const cashTaskReceiveSchema = z.object({ amountEur: moneyEurSchema })
+export const cashTaskCorrectionSchema = z.object({ amountEur: moneyEurSchema.optional(), reportIncluded: z.boolean().optional() }).refine(value => value.amountEur !== undefined || value.reportIncluded !== undefined, 'Укажите изменения')
 
 export const taskUpdateSchema = taskInputSchema.partial().extend({ status: taskStatusSchema.optional() })
 

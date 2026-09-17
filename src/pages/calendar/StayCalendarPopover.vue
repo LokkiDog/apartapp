@@ -81,7 +81,7 @@ function editStay() {
         <span v-if="leftLabel" class="stay-calendar-trigger__left">{{ leftLabel }}</span>
         <span v-if="rightLabel" class="stay-calendar-trigger__right">{{ rightLabel }}</span>
         <span v-if="canManageCleaning && showCleaningMarker" class="stay-cleaning-marker" :class="cleaningPresentation.className" :title="cleaningPresentation.label" aria-hidden="true"><UIcon :name="cleaningPresentation.icon" class="size-3" /></span>
-        <StayServiceIcons v-if="showServiceIcons" :services="stay.services" />
+        <StayServiceIcons v-if="showServiceIcons" :services="stay.services" :cash-amount-eur="stay.cashAmountEur" :cash-task-state="stay.cashTaskState" />
         <span v-if="continuesRight" class="stay-calendar-trigger__arrow stay-calendar-trigger__arrow--right" aria-hidden="true" />
       </button>
     </template>

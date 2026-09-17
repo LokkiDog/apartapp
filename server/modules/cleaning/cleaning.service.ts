@@ -3,7 +3,7 @@ import { cleaningAssignmentInputSchema, cleaningInputSchema, cleaningLinenUpdate
 import { canAccessAssignedWork, requireRole, requireWorkSectionAccess, type Actor } from '../../infrastructure/auth/actor'
 import { writeAuditLog } from '../../infrastructure/audit/log'
 import { db } from '../../infrastructure/database/client'
-import { apartments, attachments, cleaningAssignments, cleanings, inventoryMovements, stays, users } from '../../infrastructure/database/schema'
+import { apartments, attachments, cashTaskDetails, cleaningAssignments, cleanings, inventoryMovements, stays, tasks, users } from '../../infrastructure/database/schema'
 import { fileStorage } from '../../infrastructure/storage/local'
 import { administratorsForOrganization, notifyUsers } from '../../infrastructure/notification/publish'
 import { createFinancialEntry } from '../finance/finance.service'
@@ -17,18 +17,22 @@ import { requireAcceptedCleaningAssignment } from './cleaning-acceptance'
 import { cleaningProblemSummary, resolveCleaningProblems, syncCleaningProblems } from './cleaning-problem'
 import { cleaningEventSnapshot, publishCleaningChange, publishCleaningChangeForId } from './cleaning-events'
 import { captureCleaningGuestPreparation, linenPlanForCleaningFromStays, supersedeCleaningGuestPreparations } from './guest-preparation'
+import { syncCashTaskForCleaning } from '../task/cash-task.service'
 
 export async function createCleaning(actor: Actor, input: unknown) {
   requireRole(actor, 'administrator')
   const data = cleaningInputSchema.parse(input)
   const apartment = await db.query.apartments.findFirst({ where: and(eq(apartments.id, data.apartmentId), eq(apartments.organizationId, actor.organizationId), eq(apartments.status, 'active')), with: { type: true } })
   if (!apartment) throw createError({ statusCode: 400, statusMessage: 'Апартамент не найден или неактивен' })
+  let linkedCashAmount = 0
   if (data.stayId) {
     const stay = await db.query.stays.findFirst({ where: and(eq(stays.id, data.stayId), eq(stays.organizationId, actor.organizationId)) })
     if (!stay || stay.apartmentId !== data.apartmentId) throw createError({ statusCode: 400, statusMessage: 'Заезд не относится к выбранному апартаменту' })
     const existing = await db.query.cleanings.findFirst({ where: eq(cleanings.stayId, data.stayId) })
     if (existing) throw createError({ statusCode: 409, statusMessage: 'Для этого заезда уборка уже назначена' })
+    linkedCashAmount = Number(stay.cashAmountEur ?? 0)
   }
+  if (linkedCashAmount > 0 && data.cleanerIds.length && !data.cashAssigneeId) throw createError({ statusCode: 400, statusMessage: 'Выберите ответственного за наличные' })
   const assignees = data.cleanerIds.length ? await db.select().from(users).where(and(inArray(users.id, data.cleanerIds), eq(users.organizationId, actor.organizationId), eq(users.status, 'active'))) : []
   if (assignees.length !== data.cleanerIds.length || assignees.some(user => !canBeCleaningAssignee(user.roles))) throw createError({ statusCode: 400, statusMessage: 'Исполнитель должен быть активной уборщицей или администратором' })
   const status = data.cleanerIds.length ? 'assigned' : 'unassigned'
@@ -47,6 +51,7 @@ export async function createCleaning(actor: Actor, input: unknown) {
   await writeAuditLog({ organizationId: actor.organizationId, actorId: actor.id, action: 'cleaning.created', entityType: 'cleaning', entityId: cleaning.id, payload: { stayId: data.stayId ?? null } })
   const eventSnapshot = await cleaningEventSnapshot(cleaning.id)
   if (eventSnapshot) await publishCleaningChange({ actor, after: eventSnapshot, reason: 'created' })
+  await syncCashTaskForCleaning(actor, cleaning.id, data.cashAssigneeId)
   return cleaning
 }
 
@@ -105,14 +110,24 @@ export async function listCleanings(actor: Actor, query: WorkListQuery = { view:
         orderBy: [asc(stays.checkInOn)]
       })
     : []
+  const cashAssignees = actor.roles.includes('administrator') && page.length
+    ? await db.select({ cleaningId: cashTaskDetails.cleaningId, assigneeId: tasks.assigneeId })
+      .from(cashTaskDetails)
+      .innerJoin(tasks, eq(tasks.id, cashTaskDetails.taskId))
+      .where(and(
+        eq(cashTaskDetails.organizationId, actor.organizationId),
+        inArray(cashTaskDetails.cleaningId, page.map(cleaning => cleaning.id))
+      ))
+    : []
   const staysByApartment = new Map<string, typeof futureStays>()
   for (const stay of futureStays) staysByApartment.set(stay.apartmentId, [...(staysByApartment.get(stay.apartmentId) ?? []), stay])
   const attachmentsByProblem = new Map<string, typeof problemAttachments>()
   for (const attachment of problemAttachments) attachmentsByProblem.set(attachment.entityId, [...(attachmentsByProblem.get(attachment.entityId) ?? []), attachment])
+  const cashAssigneeByCleaning = new Map(cashAssignees.map(item => [item.cleaningId, item.assigneeId]))
   const linenPlan = (cleaning: (typeof page)[number]) => linenPlanForCleaningFromStays(cleaning, staysByApartment.get(cleaning.apartmentId) ?? [])
   const serializeCleaning = (cleaning: (typeof page)[number]) => ({ ...cleaning, linenPlan: linenPlan(cleaning), problems: cleaning.problems.map(problem => ({ ...problem, attachments: attachmentsByProblem.get(problem.id) ?? [] })), apartment: serializeApartment(cleaning.apartment) })
   let serialized
-  if (actor.roles.includes('administrator')) serialized = page.map(serializeCleaning)
+  if (actor.roles.includes('administrator')) serialized = page.map(cleaning => ({ ...serializeCleaning(cleaning), cashAssigneeId: cashAssigneeByCleaning.get(cleaning.id) ?? null }))
   else if (actor.roles.includes('specialist')) serialized = page.map(cleaning => ({
     id: cleaning.id,
     apartmentId: cleaning.apartmentId,
@@ -357,7 +372,7 @@ export async function updateCleaning(actor: Actor, cleaningId: string, input: un
     throw createError({ statusCode: 400, statusMessage: 'Исполнитель должен быть активной уборщицей или администратором' })
   }
 
-  const { cleanerIds, scheduledOn, reason, apartmentId, stayId, checklist, urgencyOverride, ...tariffSnapshot } = data
+  const { cleanerIds, scheduledOn, reason, apartmentId, stayId, checklist, urgencyOverride, cashAssigneeId, ...tariffSnapshot } = data
   const nextApartmentId = apartmentId ?? cleaning.apartmentId
   const nextStayId = stayId === undefined ? cleaning.stayId : stayId
   const contextChanged = nextApartmentId !== cleaning.apartmentId || nextStayId !== cleaning.stayId
@@ -419,6 +434,7 @@ export async function updateCleaning(actor: Actor, cleaningId: string, input: un
   })
   const afterEvent = await cleaningEventSnapshot(cleaningId)
   if (beforeEvent && afterEvent) await publishCleaningChange({ actor, before: beforeEvent, after: afterEvent, reason: 'updated' })
+  await syncCashTaskForCleaning(actor, cleaningId, cashAssigneeId)
   return updated
 }
 
@@ -445,6 +461,7 @@ export async function deleteCleaning(actor: Actor, cleaningId: string, input?: u
   requireRole(actor, 'administrator')
   const cleaning = await db.query.cleanings.findFirst({ where: and(eq(cleanings.id, cleaningId), eq(cleanings.organizationId, actor.organizationId)), with: { problems: true } })
   if (!cleaning) throw createError({ statusCode: 404, statusMessage: 'Уборка не найдена' })
+  await syncCashTaskForCleaning(actor, cleaningId, null)
   const disposition = input && typeof input === 'object' && 'problemDisposition' in input ? (input as { problemDisposition?: unknown }).problemDisposition : undefined
   if (cleaning.problems.length && !['preserve', 'delete'].includes(String(disposition))) {
     throw createError({ statusCode: 409, statusMessage: 'Выберите, сохранить или удалить связанные проблемы', data: { problemCount: cleaning.problems.length } })

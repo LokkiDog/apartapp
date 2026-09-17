@@ -11,9 +11,9 @@ const labels: Record<ReportTab, string> = {
 }
 
 const financeTypeLabels: Record<CsvLocale, Record<string, string>> = {
-  ru: { cleaning_charge: 'Уборки', inventory_charge: 'Расходники', task_charge: 'Работы', guest_service_charge: 'Дополнительные услуги', compensation: 'Корректировки', manual_expense: 'Прочее' },
-  en: { cleaning_charge: 'Cleanings', inventory_charge: 'Consumables', task_charge: 'Work', guest_service_charge: 'Extra services', compensation: 'Adjustments', manual_expense: 'Other' },
-  he: { cleaning_charge: 'ניקיונות', inventory_charge: 'חומרים מתכלים', task_charge: 'עבודות', guest_service_charge: 'שירותים נוספים', compensation: 'התאמות', manual_expense: 'אחר' }
+  ru: { cleaning_charge: 'Уборки', inventory_charge: 'Расходники', task_charge: 'Работы', guest_service_charge: 'Дополнительные услуги', compensation: 'Корректировки', manual_expense: 'Прочее', cash_receipt: 'Наличные' },
+  en: { cleaning_charge: 'Cleanings', inventory_charge: 'Consumables', task_charge: 'Work', guest_service_charge: 'Extra services', compensation: 'Adjustments', manual_expense: 'Other', cash_receipt: 'Cash received' },
+  he: { cleaning_charge: 'ניקיונות', inventory_charge: 'חומרים מתכלים', task_charge: 'עבודות', guest_service_charge: 'שירותים נוספים', compensation: 'התאמות', manual_expense: 'אחר', cash_receipt: 'מזומן שהתקבל' }
 }
 
 function scopeLabel(report: GlobalReportResponse, locale: CsvLocale) {

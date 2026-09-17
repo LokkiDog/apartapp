@@ -55,7 +55,7 @@ const presets = computed(() => [
 ])
 const cleaningLabels = computed<Record<string, string>>(() => ({ unassigned: t('work.statusUnassigned'), assigned: t('work.statusAssigned'), in_progress: t('work.statusProgress'), completed: t('work.statusCompleted'), canceled: t('work.statusCanceled') }))
 const taskLabels = computed<Record<string, string>>(() => ({ open: t('work.statusOpen'), in_progress: t('work.statusProgress'), resolved: t('taskReview.resolved'), completed: t('taskReview.closed'), canceled: t('work.statusCanceled') }))
-const financeTypeLabels = computed<Record<string, string>>(() => ({ cleaning_charge: t('reports.cleaning'), inventory_charge: t('inventory.consumable'), task_charge: t('work.tasks'), guest_service_charge: t('reports.extraServices'), compensation: t('common.adjustment'), manual_expense: t('expenses.title') }))
+const financeTypeLabels = computed<Record<string, string>>(() => ({ cleaning_charge: t('reports.cleaning'), inventory_charge: t('inventory.consumable'), task_charge: t('work.tasks'), guest_service_charge: t('reports.extraServices'), compensation: t('common.adjustment'), manual_expense: t('expenses.title'), cash_receipt: t('cash.category') }))
 function filterSnapshot() {
   return JSON.stringify({ ...filters, apartmentIds: [...filters.apartmentIds].sort() })
 }

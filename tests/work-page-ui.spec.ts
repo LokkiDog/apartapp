@@ -24,6 +24,15 @@ describe('work page UI contracts', () => {
     expect(dashboard).not.toContain('activeTask(item.status) && dateInDashboardMonth(item.dueOn, dashboardMonth.value)')
   })
 
+  it('waits for the protected booking list before opening a linked cleaning', () => {
+    const source = readFileSync('src/pages/work/WorkPage.vue', 'utf8')
+    const form = readFileSync('src/features/manage-cleaning/ui/CleaningFormSlideover.vue', 'utf8')
+    expect(source).toContain('{ data: stays, pending: staysPending }')
+    expect(source).toContain('if (staysPending.value || !(stays.value ?? []).some((stay) => stay.id === stayId)) return;')
+    expect(source).toContain('watch([stays, staysPending, isAdministrator], () => {')
+    expect(form).toMatch(/watch\(\s*\(\) => props\.open,[\s\S]*?if \(value\) reset\(\);[\s\S]*?\{ immediate: true \},\s*\);/)
+  })
+
   it('keeps task filters, sorting and final records in the task list history', () => {
     const source = readFileSync('src/pages/work/WorkPage.vue', 'utf8')
     expect(source).toContain('const taskStatusFilter = ref<TaskStatusFilter>("all")')
@@ -116,6 +125,26 @@ describe('work page UI contracts', () => {
     expect(source).toContain('const displayedCleanings = computed(() => isSpecialist.value && linenQueueOnly.value')
     expect(source).toContain("'work-planning-switch--two': isSpecialist")
     expect(source).toContain('buildCleaningPlan(\n    displayedCleanings.value,\n    today,\n    false,\n    isSpecialist.value,')
+  })
+
+  it('keeps the cash task summary and correction controls compact', () => {
+    const detail = readFileSync('src/features/work-detail/ui/WorkDetailPage.vue', 'utf8')
+    const styles = readFileSync('src/app/styles/main.css', 'utf8')
+    expect(detail).toContain('class="cash-task-card surface"')
+    expect(detail).toContain('class="cash-task-card__summary"')
+    expect(detail).toContain('class="cash-task-card__editor cash-task-card__editor--correction"')
+    expect(detail).toContain('<UCheckbox v-model="reportIncluded" class="cash-task-card__report"')
+    expect(styles).toContain('grid-template-columns: repeat(auto-fit, minmax(6.25rem, 1fr));')
+    expect(styles).toContain('.cash-task-card__submit:active')
+  })
+
+  it('keeps the task description full width and uses a checkbox for cash reporting', () => {
+    const source = readFileSync('src/pages/work/WorkPage.vue', 'utf8')
+    expect(source).toContain('name="description" :label="t(\'workExtra.taskDescription\')" class="w-full"')
+    expect(source).toContain('<UTextarea v-model="taskForm.description" class="w-full" />')
+    expect(source).toContain('<UCheckbox v-if="taskForm.category === \'cash\'" v-model="taskForm.reportIncluded" name="reportIncluded" :label="t(\'cash.includeReport\')" class="w-full" />')
+    expect(source).not.toMatch(/<UCheckbox[^>]+\/>\s*>\s*<UFormField v-if="isAdministrator"/)
+    expect(source).not.toContain('<USwitch v-model="taskForm.reportIncluded"')
   })
 
   it('requires acceptance in the cleaning detail before a worker can operate', () => {

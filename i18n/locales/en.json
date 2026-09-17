@@ -140,4 +140,5 @@
   ,"taskProblem": { "open": "Go to issue" }
   ,"taskReview": { "resolved": "Resolved", "closed": "Closed", "returnToWork": "Return to work", "close": "Close", "resolvedNotice": "Task marked as resolved", "closedNotice": "Task closed" }
   ,"taskNotice": { "saved": "Changes saved", "completed": "Task completed" }
+  ,"cash": { "category": "Cash", "regularTask": "Regular task", "responsible": "Cash collector", "expected": "Expected", "toCollect": "To collect", "awaitingTransfer": "Awaiting transfer", "received": "Received", "collected": "Collected", "receivedByAdmin": "Received by administrator", "difference": "Difference found", "collectedAmount": "Amount collected", "receivedAmount": "Amount received", "collect": "Cash collected", "receive": "Cash received", "includeReport": "Include in report", "saveCorrection": "Save correction", "noTask": "Task not assigned" }
 }

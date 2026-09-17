@@ -2154,6 +2154,23 @@ img {
 .stay-service-icons__more {
   padding-inline: 0.15rem;
 }
+.stay-service-icon--cash {
+  transition-property: background-color, color;
+  transition-duration: 150ms;
+  transition-timing-function: ease-out;
+}
+.stay-service-icon--cash-none {
+  background: #eef3f0;
+  color: var(--color-muted);
+}
+.stay-service-icon--cash-pending {
+  background: #fff3d6;
+  color: #a16207;
+}
+.stay-service-icon--cash-collected {
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+}
 .stay-service-list {
   display: grid;
   gap: 0.35rem;
@@ -4646,6 +4663,97 @@ html[dir="rtl"] .dashboard-page-header__actions {
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
+.cash-task-card {
+  display: grid;
+  gap: 0.875rem;
+  padding: 1rem;
+}
+.cash-task-card__header {
+  display: grid;
+  grid-template-columns: 2.25rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.625rem;
+}
+.cash-task-card__icon {
+  display: grid;
+  width: 2.25rem;
+  height: 2.25rem;
+  place-items: center;
+  border-radius: 0.625rem;
+  background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+  color: var(--color-primary);
+  font-size: 1.125rem;
+}
+.cash-task-card__title {
+  min-width: 0;
+  font-weight: 700;
+}
+.cash-task-card__status {
+  justify-self: end;
+}
+.cash-task-card__summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(6.25rem, 1fr));
+  gap: 1px;
+  overflow: hidden;
+  border-radius: 0.75rem;
+  background: var(--color-line);
+}
+.cash-task-card__stat {
+  display: grid;
+  min-width: 0;
+  gap: 0.125rem;
+  padding: 0.625rem 0.75rem;
+  background: var(--color-surface-muted);
+}
+.cash-task-card__stat span {
+  overflow: hidden;
+  color: var(--color-muted);
+  font-size: 0.75rem;
+  line-height: 1rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cash-task-card__stat strong {
+  font-size: 0.9375rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.25rem;
+  white-space: nowrap;
+}
+.cash-task-card__stat small {
+  color: #b45309;
+  font-size: 0.6875rem;
+  line-height: 0.875rem;
+}
+.cash-task-card__editor {
+  display: grid;
+  align-items: end;
+  gap: 0.625rem;
+  padding: 0.75rem;
+  border-radius: 0.75rem;
+  background: var(--color-surface-muted);
+}
+.cash-task-card__editor--amount-only {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+.cash-task-card__editor--correction {
+  grid-template-columns: minmax(0, 10rem) minmax(0, 1fr) auto;
+}
+.cash-task-card__amount {
+  min-width: 0;
+}
+.cash-task-card__report {
+  min-height: 44px;
+  align-items: center;
+}
+.cash-task-card__submit {
+  min-height: 44px;
+  justify-content: center;
+  transition: transform 120ms ease;
+}
+.cash-task-card__submit:active {
+  transform: scale(0.96);
+}
 @media (min-width: 640px) {
   .work-directions-action {
     justify-content: flex-start;
@@ -4705,6 +4813,16 @@ html[dir="rtl"] .dashboard-page-header__actions {
   .work-detail-summary {
     gap: 0.625rem 0.75rem;
     padding: 0.875rem;
+  }
+  .cash-task-card {
+    gap: 0.75rem;
+    padding: 0.875rem;
+  }
+  .cash-task-card__editor--correction {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .cash-task-card__editor--correction .cash-task-card__amount {
+    grid-column: 1 / -1;
   }
   .work-progress-form {
     gap: 0.75rem;

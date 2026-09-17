@@ -216,4 +216,5 @@
   ,"taskProblem": { "open": "Перейти к проблеме" }
   ,"taskReview": { "resolved": "Решено", "closed": "Закрыто", "returnToWork": "Вернуть в работу", "close": "Закрыть", "resolvedNotice": "Задача отмечена как решённая", "closedNotice": "Задача закрыта" }
   ,"taskNotice": { "saved": "Изменения сохранены", "completed": "Задача завершена" }
+  ,"cash": { "category": "Наличные", "regularTask": "Обычная задача", "responsible": "Ответственный за наличные", "expected": "Ожидается", "toCollect": "Нужно забрать", "awaitingTransfer": "Ожидает передачи", "received": "Получены", "collected": "Забрано", "receivedByAdmin": "Получено администратором", "difference": "Есть расхождение", "collectedAmount": "Фактически забрано", "receivedAmount": "Фактически получено", "collect": "Наличные забраны", "receive": "Наличные получены", "includeReport": "Учесть в отчёте", "saveCorrection": "Сохранить корректировку", "noTask": "Задача не назначена" }
 }

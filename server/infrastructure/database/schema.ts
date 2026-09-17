@@ -28,9 +28,10 @@ export const hotelStatusEnum = pgEnum('hotel_status', ['active', 'archived'])
 export const apartmentStatusEnum = pgEnum('apartment_status', ['active', 'inactive', 'archived'])
 export const cleaningStatusEnum = pgEnum('cleaning_status', ['unassigned', 'assigned', 'in_progress', 'completed', 'canceled'])
 export const taskStatusEnum = pgEnum('task_status', ['open', 'in_progress', 'resolved', 'completed', 'canceled'])
+export const taskCategoryEnum = pgEnum('task_category', ['general', 'cash'])
 export const taskPriorityEnum = pgEnum('task_priority', ['low', 'normal', 'high', 'urgent'])
 export const inventoryMovementEnum = pgEnum('inventory_movement', ['replenishment', 'usage', 'adjustment_in', 'adjustment_out'])
-export const financialEntryTypeEnum = pgEnum('financial_entry_type', ['cleaning_charge', 'inventory_charge', 'task_charge', 'guest_service_charge', 'compensation', 'manual_expense'])
+export const financialEntryTypeEnum = pgEnum('financial_entry_type', ['cleaning_charge', 'inventory_charge', 'task_charge', 'guest_service_charge', 'compensation', 'manual_expense', 'cash_receipt'])
 export const visibilityEnum = pgEnum('entry_visibility', ['administrator', 'manager'])
 export const notificationTypeEnum = pgEnum('notification_type', ['stay_changed', 'work_assigned', 'work_rescheduled', 'work_canceled', 'problem', 'manager_expense_report_published', 'cleaning_changed', 'task_resolved', 'task_returned'])
 export const managerExpenseCategoryEnum = pgEnum('manager_expense_category', ['cleaning', 'inventory', 'task', 'other'])
@@ -245,6 +246,7 @@ export const tasks = pgTable('tasks', {
   createdById: uuid('created_by_id').notNull().references(() => users.id),
   assigneeId: uuid('assignee_id').references(() => users.id),
   problemId: uuid('problem_id').references(() => cleaningProblems.id, { onDelete: 'set null' }),
+  category: taskCategoryEnum('category').notNull().default('general'),
   title: text('title').notNull(),
   description: text('description').notNull().default(''),
   priority: taskPriorityEnum('priority').notNull().default('normal'),
@@ -264,6 +266,29 @@ export const tasks = pgTable('tasks', {
   index('task_operational_list_idx').on(table.organizationId, table.status, table.dueOn),
   index('task_assignee_operational_list_idx').on(table.organizationId, table.assigneeId, table.status, table.dueOn),
   index('task_problem_idx').on(table.problemId)
+])
+
+export const cashTaskDetails = pgTable('cash_task_details', {
+  taskId: uuid('task_id').primaryKey().references(() => tasks.id, { onDelete: 'cascade' }),
+  organizationId: uuid('organization_id').notNull().references(() => organizations.id),
+  stayId: uuid('stay_id').references(() => stays.id, { onDelete: 'set null' }),
+  cleaningId: uuid('cleaning_id').references(() => cleanings.id, { onDelete: 'set null' }),
+  expectedAmountEur: numeric('expected_amount_eur', { precision: 12, scale: 2, mode: 'number' }).notNull(),
+  collectedAmountEur: numeric('collected_amount_eur', { precision: 12, scale: 2, mode: 'number' }),
+  collectedById: uuid('collected_by_id').references(() => users.id, { onDelete: 'set null' }),
+  collectedAt: timestamp('collected_at', { withTimezone: true }),
+  receivedAmountEur: numeric('received_amount_eur', { precision: 12, scale: 2, mode: 'number' }),
+  receivedById: uuid('received_by_id').references(() => users.id, { onDelete: 'set null' }),
+  receivedAt: timestamp('received_at', { withTimezone: true }),
+  reportIncluded: boolean('report_included').notNull().default(true),
+  reportOccurredOn: date('report_occurred_on'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+}, table => [
+  uniqueIndex('cash_task_cleaning_unique').on(table.cleaningId).where(sql`${table.cleaningId} IS NOT NULL`),
+  index('cash_task_org_stage_idx').on(table.organizationId, table.collectedAt, table.receivedAt),
+  index('cash_task_stay_idx').on(table.stayId),
+  check('cash_task_amounts_nonnegative', sql`${table.expectedAmountEur} >= 0 AND (${table.collectedAmountEur} IS NULL OR ${table.collectedAmountEur} >= 0) AND (${table.receivedAmountEur} IS NULL OR ${table.receivedAmountEur} >= 0)`)
 ])
 
 export const consumables = pgTable('consumables', {
@@ -410,6 +435,8 @@ export const managerExpenseReportLines = pgTable('manager_expense_report_lines',
   amountEur: numeric('amount_eur', { precision: 12, scale: 2, mode: 'number' }).notNull(),
   included: boolean('included').notNull().default(true),
   problemId: uuid('problem_id').references(() => cleaningProblems.id, { onDelete: 'set null' }),
+  sourceType: text('source_type'),
+  sourceId: uuid('source_id'),
   position: integer('position').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 }, table => [index('manager_expense_report_line_order_idx').on(table.reportId, table.category, table.position)])
@@ -548,7 +575,15 @@ export const tasksRelations = relations(tasks, ({ one }) => ({
   apartment: one(apartments, { fields: [tasks.apartmentId], references: [apartments.id] }),
   assignee: one(users, { fields: [tasks.assigneeId], references: [users.id], relationName: 'taskAssignee' }),
   createdBy: one(users, { fields: [tasks.createdById], references: [users.id], relationName: 'taskCreator' }),
-  problem: one(cleaningProblems, { fields: [tasks.problemId], references: [cleaningProblems.id], relationName: 'problemSolutionTask' })
+  problem: one(cleaningProblems, { fields: [tasks.problemId], references: [cleaningProblems.id], relationName: 'problemSolutionTask' }),
+  cash: one(cashTaskDetails)
+}))
+export const cashTaskDetailsRelations = relations(cashTaskDetails, ({ one }) => ({
+  task: one(tasks, { fields: [cashTaskDetails.taskId], references: [tasks.id] }),
+  stay: one(stays, { fields: [cashTaskDetails.stayId], references: [stays.id] }),
+  cleaning: one(cleanings, { fields: [cashTaskDetails.cleaningId], references: [cleanings.id] }),
+  collectedBy: one(users, { fields: [cashTaskDetails.collectedById], references: [users.id], relationName: 'cashCollector' }),
+  receivedBy: one(users, { fields: [cashTaskDetails.receivedById], references: [users.id], relationName: 'cashReceiver' })
 }))
 export const consumablesRelations = relations(consumables, ({ many }) => ({ apartmentStocks: many(apartmentConsumables), apartmentTypeWriteOffs: many(apartmentTypeConsumableWriteOffs) }))
 export const apartmentTypeConsumableWriteOffsRelations = relations(apartmentTypeConsumableWriteOffs, ({ one }) => ({

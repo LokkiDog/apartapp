@@ -140,4 +140,5 @@
   ,"taskProblem": { "open": "מעבר לבעיה" }
   ,"taskReview": { "resolved": "נפתרה", "closed": "נסגרה", "returnToWork": "החזרה לביצוע", "close": "סגור", "resolvedNotice": "המשימה סומנה כנפתרה", "closedNotice": "המשימה נסגרה" }
   ,"taskNotice": { "saved": "השינויים נשמרו", "completed": "המשימה הושלמה" }
+  ,"cash": { "category": "מזומן", "regularTask": "משימה רגילה", "responsible": "אחראי למזומן", "expected": "צפוי", "toCollect": "לאסוף", "awaitingTransfer": "ממתין להעברה", "received": "התקבל", "collected": "נאסף", "receivedByAdmin": "התקבל על ידי מנהל", "difference": "נמצא פער", "collectedAmount": "סכום שנאסף", "receivedAmount": "סכום שהתקבל", "collect": "המזומן נאסף", "receive": "המזומן התקבל", "includeReport": "לכלול בדוח", "saveCorrection": "שמירת תיקון", "noTask": "לא הוקצתה משימה" }
 }

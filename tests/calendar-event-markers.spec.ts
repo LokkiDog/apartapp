@@ -72,7 +72,7 @@ describe('calendar arrival and departure markers', () => {
     expect(popover).toContain('showCleaningMarker: true')
     expect(popover).toContain('showServiceIcons: true')
     expect(popover).toContain('v-if="canManageCleaning && showCleaningMarker"')
-    expect(popover).toContain('<StayServiceIcons v-if="showServiceIcons" :services="stay.services" />')
+    expect(popover).toContain('<StayServiceIcons v-if="showServiceIcons" :services="stay.services" :cash-amount-eur="stay.cashAmountEur" :cash-task-state="stay.cashTaskState" />')
   })
 
   it('restores and persists the selected calendar event mode', () => {

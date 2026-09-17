@@ -23,7 +23,7 @@ async function getManagerTeamSnapshot(organizationId: string, apartmentId: strin
 }
 
 export async function createFinancialEntry(input: {
-  organizationId: string; apartmentId: string; type: 'cleaning_charge' | 'inventory_charge' | 'task_charge' | 'guest_service_charge' | 'compensation' | 'manual_expense'; visibility: 'administrator' | 'manager'; amountEur: number; occurredOn: string; description: string; sourceType: string; sourceId: string; createdById: string; problemId?: string | null
+  organizationId: string; apartmentId: string; type: 'cleaning_charge' | 'inventory_charge' | 'task_charge' | 'guest_service_charge' | 'compensation' | 'manual_expense' | 'cash_receipt'; visibility: 'administrator' | 'manager'; amountEur: number; occurredOn: string; description: string; sourceType: string; sourceId: string; createdById: string; problemId?: string | null
 }, database: typeof db = db) {
   const apartment = await database.query.apartments.findFirst({ where: and(eq(apartments.id, input.apartmentId), eq(apartments.organizationId, input.organizationId)) })
   if (!apartment) throw createError({ statusCode: 404, statusMessage: 'Апартамент не найден' })
@@ -43,7 +43,7 @@ function sort(lines: Line[]) { return [...lines].sort((left, right) => order.ind
 async function automaticLines(organizationId: string, apartmentId: string, month: string): Promise<Line[]> {
   const { start, end } = range(month)
   const entries = await db.select({ id: financialEntries.id, type: financialEntries.type, description: financialEntries.description, occurredOn: financialEntries.occurredOn, amountEur: financialEntries.amountEur, problemId: financialEntries.problemId })
-    .from(financialEntries).where(and(eq(financialEntries.organizationId, organizationId), eq(financialEntries.apartmentId, apartmentId), inArray(financialEntries.type, ['cleaning_charge', 'inventory_charge', 'task_charge', 'manual_expense']), gte(financialEntries.occurredOn, start), lt(financialEntries.occurredOn, end)))
+    .from(financialEntries).where(and(eq(financialEntries.organizationId, organizationId), eq(financialEntries.apartmentId, apartmentId), eq(financialEntries.visibility, 'manager'), inArray(financialEntries.type, ['cleaning_charge', 'inventory_charge', 'task_charge', 'manual_expense', 'cash_receipt']), gte(financialEntries.occurredOn, start), lt(financialEntries.occurredOn, end)))
     .orderBy(asc(financialEntries.occurredOn), asc(financialEntries.createdAt))
   const lines: Line[] = []
   let position = 0
@@ -63,6 +63,31 @@ async function automaticLines(organizationId: string, apartmentId: string, month
     lines.push({ id: `problem-${problem.id}`, category: 'task', description: problem.description, occurredOn, amountEur, position: position++, included: Boolean(problem.resolvedAt), problemId: problem.id })
   }
   return sort(lines)
+}
+
+/** Keeps a stored monthly report in sync without replacing its manually edited lines. */
+export async function syncCashReceiptReport(input: { organizationId: string, apartmentId: string, taskId: string, occurredOn: string, amountEur: number, included: boolean }) {
+  const month = input.occurredOn.slice(0, 7)
+  const report = await storedReport(input.organizationId, input.apartmentId, month)
+  if (!report) return
+  await db.transaction(async tx => {
+    const existing = await tx.query.managerExpenseReportLines.findFirst({ where: and(
+      eq(managerExpenseReportLines.reportId, report.id),
+      or(
+        and(eq(managerExpenseReportLines.sourceType, 'cash_task'), eq(managerExpenseReportLines.sourceId, input.taskId)),
+        and(eq(managerExpenseReportLines.category, 'other'), eq(managerExpenseReportLines.description, 'Наличные'), eq(managerExpenseReportLines.occurredOn, input.occurredOn), eq(managerExpenseReportLines.amountEur, -Math.abs(input.amountEur)))
+      )
+    ) })
+    if (!input.included) {
+      if (existing) await tx.delete(managerExpenseReportLines).where(eq(managerExpenseReportLines.id, existing.id))
+    } else if (existing) {
+      await tx.update(managerExpenseReportLines).set({ category: 'other', description: 'Наличные', occurredOn: input.occurredOn, amountEur: -Math.abs(input.amountEur), sourceType: 'cash_task', sourceId: input.taskId }).where(eq(managerExpenseReportLines.id, existing.id))
+    } else {
+      const position = report.lines.reduce((max, line) => Math.max(max, line.position), -1) + 1
+      await tx.insert(managerExpenseReportLines).values({ reportId: report.id, category: 'other', description: 'Наличные', occurredOn: input.occurredOn, amountEur: -Math.abs(input.amountEur), included: true, position, sourceType: 'cash_task', sourceId: input.taskId })
+    }
+    if (report.publishedAt) await tx.update(managerExpenseReports).set({ publishedAt: null, publishedById: null, updatedAt: new Date() }).where(eq(managerExpenseReports.id, report.id))
+  })
 }
 
 async function apartmentForReport(actor: Actor, apartmentId: string) {

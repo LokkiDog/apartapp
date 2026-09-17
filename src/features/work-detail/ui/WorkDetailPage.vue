@@ -5,7 +5,7 @@ import type { Task } from '#fsd/entities/task'
 import { useCurrentUser } from '#fsd/shared/auth'
 import { formatDate, formatDateTime, formatEuro } from '#fsd/shared/lib'
 import { useI18n } from 'vue-i18n'
-import { ConfirmActionModal, DeleteConfirmModal, EmptyState, PageHeader, StatusBadge } from '#fsd/shared/ui'
+import { ConfirmActionModal, DeleteConfirmModal, EmptyState, MoneyInput, PageHeader, StatusBadge } from '#fsd/shared/ui'
 import { WorkProgressForm } from '#fsd/features/work-progress'
 import { useCleaningRealtimeState, useTaskRealtimeState } from '#fsd/shared/realtime'
 
@@ -65,6 +65,16 @@ const backLabel = computed(() => cameFromInventory.value ? t('inventoryDiscrepan
 
 const cleaning = computed(() => props.kind === 'cleaning' ? work.value as Cleaning | null : null)
 const task = computed(() => props.kind === 'task' ? work.value as Task | null : null)
+const isCashTask = computed(() => task.value?.category === 'cash' && Boolean(task.value.cash))
+const collectedAmount = ref<number | null>(null)
+const receivedAmount = ref<number | null>(null)
+const reportIncluded = ref(true)
+watch(task, value => {
+  if (!value?.cash) return
+  collectedAmount.value = value.cash.collectedAmountEur ?? value.cash.expectedAmountEur
+  receivedAmount.value = value.cash.receivedAmountEur ?? value.cash.collectedAmountEur ?? value.cash.expectedAmountEur
+  reportIncluded.value = value.cash.reportIncluded
+}, { immediate: true })
 const linenPlan = computed(() => cleaning.value?.linenPlan ?? null)
 const linenGuestCountLabel = computed(() => {
   const count = linenPlan.value?.current.guestCount ?? 0
@@ -101,6 +111,22 @@ const canManage = computed(() => isAdministrator.value)
 const canUpdateLinen = computed(() => Boolean(cleaning.value && (isAdministrator.value || isSpecialist.value || assignedToCurrent.value)))
 const statusLabels = computed<Record<string, string>>(() => ({ unassigned: t('work.statusUnassigned'), assigned: t('work.statusAssigned'), in_progress: t('work.statusProgress'), resolved: t('taskReview.resolved'), completed: props.kind === 'task' ? t('taskReview.closed') : t('work.statusCompleted'), canceled: t('work.statusCanceled'), open: t('work.statusOpen') }))
 const statusTones: Record<string, 'neutral' | 'success' | 'warning' | 'danger' | 'info'> = { unassigned: 'warning', assigned: 'info', in_progress: 'warning', resolved: 'warning', completed: 'success', canceled: 'neutral', open: 'info' }
+
+async function collectCash() {
+  if (collectedAmount.value === null) return
+  pending.value = true; error.value = ''
+  try { await $fetch(`/api/tasks/${id}/cash/collect`, { method: 'POST', body: { amountEur: collectedAmount.value } }); await refresh() } catch (cause: any) { error.value = cause?.data?.statusMessage ?? t('common.error') } finally { pending.value = false }
+}
+async function receiveCash() {
+  if (receivedAmount.value === null) return
+  pending.value = true; error.value = ''
+  try { await $fetch(`/api/tasks/${id}/cash/receive`, { method: 'POST', body: { amountEur: receivedAmount.value } }); await refresh() } catch (cause: any) { error.value = cause?.data?.statusMessage ?? t('common.error') } finally { pending.value = false }
+}
+async function correctCash() {
+  if (receivedAmount.value === null) return
+  pending.value = true; error.value = ''
+  try { await $fetch(`/api/tasks/${id}/cash`, { method: 'PATCH', body: { amountEur: receivedAmount.value, reportIncluded: reportIncluded.value } }); await refresh() } catch (cause: any) { error.value = cause?.data?.statusMessage ?? t('common.error') } finally { pending.value = false }
+}
 
 watch(cleaningRealtime.revision, async () => {
   if (props.kind !== 'cleaning') return
@@ -331,11 +357,48 @@ function requestComplete() {
         </div>
         <div v-if="props.kind === 'cleaning' && hotelLocation" class="work-directions-action col-span-full"><UButton color="primary" variant="link" class="work-directions-action__button" @click="directionsOpen = true">{{ t('directions.title') }}</UButton></div>
       </section>
+      <section v-if="isCashTask && task?.cash" class="cash-task-card surface">
+        <header class="cash-task-card__header">
+          <span class="cash-task-card__icon" aria-hidden="true"><UIcon name="i-lucide-banknote" /></span>
+          <p class="cash-task-card__title">{{ t('cash.category') }}</p>
+          <StatusBadge class="cash-task-card__status" :label="task.status === 'resolved' ? t('cash.awaitingTransfer') : task.status === 'completed' ? t('cash.received') : t('cash.toCollect')" :tone="task.status === 'completed' ? 'success' : 'warning'" />
+        </header>
+        <div class="cash-task-card__summary">
+          <div class="cash-task-card__stat">
+            <span>{{ t('cash.expected') }}</span>
+            <strong>{{ formatEuro(task.cash.expectedAmountEur) }}</strong>
+          </div>
+          <div v-if="task.cash.collectedAt" class="cash-task-card__stat">
+            <span>{{ t('cash.collected') }}</span>
+            <strong>{{ formatEuro(task.cash.collectedAmountEur ?? 0) }}</strong>
+            <small v-if="task.cash.collectedAmountEur !== task.cash.expectedAmountEur">{{ t('cash.difference') }}</small>
+          </div>
+          <div v-if="task.cash.receivedAt" class="cash-task-card__stat">
+            <span>{{ t('cash.received') }}</span>
+            <strong>{{ formatEuro(task.cash.receivedAmountEur ?? 0) }}</strong>
+            <small v-if="task.cash.receivedAmountEur !== task.cash.collectedAmountEur">{{ t('cash.difference') }}</small>
+          </div>
+        </div>
+        <div v-if="['open', 'in_progress'].includes(task.status) && (isAdministrator || assignedToCurrent)" class="cash-task-card__editor cash-task-card__editor--amount-only">
+          <UFormField class="cash-task-card__amount" :label="t('cash.collectedAmount')"><MoneyInput v-model="collectedAmount" /></UFormField>
+          <UButton icon="i-lucide-check" class="cash-task-card__submit" :loading="pending" @click="collectCash">{{ t('cash.collect') }}</UButton>
+        </div>
+        <div v-else-if="task.status === 'resolved' && isAdministrator" class="cash-task-card__editor cash-task-card__editor--amount-only">
+          <UFormField class="cash-task-card__amount" :label="t('cash.receivedAmount')"><MoneyInput v-model="receivedAmount" /></UFormField>
+          <UButton icon="i-lucide-check" class="cash-task-card__submit" :loading="pending" @click="receiveCash">{{ t('cash.receive') }}</UButton>
+        </div>
+        <div v-else-if="task.status === 'completed' && isAdministrator" class="cash-task-card__editor cash-task-card__editor--correction">
+          <UFormField class="cash-task-card__amount" :label="t('cash.received')"><MoneyInput v-model="receivedAmount" /></UFormField>
+          <UCheckbox v-model="reportIncluded" class="cash-task-card__report" :label="t('cash.includeReport')" />
+          <UButton color="neutral" variant="soft" icon="i-lucide-check" class="cash-task-card__submit" :aria-label="t('cash.saveCorrection')" :loading="pending" @click="correctCash">{{ t('common.save') }}</UButton>
+        </div>
+        <UAlert v-if="error" color="error" variant="soft" :description="error" />
+      </section>
       <div v-if="showCleaningAcceptance || canStartCleaning" class="work-detail-mobile-cleaning-action sm:hidden">
         <UButton v-if="showCleaningAcceptance" class="min-h-11 w-full justify-center" color="warning" :loading="acceptancePending" @click="acceptAssignedCleaning">{{ t('work.acceptCleaning') }}</UButton>
         <UButton v-else class="min-h-11 w-full justify-center" icon="i-lucide-play" :loading="startPending" @click="startAssignedCleaning">{{ t('work.startCleaning') }}</UButton>
       </div>
-      <WorkProgressForm :key="`${work.id}-${attachments.length}`" :kind="props.kind" :checklist="work.checklist" :comment="work.comment" :has-problem="work.hasProblem" :problem-description="work.problemDescription" :problem-details="taskProblemDetails" :owner-cost-eur="task?.ownerCostEur" :problems="cleaning?.problems ?? []" :inventory-reports="inventoryReports" :attachments="attachments" :focus-consumable-id="focusConsumableId" :editable="canProgress" :inventory-editable="inventoryEditable" :can-approve-inventory-discrepancy="inventoryEditable" :show-checklist="props.kind === 'task' || !isSpecialist" :show-inventory="props.kind !== 'cleaning' || !isSpecialist" :can-complete="canComplete" :complete-label="props.kind === 'task' ? taskCompleteLabel : undefined" :save-icon-only="props.kind === 'task' && task?.status === 'resolved'" :save-position="props.kind === 'task' && task?.status === 'resolved' ? 'left' : 'primary'" :center-actions="props.kind === 'task' && isAdministrator && task?.status === 'resolved'" :busy="pending" :error="error" :finish-hint="finishHint" @save="payload => saveProgress(payload)" @complete="payload => saveProgress(payload, true)" @save-inventory="saveInventoryOnly" @approve-inventory-discrepancy="requestInventoryDiscrepancyApproval">
+      <WorkProgressForm :key="`${work.id}-${attachments.length}`" :kind="props.kind" :checklist="work.checklist" :comment="work.comment" :has-problem="work.hasProblem" :problem-description="work.problemDescription" :problem-details="taskProblemDetails" :owner-cost-eur="task?.ownerCostEur" :problems="cleaning?.problems ?? []" :inventory-reports="inventoryReports" :attachments="attachments" :focus-consumable-id="focusConsumableId" :editable="isCashTask ? !['completed', 'canceled'].includes(work.status) && (isAdministrator || assignedToCurrent) : canProgress" :inventory-editable="inventoryEditable" :can-approve-inventory-discrepancy="inventoryEditable" :show-checklist="props.kind === 'task' || !isSpecialist" :show-inventory="isCashTask ? false : props.kind !== 'cleaning' || !isSpecialist" :can-complete="isCashTask ? false : canComplete" :complete-label="props.kind === 'task' ? taskCompleteLabel : undefined" :save-icon-only="props.kind === 'task' && task?.status === 'resolved'" :save-position="props.kind === 'task' && task?.status === 'resolved' ? 'left' : 'primary'" :center-actions="props.kind === 'task' && isAdministrator && task?.status === 'resolved'" :busy="pending" :error="error" :finish-hint="finishHint" @save="payload => saveProgress(payload)" @complete="payload => saveProgress(payload, true)" @save-inventory="saveInventoryOnly" @approve-inventory-discrepancy="requestInventoryDiscrepancyApproval">
         <template v-if="props.kind === 'cleaning' && canUpdateLinen" #after-checklist>
           <section class="progress-section">
             <UCheckbox :model-value="cleaning?.linenCollected" :label="t('work.linenCollected')" class="min-h-11 items-center font-medium" @update:model-value="updateLinen($event === true)" />
@@ -355,10 +418,10 @@ function requestComplete() {
         <template v-if="props.kind === 'task' && canManage" #before-actions>
           <div class="work-detail-manage-actions work-detail-manage-actions--task">
             <div class="work-detail-manage-actions__start">
-              <UButton v-if="isAdministrator" type="button" color="error" variant="soft" icon="i-lucide-trash-2" class="work-detail-manage-action" :aria-label="t('work.delete')" @click="deleteOpen = true" />
-              <UButton v-if="!['completed', 'canceled'].includes(work.status)" type="button" color="neutral" variant="soft" icon="i-lucide-ban" class="work-detail-manage-action" :aria-label="t('work.cancelTask')" @click="cancelTask" />
+              <UButton v-if="isAdministrator && (!isCashTask || !task?.cash?.collectedAt)" type="button" color="error" variant="soft" icon="i-lucide-trash-2" class="work-detail-manage-action" :aria-label="t('work.delete')" @click="deleteOpen = true" />
+              <UButton v-if="!isCashTask && !['completed', 'canceled'].includes(work.status)" type="button" color="neutral" variant="soft" icon="i-lucide-ban" class="work-detail-manage-action" :aria-label="t('work.cancelTask')" @click="cancelTask" />
             </div>
-            <UButton :to="taskEditHref" color="neutral" variant="soft" icon="i-lucide-pencil" class="work-detail-manage-action" :aria-label="t('work.editTask')" />
+            <UButton v-if="!isCashTask" :to="taskEditHref" color="neutral" variant="soft" icon="i-lucide-pencil" class="work-detail-manage-action" :aria-label="t('work.editTask')" />
           </div>
         </template>
       </WorkProgressForm>

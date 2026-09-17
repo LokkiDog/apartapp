@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { apartmentInputSchema, apartmentTypeInputSchema, apartmentUpdateSchema, buildCleaningChecklist, cleaningAssignmentInputSchema, cleaningInputSchema, cleaningRouteUpdateSchema, cleaningTariffOverrideSchema, cleaningUpdateSchema, completionInputSchema, consumableInputSchema, hotelInputSchema, hotelReverseGeocodeQuerySchema, isApartmentOwnerEligible, specialServiceInputSchema, stayInputSchema, stayListQuerySchema, taskCompletionInputSchema, taskInputSchema, taskWorkProgressInputSchema, workProgressInputSchema } from '../shared/contracts/crm'
+import { apartmentInputSchema, apartmentTypeInputSchema, apartmentUpdateSchema, buildCleaningChecklist, cashTaskCollectSchema, cashTaskCorrectionSchema, cashTaskReceiveSchema, cashTaskInputSchema, cleaningAssignmentInputSchema, cleaningInputSchema, cleaningRouteUpdateSchema, cleaningTariffOverrideSchema, cleaningUpdateSchema, completionInputSchema, consumableInputSchema, hotelInputSchema, hotelReverseGeocodeQuerySchema, isApartmentOwnerEligible, specialServiceInputSchema, stayInputSchema, stayListQuerySchema, taskCompletionInputSchema, taskInputSchema, taskWorkProgressInputSchema, workProgressInputSchema } from '../shared/contracts/crm'
 import { formatEuroInput, parseEuroInput } from '../src/shared/lib/money'
 import { apartmentCalendarColor } from '../src/shared/lib/calendar'
 import { calculateFifoUsage } from '../server/modules/inventory/fifo'
@@ -79,6 +79,16 @@ describe('CRM contracts', () => {
     expect(specialServiceInputSchema.safeParse({ name: 'Трансфер', priceEur: 20, managerSharePercent: 25, iconName: specialServiceIconOptions[1].name }).success).toBe(true)
     expect(specialServiceInputSchema.safeParse({ name: 'Трансфер', priceEur: 20, managerSharePercent: 25, iconName: 'i-lucide-not-a-real-icon' }).success).toBe(false)
     expect(specialServiceInputSchema.safeParse({ name: 'Поздний выезд', priceEur: 20, managerSharePercent: 101 }).success).toBe(false)
+  })
+
+  it('requires complete cash-task data and nonnegative collection amounts', () => {
+    const base = { apartmentId: '00000000-0000-4000-8000-000000000001', assigneeId: '00000000-0000-4000-8000-000000000002', title: 'Получить наличные', category: 'cash' as const, dueOn: '2026-01-03', expectedAmountEur: 25, reportIncluded: true }
+    expect(cashTaskInputSchema.safeParse(base).success).toBe(true)
+    expect(cashTaskInputSchema.safeParse({ ...base, assigneeId: undefined }).success).toBe(false)
+    expect(cashTaskInputSchema.safeParse({ ...base, dueOn: undefined }).success).toBe(false)
+    expect(cashTaskCollectSchema.safeParse({ amountEur: 24.5 }).success).toBe(true)
+    expect(cashTaskReceiveSchema.safeParse({ amountEur: -1 }).success).toBe(false)
+    expect(cashTaskCorrectionSchema.safeParse({}).success).toBe(false)
   })
 
   it('provides an expanded unique service icon catalogue', () => {
