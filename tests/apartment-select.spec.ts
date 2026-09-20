@@ -15,18 +15,18 @@ describe('apartment selection', () => {
   it('uses a shared searchable menu for every single-apartment control', () => {
     const component = readFileSync('src/features/select-apartment/ui/ApartmentSelect.vue', 'utf8')
     expect(component).toContain('<USelectMenu')
-    expect(component).toContain(':filter-fields="[\'label\', \'search\']"')
-    expect(component).toContain("t('common.searchApartment')")
-    expect(component).toContain("t('common.noApartmentsFound')")
-    expect(component).toContain("type: 'label' as const")
+    expect(component).toMatch(/:filter-fields="\[['"]label['"], ['"]search['"]\]"/)
+    expect(component).toMatch(/t\(['"]common\.searchApartment['"]\)/)
+    expect(component).toMatch(/t\(['"]common\.noApartmentsFound['"]\)/)
+    expect(component).toMatch(/type: ['"]label['"] as const/)
     expect(component).toContain('label: apartment.name')
-    expect(component).toContain('return prependGroup.length ? [prependGroup, ...apartmentGroups] : apartmentGroups')
-    expect(component).toContain("new Intl.Collator(locale.value, { numeric: true, sensitivity: 'base' })")
+    expect(component).toMatch(/return prependGroup\.length\s*\? \[prependGroup, \.\.\.apartmentGroups\]\s*: apartmentGroups/)
+    expect(component).toMatch(/new Intl\.Collator\(locale\.value, \{ numeric: true, sensitivity: ['"]base['"] \}\)/)
     expect(component).toContain('selectedLabel(selectedValue)')
-    expect(component).toContain('return apartment?.name ?? \'\'')
+    expect(component).toMatch(/return apartment\?\.name \?\? ['"]['"]/)
     expect(component).not.toContain('`${apartment.name} · ${apartment.hotel.name}`')
-    expect(component).toContain("label: 'sticky top-0 z-[1] bg-default")
-    expect(component).toContain("value: 'w-full min-w-0 text-start'")
+    expect(component).toMatch(/label:\s*['"]sticky top-0 z-\[1\] bg-default/)
+    expect(component).toMatch(/value: ['"]w-full min-w-0 text-start['"]/)
 
     for (const path of [
       'src/features/manage-cleaning/ui/CleaningFormSlideover.vue',
