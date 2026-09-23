@@ -122,6 +122,9 @@ describe('CRM contracts', () => {
   it('validates combined cleaning updates', () => {
     const tariff = { cleanerPoolEur: 5, laundryEur: 4, serviceEur: 3 }
     const cleanerId = '00000000-0000-4000-8000-000000000001'
+    const update = { ...tariff, cleanerIds: [cleanerId], scheduledOn: '2026-01-10' }
+    expect(cleaningUpdateSchema.parse({ ...update, assignmentComment: '  Взять ключ на ресепшене  ' }).assignmentComment).toBe('Взять ключ на ресепшене')
+    expect(cleaningUpdateSchema.safeParse({ ...update, assignmentComment: 'а'.repeat(2001) }).success).toBe(false)
     expect(cleaningUpdateSchema.safeParse({ ...tariff, cleanerIds: [], scheduledOn: null }).success).toBe(false)
     expect(cleaningUpdateSchema.safeParse({ ...tariff, cleanerIds: [cleanerId], scheduledOn: '2026-01-10' }).success).toBe(true)
     expect(cleaningUpdateSchema.safeParse({ ...tariff, cleanerIds: [cleanerId], scheduledOn: null }).success).toBe(false)

@@ -334,22 +334,33 @@ function requestComplete() {
           <UButton v-else-if="canStartCleaning" class="hidden sm:inline-flex" icon="i-lucide-play" :loading="startPending" @click="startAssignedCleaning">{{ t('work.startCleaning') }}</UButton>
         </template>
       </PageHeader>
-      <section class="work-detail-summary surface grid grid-cols-2 gap-x-4 gap-y-5 p-5 sm:grid-cols-3 sm:p-6">
+      <section class="work-detail-summary surface grid grid-cols-2 gap-x-4 gap-y-5 p-5 sm:p-6" :class="props.kind === 'cleaning' ? 'sm:grid-cols-2' : 'sm:grid-cols-3'">
         <div><p class="detail-label">{{ t('work.date') }}</p><p class="font-semibold">{{ 'scheduledOn' in work ? formatDate(work.scheduledOn) : task?.dueOn ? formatDate(task.dueOn) : t('work.noDeadline') }}</p></div>
         <div><p class="detail-label">{{ t('work.assignee') }}</p><p class="font-semibold">{{ props.kind === 'cleaning' ? cleanerNames() : task?.assignee?.name ?? t('work.notAssigned') }}</p></div>
-        <div><p class="detail-label">{{ t('work.apartment') }}</p><p class="font-semibold">{{ work.apartment.name }}</p></div>
+        <div v-if="props.kind === 'task'"><p class="detail-label">{{ t('work.apartment') }}</p><p class="font-semibold">{{ work.apartment.name }}</p></div>
         <div v-if="props.kind === 'task' && isAdministrator && task?.problemId" class="col-span-full">
           <p class="detail-label">{{ t('problems.linkedProblem') }}</p>
           <UButton :to="`/problems?problemId=${encodeURIComponent(task.problemId)}`" color="neutral" variant="soft" class="mt-1 min-h-11 active:scale-[0.96] transition-transform">{{ t('taskProblem.open') }}</UButton>
         </div>
         <div v-if="props.kind === 'cleaning' && cleaning?.startedAt"><p class="detail-label">{{ t('work.startedAt') }}</p><p class="font-semibold">{{ formatDateTime(cleaning.startedAt) }}</p></div>
         <div v-if="props.kind === 'cleaning' && cleaning?.completedAt"><p class="detail-label">{{ t('work.completedAt') }}</p><p class="font-semibold">{{ formatDateTime(cleaning.completedAt) }}</p></div>
-        <div v-if="props.kind === 'cleaning' && cleaning?.apartment.instructions.trim()" class="col-span-2 sm:col-span-3">
-          <p class="detail-label">{{ t('apartments.instructions') }}</p>
-          <p class="mt-1 whitespace-pre-line break-words text-sm leading-5 text-[var(--color-muted)]">{{ cleaning.apartment.instructions }}</p>
+        <div v-if="props.kind === 'cleaning'" class="work-detail-summary__cleaning-fields">
+          <div class="min-w-0 space-y-2.5 sm:space-y-5">
+            <div><p class="detail-label">{{ t('work.apartment') }}</p><p class="font-semibold">{{ work.apartment.name }}</p></div>
+            <div v-if="cleaning?.tariffSnapshot?.ownerTotalEur !== undefined"><p class="detail-label">{{ t('work.cost') }}</p><p class="font-semibold tabular-nums">{{ formatEuro(cleaning.tariffSnapshot.ownerTotalEur) }}</p></div>
+            <div v-if="cleaning?.tariffSnapshot?.cleanerPoolEur !== undefined"><p class="detail-label">{{ t('work.payout') }}</p><p class="font-semibold tabular-nums">{{ formatEuro(cleaning.tariffSnapshot.cleanerPoolEur) }}</p></div>
+          </div>
+          <div class="min-w-0 space-y-2.5 sm:space-y-5">
+            <div v-if="cleaning?.apartment.instructions.trim()">
+              <p class="detail-label">{{ t('apartments.instructions') }}</p>
+              <p class="mt-1 whitespace-pre-line break-words text-sm leading-5 text-[var(--color-muted)]">{{ cleaning.apartment.instructions }}</p>
+            </div>
+            <div v-if="cleaning?.assignmentComment?.trim()">
+              <p class="detail-label">{{ t('work.assignmentComment') }}</p>
+              <p class="mt-1 whitespace-pre-line break-words text-sm leading-5">{{ cleaning.assignmentComment }}</p>
+            </div>
+          </div>
         </div>
-        <div v-if="props.kind === 'cleaning' && cleaning?.tariffSnapshot?.ownerTotalEur !== undefined"><p class="detail-label">{{ t('work.cost') }}</p><p class="font-semibold tabular-nums">{{ formatEuro(cleaning.tariffSnapshot.ownerTotalEur) }}</p></div>
-        <div v-if="props.kind === 'cleaning' && cleaning?.tariffSnapshot?.cleanerPoolEur !== undefined"><p class="detail-label">{{ t('work.payout') }}</p><p class="font-semibold tabular-nums">{{ formatEuro(cleaning.tariffSnapshot.cleanerPoolEur) }}</p></div>
         <div v-if="props.kind === 'cleaning' && linenPlan" class="work-detail-linen-plan" :class="{ 'rounded-xl bg-amber-50 py-4 text-amber-950 dark:bg-amber-950/25 dark:text-amber-50': linenPlan.mismatch }">
           <p class="detail-label">{{ t('work.nextArrival') }}</p>
           <p class="mt-1 font-semibold tabular-nums">{{ linenGuestCountLabel }} · {{ linenPlan.current.source === 'booking' ? formatDate(linenPlan.current.checkInOn!) : t('work.noStay') }}</p>

@@ -8,19 +8,18 @@ import {
   formatEuro,
   useSubmitFormValidation,
 } from "#fsd/shared/lib";
-import { DateInput, MoneyInput } from "#fsd/shared/ui";
+import { DateInput, GroupedUserMultiSelect, MoneyInput } from "#fsd/shared/ui";
 import { useI18n } from "vue-i18n";
 import { buildCleaningChecklist, cleaningInputSchema } from "@contracts/crm";
 
 type ChecklistItem = { label: string; checked: boolean };
-type TeamOption = { label: string; value: string };
-type TeamOptionGroup = Array<TeamOption | { type: "label"; label: string }>;
 export type CleaningDraft = {
   apartmentId: string;
   stayId: string | null;
   cleanerIds: string[];
   cashAssigneeId: string | null;
   scheduledOn: string;
+  assignmentComment: string;
   isUrgent: boolean;
   urgencyOverride: boolean | null;
   cleanerPoolEur: number;
@@ -57,6 +56,7 @@ const form = reactive<CleaningDraft>({
   cleanerIds: [],
   cashAssigneeId: null,
   scheduledOn: "",
+  assignmentComment: "",
   isUrgent: false,
   urgencyOverride: null,
   cleanerPoolEur: 0,
@@ -117,36 +117,10 @@ const availableStays = computed(() =>
       (!stay.cleaning || stay.cleaning.id === props.editingCleaning?.id),
   ),
 );
-const cleanerOptions = computed(() => {
-  const cleaners = props.team
-    .filter((member) => member.roles.includes("cleaner"))
-    .map((member) => ({ label: member.name, value: member.id }));
-  const administrators = props.team
-    .filter(
-      (member) =>
-        member.roles.includes("administrator") &&
-        !member.roles.includes("cleaner"),
-    )
-    .map((member) => ({ label: member.name, value: member.id }));
-  const groups: TeamOptionGroup[] = [];
-  if (cleaners.length)
-    groups.push([
-      { type: "label" as const, label: t("common.cleaners"), value: "__cleaners__" },
-      ...cleaners,
-    ]);
-  if (administrators.length)
-    groups.push([
-      { type: "label" as const, label: t("common.administrators"), value: "__administrators__" },
-      ...administrators,
-    ]);
-  return groups;
-});
-const cleanerSummary = computed(() =>
-  props.team
-    .filter((member) => form.cleanerIds.includes(member.id))
-    .map((member) => member.name)
-    .join(", "),
-);
+const cleanerGroups = computed(() => [
+  { role: 'cleaner', label: t('common.cleaners') },
+  { role: 'administrator', label: t('common.administrators') },
+]);
 const cleanerSelectOpen = ref(false);
 const canChangeContext = computed(
   () =>
@@ -203,6 +177,7 @@ function reset() {
     cleanerIds: cleaning?.assignments.map((item) => item.cleanerId) ?? [],
     cashAssigneeId: cleaning?.cashAssigneeId ?? null,
     scheduledOn: cleaning?.scheduledOn ?? stay?.checkOutOn ?? "",
+    assignmentComment: cleaning?.assignmentComment ?? "",
     isUrgent: cleaning?.isUrgent ?? false,
     urgencyOverride: cleaning?.urgencyOverride ?? null,
     cleanerPoolEur: cleaning?.tariffSnapshot.cleanerPoolEur ?? 0,
@@ -381,48 +356,20 @@ function submit() {
           /></UFormField>
         </div>
         <UFormField name="cleanerIds" :label="t('work.assignee')"
-          ><USelectMenu
+          ><GroupedUserMultiSelect
             v-model="form.cleanerIds"
             v-model:open="cleanerSelectOpen"
-            :items="cleanerOptions as any"
-            value-key="value"
-            multiple
+            :members="team"
+            :groups="cleanerGroups"
             :disabled="!canChangeContext"
-            :search-input="{
-              placeholder: t('common.searchAssignee'),
-              variant: 'none',
-              autofocus: false,
-              ui: { root: 'm-2 w-auto self-stretch' },
-            }"
-            :content="{
-              align: 'start',
-              sideOffset: 8,
-              collisionPadding: 8,
-              bodyLock: true,
-            }"
-            :ui="{
-              base: 'w-full justify-start text-start',
-              content: 'assignee-select-menu',
-              viewport: 'min-h-0 overflow-y-auto overscroll-contain touch-pan-y',
-              item: 'min-h-11 items-center',
-              itemWrapper: 'justify-center',
-              itemTrailing: 'self-center',
-            }"
-            class="w-full"
-            @update:model-value="cleanerSelectOpen = false"
-            ><template #default
-              ><span
-                v-if="cleanerSummary"
-                class="min-w-0 flex-1 truncate text-start"
-                >{{ cleanerSummary }}</span
-              ><span
-                v-else
-                class="flex-1"
-                aria-hidden="true" /></template></USelectMenu
-        ></UFormField>
+            :search-placeholder="t('common.searchAssignee')"
+          /></UFormField>
         <UFormField v-if="needsCashAssignee" name="cashAssigneeId" :label="t('cash.responsible')" required>
           <USelect :model-value="form.cashAssigneeId ?? undefined" :items="cashAssigneeOptions" class="w-full" @update:model-value="form.cashAssigneeId = $event || null" />
           <template #hint><span class="tabular-nums">{{ formatEuro(selectedStay?.cashAmountEur ?? 0) }}</span></template>
+        </UFormField>
+        <UFormField name="assignmentComment" :label="t('work.assignmentComment')" class="col-span-full w-full">
+          <UTextarea v-model="form.assignmentComment" class="w-full" :maxlength="2000" />
         </UFormField>
         <section class="rounded-2xl border border-[var(--color-line)] px-4 py-3">
           <div class="flex items-center justify-between gap-3">

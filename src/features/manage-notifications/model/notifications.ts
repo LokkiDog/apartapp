@@ -6,7 +6,7 @@ let taskRevisionTimer: ReturnType<typeof setTimeout> | null = null
 let pendingCleaningMessage: CleaningChangeMessage | null = null
 let pendingTaskMessage: TaskChangeMessage | null = null
 
-export type NotificationType = 'stay_changed' | 'work_assigned' | 'work_rescheduled' | 'work_canceled' | 'problem' | 'manager_expense_report_published' | 'cleaning_changed'
+export type NotificationType = 'stay_changed' | 'work_assigned' | 'work_rescheduled' | 'work_canceled' | 'problem' | 'manager_expense_report_published' | 'cleaning_changed' | 'task_resolved' | 'task_returned' | 'manual'
 export type { CleaningChangeMessage, TaskChangeMessage } from '#fsd/shared/realtime'
 
 export type NotificationItem = {

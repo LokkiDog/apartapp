@@ -4676,6 +4676,13 @@ html[dir="rtl"] .dashboard-page-header__actions {
   justify-content: center;
   padding: 0px;
 }
+.work-detail-summary__cleaning-fields {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
 .detail-label {
   margin-bottom: 0.25rem;
   color: var(--color-muted);

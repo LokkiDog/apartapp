@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { EmptyState, PageHeader } from '#fsd/shared/ui'
+import { EmptyState, GroupedUserMultiSelect, PageHeader } from '#fsd/shared/ui'
 import { useCurrentUser } from '#fsd/shared/auth'
 import { useNotificationState, type NotificationItem, type NotificationType } from '#fsd/features/manage-notifications'
 import { usePushSubscription } from '#fsd/features/manage-push-subscription'
@@ -8,6 +8,8 @@ import { useI18n } from 'vue-i18n'
 type Notification = NotificationItem
 type Filter = 'all' | 'unread'
 type NotificationPage = { items: Notification[]; nextCursor: string | null }
+type Recipient = { id: string; name: string; email: string; roles: string[]; status: string }
+type Audience = 'all' | 'administrators' | 'cleaners' | 'users'
 
 const currentUser = useCurrentUser()
 const { t, locale } = useI18n()
@@ -17,6 +19,39 @@ const filter = ref<Filter>('unread')
 const actionError = ref('')
 const itemPendingId = ref<string | null>(null)
 const markAllPending = ref(false)
+const isAdministrator = computed(() => Boolean(currentUser.value?.roles.includes('administrator')))
+const sendOpen = ref(false)
+const confirmSendOpen = ref(false)
+const sending = ref(false)
+const sendError = ref('')
+const sendNotice = ref('')
+const detail = ref<Notification | null>(null)
+const detailOpen = ref(false)
+const draft = reactive({ audience: 'all' as Audience, userIds: [] as string[], title: '', body: '' })
+const { data: recipientList, status: recipientStatus, error: recipientError } = await useAsyncData(
+  'notification-recipients',
+  () => isAdministrator.value && sendOpen.value ? $fetch<Recipient[]>('/api/users') : Promise.resolve([]),
+  { server: false, default: () => [], watch: [currentUser, sendOpen] }
+)
+const activeRecipients = computed(() => (recipientList.value ?? []).filter(user => user.status === 'active'))
+const recipientGroups = computed(() => [
+  { role: 'administrator', label: t('common.administrators') },
+  { role: 'cleaner', label: t('common.cleaners') },
+  { role: 'specialist', label: t('notifications.groupSpecialists') },
+  { role: 'manager', label: t('apartments.managers') }
+])
+const audienceOptions = computed(() => [
+  { label: t('notifications.audienceAll'), value: 'all' },
+  { label: t('notifications.audienceAdministrators'), value: 'administrators' },
+  { label: t('notifications.audienceCleaners'), value: 'cleaners' },
+  { label: t('notifications.audienceUsers'), value: 'users' }
+])
+const recipientCount = computed(() => {
+  if (draft.audience === 'all') return activeRecipients.value.length
+  if (draft.audience === 'administrators') return activeRecipients.value.filter(user => user.roles.includes('administrator')).length
+  if (draft.audience === 'cleaners') return activeRecipients.value.filter(user => user.roles.includes('cleaner')).length
+  return activeRecipients.value.filter(user => draft.userIds.includes(user.id)).length
+})
 const { data: firstPage, refresh, status, error: loadError } = await useAsyncData(
   'notifications',
   () => currentUser.value ? $fetch<NotificationPage>('/api/notifications', { query: { paginated: true, limit: 30 } }) : Promise.resolve({ items: [], nextCursor: null }),
@@ -47,7 +82,10 @@ const notificationAppearance: Record<NotificationType, { icon: string; className
   work_canceled: { icon: 'i-lucide-circle-x', className: 'bg-[#f1f3f2] text-[#647a70]' },
   problem: { icon: 'i-lucide-circle-alert', className: 'bg-[#ffebec] text-[#b63843]' },
   manager_expense_report_published: { icon: 'i-lucide-receipt-euro', className: 'bg-[#e8f1f7] text-[#356882]' },
-  cleaning_changed: { icon: 'i-lucide-broom', className: 'bg-[var(--color-primary-soft)] text-[var(--color-primary)]' }
+  cleaning_changed: { icon: 'i-lucide-broom', className: 'bg-[var(--color-primary-soft)] text-[var(--color-primary)]' },
+  task_resolved: { icon: 'i-lucide-circle-check', className: 'bg-[#e8f1f7] text-[#356882]' },
+  task_returned: { icon: 'i-lucide-rotate-ccw', className: 'bg-[#fff4d7] text-[#9a5b10]' },
+  manual: { icon: 'i-lucide-megaphone', className: 'bg-[var(--color-primary-soft)] text-[var(--color-primary)]' }
 }
 
 function dateKey(value: string) {
@@ -115,10 +153,55 @@ async function read(item: Notification) {
       markLocallyRead([item.id])
     }
     if (item.href) await navigateTo(item.href)
+    else {
+      detail.value = item
+      detailOpen.value = true
+    }
   } catch (cause: any) {
     actionError.value = errorMessage(cause)
   } finally {
     itemPendingId.value = null
+  }
+}
+
+function requestSend() {
+  if (sending.value || recipientStatus.value !== 'success') return
+  sendError.value = ''
+  if (!draft.title.trim() || !draft.body.trim()) {
+    sendError.value = t('notifications.fillMessage')
+    return
+  }
+  if (!recipientCount.value) {
+    sendError.value = t('notifications.noRecipients')
+    return
+  }
+  confirmSendOpen.value = true
+}
+
+async function sendNotification() {
+  if (sending.value) return
+  sending.value = true
+  sendError.value = ''
+  try {
+    const result = await $fetch<{ count: number }>('/api/notifications/send', {
+      method: 'POST',
+      body: {
+        audience: draft.audience,
+        userIds: draft.audience === 'users' ? draft.userIds : [],
+        title: draft.title.trim(),
+        body: draft.body.trim()
+      }
+    })
+    confirmSendOpen.value = false
+    sendOpen.value = false
+    sendNotice.value = t('notifications.sent', { count: result.count })
+    Object.assign(draft, { audience: 'all', userIds: [], title: '', body: '' })
+    await refresh()
+  } catch (cause: any) {
+    confirmSendOpen.value = false
+    sendError.value = errorMessage(cause)
+  } finally {
+    sending.value = false
   }
 }
 
@@ -143,9 +226,14 @@ watch(notificationState.revision, () => {
 
 <template>
   <section class="page-wrap space-y-6">
-    <PageHeader :title="t('notifications.title')" />
+    <PageHeader :title="t('notifications.title')">
+      <template v-if="isAdministrator" #actions>
+        <UButton icon="i-lucide-send" class="min-h-11" @click="sendNotice = ''; sendError = ''; sendOpen = true">{{ t('notifications.send') }}</UButton>
+      </template>
+    </PageHeader>
 
     <div class="mx-auto max-w-4xl space-y-4">
+      <UAlert v-if="sendNotice" color="success" variant="soft" :description="sendNotice" />
       <div v-if="status === 'pending'" class="space-y-5" aria-busy="true">
         <div class="flex items-center justify-between gap-3"><USkeleton class="h-11 w-44 rounded-xl" /><USkeleton class="h-11 w-36 rounded-xl" /></div>
         <section v-for="group in 2" :key="group" class="space-y-2">
@@ -212,6 +300,58 @@ watch(notificationState.revision, () => {
         <EmptyState v-else icon="i-lucide-bell" :title="t('notifications.emptyTitle')" :description="t('notifications.emptyDescription')" />
       </template>
     </div>
+    <USlideover v-model:open="sendOpen" :title="t('notifications.sendTitle')" :modal="true" :overlay="true">
+      <template #body>
+        <form id="notification-send-form" class="form-grid" @submit.prevent="requestSend">
+          <UFormField :label="t('notifications.audience')" required>
+            <USelect v-model="draft.audience" :items="audienceOptions" class="w-full" />
+          </UFormField>
+          <UFormField v-if="draft.audience === 'users'" :label="t('notifications.users')" required>
+            <GroupedUserMultiSelect
+              v-model="draft.userIds"
+              :members="activeRecipients"
+              :groups="recipientGroups"
+              :placeholder="t('notifications.chooseUsers')"
+              :search-placeholder="t('notifications.searchUsers')"
+              :unmatched-label="t('notifications.users')"
+              :close-on-select="false"
+              show-email
+            />
+          </UFormField>
+          <UFormField :label="t('notifications.messageTitle')" required>
+            <UInput v-model="draft.title" class="w-full" maxlength="120" />
+          </UFormField>
+          <UFormField :label="t('notifications.messageBody')" required class="w-full">
+            <UTextarea v-model="draft.body" class="w-full" :rows="6" maxlength="2000" />
+          </UFormField>
+          <p class="text-sm text-[var(--color-muted)]">{{ t('notifications.recipientCount', { count: recipientCount }) }}</p>
+          <UAlert v-if="recipientError" color="error" variant="soft" :description="t('notifications.recipientsLoadError')" />
+          <UAlert v-if="sendError" color="error" variant="soft" :description="sendError" />
+        </form>
+      </template>
+      <template #footer>
+        <div class="form-actions form-actions--footer">
+          <UButton color="neutral" variant="ghost" :disabled="sending" @click="sendOpen = false">{{ t('common.cancel') }}</UButton>
+          <UButton type="submit" form="notification-send-form" :loading="sending" :disabled="recipientStatus !== 'success' || !recipientCount">{{ t('notifications.send') }}</UButton>
+        </div>
+      </template>
+    </USlideover>
+    <UModal v-model:open="confirmSendOpen" :title="t('notifications.confirmTitle')">
+      <template #body>
+        <div class="space-y-5">
+          <p class="text-sm">{{ t('notifications.confirmDescription', { count: recipientCount }) }}</p>
+          <div class="form-actions">
+            <UButton color="neutral" variant="ghost" :disabled="sending" @click="confirmSendOpen = false">{{ t('common.cancel') }}</UButton>
+            <UButton :loading="sending" :disabled="!recipientCount" @click="sendNotification">{{ t('notifications.send') }}</UButton>
+          </div>
+        </div>
+      </template>
+    </UModal>
+    <UModal v-model:open="detailOpen" :title="detail?.title ?? ''">
+      <template #body>
+        <p class="whitespace-pre-wrap break-words">{{ detail?.body }}</p>
+      </template>
+    </UModal>
   </section>
 </template>
 

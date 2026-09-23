@@ -147,7 +147,7 @@ export const notificationListQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(30)
 }).strict()
 
-export const cleaningAssignmentInputSchema = z.object({ cleanerIds: z.array(z.uuid()).min(1), scheduledOn: z.iso.date() })
+export const cleaningAssignmentInputSchema = z.object({ cleanerIds: z.array(z.uuid()).min(1), scheduledOn: z.iso.date(), assignmentComment: z.string().trim().max(2000).optional() })
 export const cleaningTariffOverrideSchema = withCalculatedTariff({ reason: z.string().trim().min(3).max(1000) })
 const cleaningChecklistSchema = z.array(z.object({ label: z.string().trim().min(1).max(200), checked: z.boolean() })).max(200)
 export const cleaningInputSchema = withCalculatedTariff({
@@ -156,6 +156,7 @@ export const cleaningInputSchema = withCalculatedTariff({
   cleanerIds: z.array(z.uuid()).default([]),
   cashAssigneeId: z.uuid().nullable().optional(),
   scheduledOn: z.iso.date(),
+  assignmentComment: z.string().trim().max(2000).optional(),
   isUrgent: z.boolean().optional(),
   urgencyOverride: z.boolean().nullable().optional(),
   checklist: cleaningChecklistSchema.optional()
@@ -164,6 +165,7 @@ export const cleaningUpdateSchema = withCalculatedTariff({
   cleanerIds: z.array(z.uuid()).default([]),
   cashAssigneeId: z.uuid().nullable().optional(),
   scheduledOn: z.iso.date(),
+  assignmentComment: z.string().trim().max(2000).optional(),
   isUrgent: z.boolean().optional(),
   urgencyOverride: z.boolean().nullable().optional(),
   apartmentId: z.uuid().optional(),

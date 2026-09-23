@@ -33,7 +33,7 @@ export const taskPriorityEnum = pgEnum('task_priority', ['low', 'normal', 'high'
 export const inventoryMovementEnum = pgEnum('inventory_movement', ['replenishment', 'usage', 'adjustment_in', 'adjustment_out'])
 export const financialEntryTypeEnum = pgEnum('financial_entry_type', ['cleaning_charge', 'inventory_charge', 'task_charge', 'guest_service_charge', 'compensation', 'manual_expense', 'cash_receipt'])
 export const visibilityEnum = pgEnum('entry_visibility', ['administrator', 'manager'])
-export const notificationTypeEnum = pgEnum('notification_type', ['stay_changed', 'work_assigned', 'work_rescheduled', 'work_canceled', 'problem', 'manager_expense_report_published', 'cleaning_changed', 'task_resolved', 'task_returned'])
+export const notificationTypeEnum = pgEnum('notification_type', ['stay_changed', 'work_assigned', 'work_rescheduled', 'work_canceled', 'problem', 'manager_expense_report_published', 'cleaning_changed', 'task_resolved', 'task_returned', 'manual'])
 export const managerExpenseCategoryEnum = pgEnum('manager_expense_category', ['cleaning', 'inventory', 'task', 'other'])
 export const authTokenTypeEnum = pgEnum('auth_token_type', ['invitation', 'password_reset'])
 
@@ -177,6 +177,7 @@ export const cleanings = pgTable('cleanings', {
   status: cleaningStatusEnum('status').notNull().default('unassigned'),
   tariffSnapshot: jsonb('tariff_snapshot').$type<CleaningTariff>().notNull(),
   checklist: jsonb('checklist').$type<ChecklistItem[]>().notNull().default([]),
+  assignmentComment: text('assignment_comment').notNull().default(''),
   comment: text('comment').notNull().default(''),
   hasProblem: boolean('has_problem').notNull().default(false),
   problemDescription: text('problem_description').notNull().default(''),

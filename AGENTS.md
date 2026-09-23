@@ -37,6 +37,7 @@
 
 - Keep route composition in `src/pages`; extract a feature only when the interaction is genuinely reused in multiple places.
 - Export feature/entity APIs through their `index.ts`; do not bypass slice public APIs.
+- Before adding UI or logic, look for existing components and modules to reuse; extract shared behavior instead of copying it when it is used in multiple places.
 - Reuse Nuxt UI controls and keep interactive hit areas at least 44px on mobile.
 - Keep UI labels and names as short as possible; minimize text so it fits on mobile screens.
 - In lists and grouped content, use subtle low-contrast separators; dividers should support grouping without competing with the content.

@@ -15,18 +15,18 @@ function copyForLocale(copy: LocalizedCopy, locale: AppLocale) {
 export async function notifyUsers(input: {
   organizationId: string
   userIds: string[]
-  type: 'stay_changed' | 'work_assigned' | 'work_rescheduled' | 'work_canceled' | 'problem' | 'manager_expense_report_published' | 'cleaning_changed' | 'task_resolved' | 'task_returned'
+  type: 'stay_changed' | 'work_assigned' | 'work_rescheduled' | 'work_canceled' | 'problem' | 'manager_expense_report_published' | 'cleaning_changed' | 'task_resolved' | 'task_returned' | 'manual'
   title: LocalizedCopy
   body: LocalizedCopy
   href: string | null
 }) {
-  if (!input.userIds.length) return
+  if (!input.userIds.length) return 0
   const recipients = await db.select({ id: users.id, locale: users.locale }).from(users).where(and(
     eq(users.organizationId, input.organizationId),
     eq(users.status, 'active'),
     inArray(users.id, [...new Set(input.userIds)])
   ))
-  if (!recipients.length) return
+  if (!recipients.length) return 0
 
   const recipientLocales = new Map(recipients.map(recipient => [recipient.id, recipient.locale]))
   const created = await db.insert(notifications).values(recipients.map(recipient => ({
@@ -52,7 +52,7 @@ export async function notifyUsers(input: {
   }
 
   const config = useRuntimeConfig()
-  if (!config.vapidPublicKey || !config.vapidPrivateKey || !config.vapidSubject) return
+  if (!config.vapidPublicKey || !config.vapidPrivateKey || !config.vapidSubject) return created.length
 
   webpush.setVapidDetails(config.vapidSubject, config.vapidPublicKey, config.vapidPrivateKey)
   const subscriptions = await db.select({ subscription: pushSubscriptions, locale: users.locale }).from(pushSubscriptions).innerJoin(users, eq(users.id, pushSubscriptions.userId)).where(and(eq(users.organizationId, input.organizationId), inArray(pushSubscriptions.userId, recipients.map(recipient => recipient.id))))
@@ -67,7 +67,7 @@ export async function notifyUsers(input: {
       id: notification.id,
       title: localizedNotificationTitle(notification.type, locale, notification.title),
       body: localizedNotificationBody(notification.type, locale, notification.body),
-      href: notification.href,
+      href: notification.href ?? '/notifications',
       timestamp: notification.createdAt.toISOString()
     }))
   }))
@@ -77,6 +77,7 @@ export async function notifyUsers(input: {
     if (statusCode !== 404 && statusCode !== 410) return undefined
     return db.delete(pushSubscriptions).where(eq(pushSubscriptions.id, subscriptions[index]!.subscription.id))
   }))
+  return created.length
 }
 
 export async function administratorsForOrganization(organizationId: string) {

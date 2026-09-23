@@ -39,7 +39,7 @@ export async function createCleaning(actor: Actor, input: unknown) {
   const isUrgent = data.urgencyOverride ?? await calculateCleaningUrgency(actor.organizationId, data.apartmentId, data.scheduledOn)
   const checklist = data.checklist?.map(item => ({ ...item })) ?? buildCleaningChecklist(apartment.type.defaultChecklist, apartment.additionalChecklist)
   const cleaning = await db.transaction(async tx => {
-    const [created] = await tx.insert(cleanings).values({ organizationId: actor.organizationId, apartmentId: data.apartmentId, stayId: data.stayId ?? null, scheduledOn: data.scheduledOn, isUrgent, urgencyOverride: data.urgencyOverride ?? null, status, tariffSnapshot: { ownerTotalEur: data.ownerTotalEur, cleanerPoolEur: data.cleanerPoolEur, laundryEur: data.laundryEur, serviceEur: data.serviceEur }, checklist }).returning()
+    const [created] = await tx.insert(cleanings).values({ organizationId: actor.organizationId, apartmentId: data.apartmentId, stayId: data.stayId ?? null, scheduledOn: data.scheduledOn, assignmentComment: data.assignmentComment ?? '', isUrgent, urgencyOverride: data.urgencyOverride ?? null, status, tariffSnapshot: { ownerTotalEur: data.ownerTotalEur, cleanerPoolEur: data.cleanerPoolEur, laundryEur: data.laundryEur, serviceEur: data.serviceEur }, checklist }).returning()
     if (!created) throw createError({ statusCode: 500, statusMessage: 'Не удалось создать уборку' })
     for (const cleanerId of data.cleanerIds) {
       const occupied = await tx.select({ routePosition: cleaningAssignments.routePosition }).from(cleaningAssignments).innerJoin(cleanings, eq(cleaningAssignments.cleaningId, cleanings.id)).where(and(eq(cleaningAssignments.cleanerId, cleanerId), eq(cleanings.scheduledOn, data.scheduledOn)))
@@ -204,7 +204,7 @@ export async function assignCleaners(actor: Actor, cleaningId: string, input: un
       routePosition: positions.get(cleanerId) ?? 0,
       acceptedAt: cleaning.assignments.find(assignment => assignment.cleanerId === cleanerId)?.acceptedAt ?? null
     })))
-    await tx.update(cleanings).set({ status: 'assigned', scheduledOn: data.scheduledOn, updatedAt: new Date() }).where(eq(cleanings.id, cleaningId))
+    await tx.update(cleanings).set({ status: 'assigned', scheduledOn: data.scheduledOn, ...(data.assignmentComment === undefined ? {} : { assignmentComment: data.assignmentComment }), updatedAt: new Date() }).where(eq(cleanings.id, cleaningId))
   })
   const afterEvent = await cleaningEventSnapshot(cleaningId)
   if (beforeEvent && afterEvent) await publishCleaningChange({ actor, before: beforeEvent, after: afterEvent, reason: 'updated' })
@@ -372,7 +372,7 @@ export async function updateCleaning(actor: Actor, cleaningId: string, input: un
     throw createError({ statusCode: 400, statusMessage: 'Исполнитель должен быть активной уборщицей или администратором' })
   }
 
-  const { cleanerIds, scheduledOn, reason, apartmentId, stayId, checklist, urgencyOverride, cashAssigneeId, ...tariffSnapshot } = data
+  const { cleanerIds, scheduledOn, reason, apartmentId, stayId, checklist, urgencyOverride, cashAssigneeId, assignmentComment, ...tariffSnapshot } = data
   const nextApartmentId = apartmentId ?? cleaning.apartmentId
   const nextStayId = stayId === undefined ? cleaning.stayId : stayId
   const contextChanged = nextApartmentId !== cleaning.apartmentId || nextStayId !== cleaning.stayId
@@ -420,7 +420,7 @@ export async function updateCleaning(actor: Actor, cleaningId: string, input: un
       routePosition: positions.get(cleanerId) ?? 0,
       acceptedAt: cleaning.assignments.find(assignment => assignment.cleanerId === cleanerId)?.acceptedAt ?? null
     })))
-    return (await tx.update(cleanings).set({ apartmentId: nextApartmentId, stayId: nextStayId ?? null, scheduledOn, isUrgent, urgencyOverride: nextUrgencyOverride, tariffSnapshot, checklist: checklist ?? cleaning.checklist, status, updatedAt: new Date() }).where(eq(cleanings.id, cleaningId)).returning())[0]
+    return (await tx.update(cleanings).set({ apartmentId: nextApartmentId, stayId: nextStayId ?? null, scheduledOn, ...(assignmentComment === undefined ? {} : { assignmentComment }), isUrgent, urgencyOverride: nextUrgencyOverride, tariffSnapshot, checklist: checklist ?? cleaning.checklist, status, updatedAt: new Date() }).where(eq(cleanings.id, cleaningId)).returning())[0]
   })
   if (!updated) throw createError({ statusCode: 500, statusMessage: 'Не удалось обновить уборку' })
 
