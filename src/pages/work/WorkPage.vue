@@ -520,6 +520,11 @@ function cleaningSubtitle(cleaning: Cleaning) {
   if (isSpecialist.value) return cleaning.apartment.hotel.name;
   return `${cleaning.apartment.hotel.name} · ${futureArrivalLabel(cleaning)}`;
 }
+function formatHistoryCompletionDate(value: string) {
+  return new Intl.DateTimeFormat(locale.value, {
+    day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Sofia',
+  }).format(new Date(value));
+}
 function canCollectLinen(cleaning: Cleaning) {
   return isSpecialist.value && ['in_progress', 'completed'].includes(cleaning.status) && !cleaning.linenCollected;
 }
@@ -1655,14 +1660,10 @@ function taskMenuItems(task: Task): DropdownMenuItem[] {
             <article
               v-for="cleaning in cleaningPlan.history"
               :key="`history-${cleaning.id}`"
-              class="work-cleaning-row flex items-center gap-3"
+              class="work-cleaning-row flex items-center gap-3 py-3"
               :class="{ 'work-cleaning-row--urgent': cleaning.isUrgent, 'work-cleaning-row--awaiting-acceptance': awaitingCleaningAcceptance(cleaning) }"
               @click="openCleaningCard($event, cleaning)"
             >
-              <span
-                class="text-sm font-medium tabular-nums text-[var(--color-muted)]"
-                >{{ formatDate(cleaning.scheduledOn) }}</span
-              >
               <div class="min-w-0 flex-1">
                 <p class="truncate font-semibold">
                   <span v-if="cleaning.isUrgent" class="work-cleaning-row__urgent-label">{{ t("work.urgentCleaning") }}</span><span v-if="cleaning.isUrgent" aria-hidden="true"> · </span>{{ cleaning.apartment.name }}
@@ -1671,22 +1672,18 @@ function taskMenuItems(task: Task): DropdownMenuItem[] {
                   {{ cleaningSubtitle(cleaning) }} ·
                   {{ cleanerNames(cleaning) }}
                 </p>
+                <p v-if="!cleaning.completedAt" class="truncate text-xs tabular-nums text-[var(--color-muted)]">{{ formatDate(cleaning.scheduledOn) }}</p>
               </div>
-              <span class="work-cleaning-row__linen"><LinenStatusControl v-if="isAdministrator || isSpecialist" :started-at="cleaning.startedAt" :collected="cleaning.linenCollected" :editable="canCollectLinen(cleaning)" @toggle="toggleLinen(cleaning, $event)" /></span>
-              <span
-                v-if="isSpecialist"
-                class="work-cleaning-status-dot"
-                :data-tone="statusTones[cleaning.status] ?? 'neutral'"
-                role="img"
-                :aria-label="cleaningStatusLabel(cleaning)"
-                :title="cleaningStatusLabel(cleaning)"
-              />
-              <StatusBadge
-                v-if="!isSpecialist && shouldShowCleaningStatus(cleaning)"
-                :label="cleaningStatusLabel(cleaning)"
-                :tone="awaitingCleaningAcceptance(cleaning) ? 'warning' : statusTones[cleaning.status] ?? 'neutral'"
-              />
-              <UButton v-if="canAcceptCleaning(cleaning)" color="primary" variant="soft" size="xs" class="h-6 min-h-6 px-2" :loading="pending" @click.stop="acceptCleaning(cleaning)">{{ t('work.accept') }}</UButton>
+              <div class="flex shrink-0 items-center gap-2">
+                <LinenStatusControl v-if="isAdministrator || isSpecialist" :started-at="cleaning.startedAt" :collected="cleaning.linenCollected" :editable="canCollectLinen(cleaning)" @toggle="toggleLinen(cleaning, $event)" />
+                <div class="flex flex-col items-end gap-1">
+                  <StatusBadge
+                    :label="cleaningStatusLabel(cleaning)"
+                    :tone="statusTones[cleaning.status] ?? 'neutral'"
+                  />
+                  <time v-if="cleaning.completedAt" :datetime="cleaning.completedAt" :title="formatDateTime(cleaning.completedAt)" class="whitespace-nowrap text-xs tabular-nums text-[var(--color-muted)]">{{ formatHistoryCompletionDate(cleaning.completedAt) }}</time>
+                </div>
+              </div>
             </article>
           </div>
           <p v-else class="px-5 py-6 text-sm text-[var(--color-muted)] sm:px-6">
@@ -2004,7 +2001,7 @@ function taskMenuItems(task: Task): DropdownMenuItem[] {
               "
               class="w-full" /></UFormField
           ><UFormField name="assigneeId" :label="t('work.assignee')"
-            ><USelect
+            ><USelectMenu
               v-model="taskForm.assigneeId"
               :items="[
                 { label: t('work.notAssigned'), value: 'unassigned' },
@@ -2012,6 +2009,18 @@ function taskMenuItems(task: Task): DropdownMenuItem[] {
                   .filter((member) => member.roles.some(role => ['cleaner', 'specialist', 'administrator'].includes(role)))
                   .map((member) => ({ label: member.name, value: member.id })),
               ]"
+              value-key="value"
+              :search-input="{
+                placeholder: t('common.searchAssignee'),
+                variant: 'none',
+                autofocus: false,
+              }"
+              :content="{ bodyLock: true }"
+              :ui="{
+                content: 'assignee-select-menu',
+                viewport: 'min-h-0 overflow-y-auto overscroll-contain touch-pan-y',
+                item: 'min-h-11 items-center',
+              }"
               class="w-full" /></UFormField
           ><UFormField v-if="taskForm.category === 'cash'" name="expectedAmountEur" :label="t('cash.expected')" required
             ><MoneyInput v-model="taskForm.expectedAmountEur" /></UFormField

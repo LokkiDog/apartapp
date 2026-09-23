@@ -38,6 +38,7 @@
 - Keep route composition in `src/pages`; extract a feature only when the interaction is genuinely reused in multiple places.
 - Export feature/entity APIs through their `index.ts`; do not bypass slice public APIs.
 - Reuse Nuxt UI controls and keep interactive hit areas at least 44px on mobile.
+- Keep UI labels and names as short as possible; minimize text so it fits on mobile screens.
 - In lists and grouped content, use subtle low-contrast separators; dividers should support grouping without competing with the content.
 - Use `UTextarea` at full form width; when a form has multiple columns, make its `UFormField` span all columns and give the control `w-full`.
 - For a date range, use one `DateRangeInput` rather than separate «с» and «по» controls; keep the start and end values separate in the submitted API contract when needed.

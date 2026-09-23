@@ -113,7 +113,7 @@ function currentLocalDate() {
 const availableStays = computed(() =>
   props.stays.filter(
     (stay) =>
-      (showAllStays.value || stay.checkOutOn >= currentLocalDate()) &&
+      (showAllStays.value || stay.id === form.stayId || stay.checkOutOn >= currentLocalDate()) &&
       (!stay.cleaning || stay.cleaning.id === props.editingCleaning?.id),
   ),
 );
@@ -147,6 +147,7 @@ const cleanerSummary = computed(() =>
     .map((member) => member.name)
     .join(", "),
 );
+const cleanerSelectOpen = ref(false);
 const canChangeContext = computed(
   () =>
     !props.editingCleaning ||
@@ -174,14 +175,30 @@ const checklistChanged = computed(() => {
   );
 });
 
+let pendingTariffApartmentId: string | null = null;
+function applyApartmentTariff(apartmentId: string) {
+  const apartment = props.apartments.find((item) => item.id === apartmentId);
+  const tariff = apartment?.tariffOverride ?? apartment?.type;
+  pendingTariffApartmentId = tariff ? null : apartmentId;
+  if (!tariff) return;
+  Object.assign(form, {
+    cleanerPoolEur: tariff.cleanerPoolEur,
+    laundryEur: tariff.laundryEur,
+    serviceEur: tariff.serviceEur,
+  });
+}
+
 function reset() {
   const cleaning = props.editingCleaning;
   const stayId = cleaning?.stayId ?? props.initialStayId ?? null;
   const stay = props.stays.find((item) => item.id === stayId);
+  const apartmentId = cleaning?.apartmentId ?? stay?.apartmentId ?? "";
+  pendingTariffApartmentId = null;
+  cleanerSelectOpen.value = false;
   linked.value = Boolean(stayId);
   showAllStays.value = false;
   Object.assign(form, {
-    apartmentId: cleaning?.apartmentId ?? stay?.apartmentId ?? "",
+    apartmentId,
     stayId,
     cleanerIds: cleaning?.assignments.map((item) => item.cleanerId) ?? [],
     cashAssigneeId: cleaning?.cashAssigneeId ?? null,
@@ -196,6 +213,7 @@ function reset() {
       checklistFromApartment(stay?.apartmentId ?? ""),
     reason: "",
   });
+  if (!cleaning && apartmentId) applyApartmentTariff(apartmentId);
   tariffOpen.value = false;
   validation.reset();
 }
@@ -231,28 +249,22 @@ watch(linked, (value) => {
 });
 function chooseApartment(apartmentId: string) {
   form.apartmentId = apartmentId;
-  const apartment = props.apartments.find((item) => item.id === apartmentId);
-  const tariff = apartment?.tariffOverride ?? apartment?.type;
-  if (tariff && !props.editingCleaning)
-    Object.assign(form, {
-      cleanerPoolEur: tariff.cleanerPoolEur,
-      laundryEur: tariff.laundryEur,
-      serviceEur: tariff.serviceEur,
-      checklist: checklistFromApartment(apartmentId),
-    });
+  if (props.editingCleaning) return;
+  applyApartmentTariff(apartmentId);
+  form.checklist = checklistFromApartment(apartmentId);
 }
 watch(
   () => form.apartmentId,
   (value) => {
     if (!value || props.editingCleaning) return;
-    const apartment = props.apartments.find((item) => item.id === value);
-    const tariff = apartment?.tariffOverride ?? apartment?.type;
-    if (tariff && !props.editingCleaning)
-      Object.assign(form, {
-        cleanerPoolEur: tariff.cleanerPoolEur,
-        laundryEur: tariff.laundryEur,
-        serviceEur: tariff.serviceEur,
-      });
+    applyApartmentTariff(value);
+  },
+);
+watch(
+  () => props.apartments,
+  () => {
+    if (pendingTariffApartmentId === form.apartmentId && !props.editingCleaning)
+      applyApartmentTariff(form.apartmentId);
   },
 );
 function addChecklistItem() {
@@ -371,6 +383,7 @@ function submit() {
         <UFormField name="cleanerIds" :label="t('work.assignee')"
           ><USelectMenu
             v-model="form.cleanerIds"
+            v-model:open="cleanerSelectOpen"
             :items="cleanerOptions as any"
             value-key="value"
             multiple
@@ -378,17 +391,25 @@ function submit() {
             :search-input="{
               placeholder: t('common.searchAssignee'),
               variant: 'none',
+              autofocus: false,
               ui: { root: 'm-2 w-auto self-stretch' },
             }"
-            :content="{ align: 'start', sideOffset: 8, collisionPadding: 8 }"
+            :content="{
+              align: 'start',
+              sideOffset: 8,
+              collisionPadding: 8,
+              bodyLock: true,
+            }"
             :ui="{
               base: 'w-full justify-start text-start',
-              content: 'max-h-72',
+              content: 'assignee-select-menu',
+              viewport: 'min-h-0 overflow-y-auto overscroll-contain touch-pan-y',
               item: 'min-h-11 items-center',
               itemWrapper: 'justify-center',
               itemTrailing: 'self-center',
             }"
             class="w-full"
+            @update:model-value="cleanerSelectOpen = false"
             ><template #default
               ><span
                 v-if="cleanerSummary"
@@ -406,7 +427,7 @@ function submit() {
         <section class="rounded-2xl border border-[var(--color-line)] px-4 py-3">
           <div class="flex items-center justify-between gap-3">
             <UCheckbox :model-value="effectiveUrgent" :label="t('work.urgentCleaning')" class="min-h-11 items-center font-medium" @update:model-value="setUrgency(Boolean($event))" />
-            <UButton v-if="form.urgencyOverride !== null" type="button" color="neutral" variant="ghost" size="sm" @click="useAutomaticUrgency">{{ t('work.useAutomatic') }}</UButton>
+            <UButton v-if="form.urgencyOverride !== null" type="button" color="neutral" variant="subtle" size="sm" @click="useAutomaticUrgency">{{ t('work.useAutomatic') }}</UButton>
           </div>
           <p class="text-sm text-[var(--color-muted)]">{{ form.urgencyOverride === null ? t('work.urgencyAutomatic') : t('work.urgencyManual') }}</p>
         </section>

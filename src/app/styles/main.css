@@ -27,6 +27,27 @@
     0 0 0 1px rgba(16, 46, 34, 0.06), 0 24px 80px -24px rgba(16, 46, 34, 0.28);
 }
 
+.assignee-select-menu {
+  max-height: min(
+    18rem,
+    calc(100dvh - 1rem),
+    var(--reka-combobox-content-available-height, 18rem)
+  );
+  touch-action: pan-y;
+}
+
+.assignee-select-menu [data-slot="focusScope"],
+.assignee-select-menu [data-slot="viewport"] {
+  min-height: 0;
+}
+
+.assignee-select-menu [data-slot="viewport"] {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+}
+
 .border-\[var\(--color-line\)\] {
   border-color: var(--color-line);
 }
