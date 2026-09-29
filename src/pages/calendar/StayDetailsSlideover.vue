@@ -12,8 +12,13 @@ const props = defineProps<{
   canManageCleaning: boolean
   showServicePrices: boolean
 }>()
-const emit = defineEmits<{ 'update:open': [value: boolean]; edit: [stay: Stay] }>()
+const emit = defineEmits<{ 'update:open': [value: boolean]; edit: [stay: Stay]; saved: [] }>()
 const { t } = useI18n()
+const adultCount = ref(1)
+const childCount = ref(0)
+const savingGuests = ref(false)
+const guestError = ref('')
+watch(() => props.stay, stay => { adultCount.value = stay?.adultCount ?? 1; childCount.value = stay?.childCount ?? 0; guestError.value = '' }, { immediate: true })
 
 const isOpen = computed({
   get: () => props.open,
@@ -24,6 +29,16 @@ function editStay() {
   if (!props.stay) return
   isOpen.value = false
   emit('edit', props.stay)
+}
+
+async function saveGuests() {
+  if (!props.stay) return
+  savingGuests.value = true; guestError.value = ''
+  try {
+    await $fetch(`/api/stays/${props.stay.id}/guest-count`, { method: 'PATCH', body: { adultCount: adultCount.value, childCount: childCount.value } })
+    emit('saved')
+  } catch (error: any) { guestError.value = error?.data?.statusMessage || t('common.error') }
+  finally { savingGuests.value = false }
 }
 </script>
 
@@ -42,9 +57,20 @@ function editStay() {
         <dl class="stay-details__facts">
           <div><dt>{{ t('calendar.arrival') }}</dt><dd>{{ formatDate(stay.checkInOn) }}</dd></div>
           <div><dt>{{ t('calendar.departure') }}</dt><dd>{{ formatDate(stay.checkOutOn) }}</dd></div>
-          <div><dt>{{ t('calendar.adults') }}</dt><dd>{{ stay.adultCount }}</dd></div>
-          <div><dt>{{ t('calendar.children') }}</dt><dd>{{ stay.childCount }}</dd></div>
+          <div><dt>{{ t('calendar.adults') }}</dt><dd>{{ stay.adultCount ?? '—' }}</dd></div>
+          <div><dt>{{ t('calendar.children') }}</dt><dd>{{ stay.childCount ?? '—' }}</dd></div>
         </dl>
+
+        <section v-if="stay.source === 'ical' && canEdit" class="stay-details__section space-y-3">
+          <h3>{{ t('icalImport.guestCountTitle') }}</h3>
+          <p v-if="stay.adultCount === null || stay.childCount === null" class="text-sm text-[var(--color-muted)]">{{ t('icalImport.guestCountHint') }}</p>
+          <div class="grid grid-cols-2 gap-3">
+            <UFormField :label="t('calendar.adults')"><UInput v-model.number="adultCount" type="number" min="1" max="50" class="w-full" /></UFormField>
+            <UFormField :label="t('calendar.children')"><UInput v-model.number="childCount" type="number" min="0" max="50" class="w-full" /></UFormField>
+          </div>
+          <UButton :loading="savingGuests" @click="saveGuests">{{ t('common.save') }}</UButton>
+          <p v-if="guestError" role="alert" class="text-sm text-error">{{ guestError }}</p>
+        </section>
 
         <section v-if="stay.guestName || stay.guestPhone || stay.guestComment || stay.specialRequests" class="stay-details__section">
           <h3>{{ t('calendarExtra.guestDetails') }}</h3>
@@ -86,7 +112,7 @@ function editStay() {
     <template #footer>
       <div class="form-actions form-actions--footer">
         <UButton color="neutral" variant="ghost" @click="isOpen = false">{{ t('common.close') }}</UButton>
-        <UButton v-if="canEdit" icon="i-lucide-pencil" @click="editStay">{{ t('calendar.editBooking') }}</UButton>
+        <UButton v-if="canEdit && stay?.source !== 'ical'" icon="i-lucide-pencil" @click="editStay">{{ t('calendar.editBooking') }}</UButton>
       </div>
     </template>
   </USlideover>

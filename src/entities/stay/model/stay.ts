@@ -2,8 +2,11 @@ export interface Stay {
   id: string
   checkInOn: string
   checkOutOn: string
-  adultCount: number
-  childCount: number
+  adultCount: number | null
+  childCount: number | null
+  source?: 'manual' | 'ical'
+  state?: 'active' | 'canceled' | 'superseded' | 'hidden'
+  icalSummary?: string | null
   specialRequests?: string
   guestName?: string
   guestPhone?: string

@@ -118,7 +118,7 @@ export async function globalReport(actor: Actor, query: ReportQuery): Promise<Gl
       with: { assignments: { with: { cleaner: true } }, problems: true }
     }),
     db.query.tasks.findMany({ where: eq(tasks.organizationId, actor.organizationId) }),
-    db.query.stays.findMany({ where: eq(stays.organizationId, actor.organizationId) }),
+    db.query.stays.findMany({ where: and(eq(stays.organizationId, actor.organizationId), eq(stays.state, 'active')) }),
     db.query.financialEntries.findMany({ where: eq(financialEntries.organizationId, actor.organizationId) }),
     db.query.users.findMany({ where: eq(users.organizationId, actor.organizationId) }),
     activeApartmentIds.length

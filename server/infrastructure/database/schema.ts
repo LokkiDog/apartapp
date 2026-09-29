@@ -33,7 +33,9 @@ export const taskPriorityEnum = pgEnum('task_priority', ['low', 'normal', 'high'
 export const inventoryMovementEnum = pgEnum('inventory_movement', ['replenishment', 'usage', 'adjustment_in', 'adjustment_out'])
 export const financialEntryTypeEnum = pgEnum('financial_entry_type', ['cleaning_charge', 'inventory_charge', 'task_charge', 'guest_service_charge', 'compensation', 'manual_expense', 'cash_receipt'])
 export const visibilityEnum = pgEnum('entry_visibility', ['administrator', 'manager'])
-export const notificationTypeEnum = pgEnum('notification_type', ['stay_changed', 'work_assigned', 'work_rescheduled', 'work_canceled', 'problem', 'manager_expense_report_published', 'cleaning_changed', 'task_resolved', 'task_returned', 'manual'])
+export const notificationTypeEnum = pgEnum('notification_type', ['stay_changed', 'stay_conflict', 'work_assigned', 'work_rescheduled', 'work_canceled', 'problem', 'manager_expense_report_published', 'cleaning_changed', 'task_resolved', 'task_returned', 'manual'])
+export const staySourceEnum = pgEnum('stay_source', ['manual', 'ical'])
+export const stayStateEnum = pgEnum('stay_state', ['active', 'canceled', 'superseded', 'hidden'])
 export const managerExpenseCategoryEnum = pgEnum('manager_expense_category', ['cleaning', 'inventory', 'task', 'other'])
 export const authTokenTypeEnum = pgEnum('auth_token_type', ['invitation', 'password_reset'])
 
@@ -140,19 +142,58 @@ export const stays = pgTable('stays', {
   apartmentId: uuid('apartment_id').notNull().references(() => apartments.id),
   checkInOn: date('check_in_on').notNull(),
   checkOutOn: date('check_out_on').notNull(),
-  adultCount: integer('adult_count').notNull(),
-  childCount: integer('child_count').notNull().default(0),
+  adultCount: integer('adult_count'),
+  childCount: integer('child_count'),
   specialRequests: text('special_requests').notNull().default(''),
   guestName: text('guest_name').notNull().default(''),
   guestPhone: text('guest_phone').notNull().default(''),
   guestComment: text('guest_comment').notNull().default(''),
   cashAmountEur: numeric('cash_amount_eur', { precision: 12, scale: 2, mode: 'number' }),
-  createdById: uuid('created_by_id').notNull().references(() => users.id),
+  createdById: uuid('created_by_id').references(() => users.id),
+  source: staySourceEnum('source').notNull().default('manual'),
+  state: stayStateEnum('state').notNull().default('active'),
+  icalFeedId: uuid('ical_feed_id'),
+  icalUid: text('ical_uid'),
+  icalSummary: text('ical_summary'),
+  icalMissingCount: integer('ical_missing_count').notNull().default(0),
   ...timestamps
 }, table => [
   check('stay_dates_order', sql`${table.checkOutOn} > ${table.checkInOn}`),
   check('stay_cash_nonnegative', sql`${table.cashAmountEur} IS NULL OR ${table.cashAmountEur} >= 0`),
-  index('stay_report_dates_idx').on(table.organizationId, table.checkInOn, table.checkOutOn)
+  check('stay_guest_counts_valid', sql`(${table.source} = 'ical' AND ${table.adultCount} IS NULL AND ${table.childCount} IS NULL) OR (${table.adultCount} >= 1 AND ${table.childCount} >= 0)`),
+  index('stay_report_dates_idx').on(table.organizationId, table.checkInOn, table.checkOutOn),
+  uniqueIndex('stay_ical_uid_unique').on(table.icalFeedId, table.icalUid).where(sql`${table.icalUid} IS NOT NULL`)
+])
+
+export const icalFeeds = pgTable('ical_feeds', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  organizationId: uuid('organization_id').notNull().references(() => organizations.id),
+  apartmentId: uuid('apartment_id').notNull().references(() => apartments.id, { onDelete: 'cascade' }),
+  url: text('url').notNull(),
+  enabled: boolean('enabled').notNull().default(true),
+  lastSyncedAt: timestamp('last_synced_at', { withTimezone: true }),
+  lastError: text('last_error').notNull().default(''),
+  createdById: uuid('created_by_id').references(() => users.id, { onDelete: 'set null' }),
+  ...timestamps
+}, table => [
+  uniqueIndex('ical_feed_apartment_unique').on(table.apartmentId),
+  index('ical_feed_org_enabled_idx').on(table.organizationId, table.enabled)
+])
+
+export const icalConflicts = pgTable('ical_conflicts', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  organizationId: uuid('organization_id').notNull().references(() => organizations.id),
+  apartmentId: uuid('apartment_id').notNull().references(() => apartments.id, { onDelete: 'cascade' }),
+  importedStayId: uuid('imported_stay_id').notNull().references(() => stays.id, { onDelete: 'cascade' }),
+  existingStayId: uuid('existing_stay_id').notNull().references(() => stays.id, { onDelete: 'cascade' }),
+  status: text('status').notNull().default('open'),
+  decision: text('decision'),
+  resolvedById: uuid('resolved_by_id').references(() => users.id, { onDelete: 'set null' }),
+  resolvedAt: timestamp('resolved_at', { withTimezone: true }),
+  ...timestamps
+}, table => [
+  uniqueIndex('ical_conflict_open_pair_unique').on(table.importedStayId, table.existingStayId).where(sql`${table.status} IN ('open', 'needs_admin', 'resolving')`),
+  index('ical_conflict_org_status_idx').on(table.organizationId, table.status, table.createdAt)
 ])
 
 export const stayServices = pgTable('stay_services', {
@@ -514,6 +555,8 @@ export const apartmentsRelations = relations(apartments, ({ one, many }) => ({
   managerAssignments: many(apartmentManagers),
   type: one(apartmentTypes, { fields: [apartments.apartmentTypeId], references: [apartmentTypes.id] }),
   stays: many(stays),
+  icalFeeds: many(icalFeeds),
+  icalConflicts: many(icalConflicts),
   cleanings: many(cleanings),
   problems: many(cleaningProblems),
   tasks: many(tasks),
@@ -537,7 +580,19 @@ export const staysRelations = relations(stays, ({ one, many }) => ({
   apartment: one(apartments, { fields: [stays.apartmentId], references: [apartments.id] }),
   createdBy: one(users, { fields: [stays.createdById], references: [users.id], relationName: 'stayCreator' }),
   services: many(stayServices),
-  cleaning: one(cleanings)
+  cleaning: one(cleanings),
+  icalFeed: one(icalFeeds, { fields: [stays.icalFeedId], references: [icalFeeds.id] }),
+  icalAsImportedConflict: many(icalConflicts, { relationName: 'icalImportedStay' }),
+  icalAsExistingConflict: many(icalConflicts, { relationName: 'icalExistingStay' })
+}))
+export const icalFeedsRelations = relations(icalFeeds, ({ one, many }) => ({
+  apartment: one(apartments, { fields: [icalFeeds.apartmentId], references: [apartments.id] }),
+  events: many(stays)
+}))
+export const icalConflictsRelations = relations(icalConflicts, ({ one }) => ({
+  apartment: one(apartments, { fields: [icalConflicts.apartmentId], references: [apartments.id] }),
+  importedStay: one(stays, { fields: [icalConflicts.importedStayId], references: [stays.id], relationName: 'icalImportedStay' }),
+  existingStay: one(stays, { fields: [icalConflicts.existingStayId], references: [stays.id], relationName: 'icalExistingStay' })
 }))
 export const stayServicesRelations = relations(stayServices, ({ one }) => ({
   stay: one(stays, { fields: [stayServices.stayId], references: [stays.id] }),

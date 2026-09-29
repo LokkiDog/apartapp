@@ -19,6 +19,7 @@ const { t } = useI18n()
 const user = useCurrentUser()
 
 function guestBreakdownLabel(stay: Stay) {
+  if (stay.adultCount === null || stay.childCount === null) return t('icalImport.guestsMissing')
   const adults = `${t('calendar.adults')}: ${stay.adultCount}`
   return stay.childCount > 0 ? `${adults} · ${t('calendar.children')}: ${stay.childCount}` : adults
 }
@@ -37,10 +38,10 @@ function cashLabel(stay: Stay) {
 
 function menuItems(stay: Stay): DropdownMenuItem[][] {
   const items: DropdownMenuItem[] = []
-  if (props.canEdit) items.push({ label: t('calendar.editBooking'), icon: 'i-lucide-pencil', onSelect: () => emit('edit', stay) })
+  if (props.canEdit && stay.source !== 'ical') items.push({ label: t('calendar.editBooking'), icon: 'i-lucide-pencil', onSelect: () => emit('edit', stay) })
   const isAdministrator = user.value?.roles.includes('administrator') ?? false
   const today = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'Europe/Sofia' }).format(new Date())
-  if (props.canDelete && (isAdministrator || stay.checkInOn > today)) items.push({ label: t('calendar.deleteBooking'), icon: 'i-lucide-trash-2', color: 'error', onSelect: () => emit('delete', stay) })
+  if (props.canDelete && stay.source !== 'ical' && (isAdministrator || stay.checkInOn > today)) items.push({ label: t('calendar.deleteBooking'), icon: 'i-lucide-trash-2', color: 'error', onSelect: () => emit('delete', stay) })
   return items.length ? [items] : []
 }
 </script>

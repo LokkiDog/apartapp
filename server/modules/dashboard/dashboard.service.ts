@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, gte, inArray, isNull, lt, or } from 'drizzle-orm'
+import { and, asc, count, desc, eq, gte, inArray, isNotNull, isNull, lt, or } from 'drizzle-orm'
 import type { DashboardResponse } from '@contracts/dashboard'
 import { canAccessWorkSection, managedApartmentIds, type Actor } from '../../infrastructure/auth/actor'
 import { db } from '../../infrastructure/database/client'
@@ -23,6 +23,9 @@ export async function dashboardSummary(actor: Actor, month: string): Promise<Das
 
   const stayWhere = and(
     eq(stays.organizationId, actor.organizationId),
+    eq(stays.state, 'active'),
+    isNotNull(stays.adultCount),
+    isNotNull(stays.childCount),
     or(
       and(gte(stays.checkInOn, range.from), lt(stays.checkInOn, range.to)),
       and(gte(stays.checkOutOn, range.from), lt(stays.checkOutOn, range.to))
@@ -41,7 +44,7 @@ export async function dashboardSummary(actor: Actor, month: string): Promise<Das
         with: { apartment: { columns: { name: true }, with: { hotel: { columns: { name: true } } } } },
         orderBy: [asc(stays.checkInOn), asc(stays.id)],
         limit: 5
-      })
+      }).then(rows => rows.filter((stay): stay is typeof stay & { adultCount: number; childCount: number } => stay.adultCount !== null && stay.childCount !== null))
 
   let accessibleCleaningIds: string[] | null = null
   if (canViewWork && !administrator && !specialist) {

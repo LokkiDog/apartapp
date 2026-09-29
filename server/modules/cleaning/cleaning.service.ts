@@ -28,6 +28,7 @@ export async function createCleaning(actor: Actor, input: unknown) {
   if (data.stayId) {
     const stay = await db.query.stays.findFirst({ where: and(eq(stays.id, data.stayId), eq(stays.organizationId, actor.organizationId)) })
     if (!stay || stay.apartmentId !== data.apartmentId) throw createError({ statusCode: 400, statusMessage: 'Заезд не относится к выбранному апартаменту' })
+    if (stay.source === 'ical' && (stay.adultCount === null || stay.childCount === null)) throw createError({ statusCode: 409, statusMessage: 'Сначала укажите число гостей в импортированном бронировании' })
     const existing = await db.query.cleanings.findFirst({ where: eq(cleanings.stayId, data.stayId) })
     if (existing) throw createError({ statusCode: 409, statusMessage: 'Для этого заезда уборка уже назначена' })
     linkedCashAmount = Number(stay.cashAmountEur ?? 0)
@@ -105,10 +106,10 @@ export async function listCleanings(actor: Actor, query: WorkListQuery = { view:
   const apartmentIds = [...new Set(page.map(item => item.apartmentId))]
   const futureStays = apartmentIds.length
     ? await db.query.stays.findMany({
-        where: and(eq(stays.organizationId, actor.organizationId), gte(stays.checkInOn, today), inArray(stays.apartmentId, apartmentIds)),
+        where: and(eq(stays.organizationId, actor.organizationId), eq(stays.state, 'active'), gte(stays.checkInOn, today), inArray(stays.apartmentId, apartmentIds)),
         columns: { id: true, apartmentId: true, checkInOn: true, adultCount: true, childCount: true },
         orderBy: [asc(stays.checkInOn)]
-      })
+      }).then(rows => rows.filter((stay): stay is typeof stay & { adultCount: number; childCount: number } => stay.adultCount !== null && stay.childCount !== null))
     : []
   const cashAssignees = actor.roles.includes('administrator') && page.length
     ? await db.select({ cleaningId: cashTaskDetails.cleaningId, assigneeId: tasks.assigneeId })

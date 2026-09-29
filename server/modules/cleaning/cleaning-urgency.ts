@@ -8,8 +8,8 @@ export function hasCleaningUrgency(departureExists: boolean, arrivalExists: bool
 
 export async function calculateCleaningUrgency(organizationId: string, apartmentId: string, date: string) {
   const [departure, arrival] = await Promise.all([
-    db.query.stays.findFirst({ where: and(eq(stays.organizationId, organizationId), eq(stays.apartmentId, apartmentId), eq(stays.checkOutOn, date)) }),
-    db.query.stays.findFirst({ where: and(eq(stays.organizationId, organizationId), eq(stays.apartmentId, apartmentId), eq(stays.checkInOn, date)) })
+    db.query.stays.findFirst({ where: and(eq(stays.organizationId, organizationId), eq(stays.apartmentId, apartmentId), eq(stays.state, 'active'), eq(stays.checkOutOn, date)) }),
+    db.query.stays.findFirst({ where: and(eq(stays.organizationId, organizationId), eq(stays.apartmentId, apartmentId), eq(stays.state, 'active'), eq(stays.checkInOn, date)) })
   ])
   return hasCleaningUrgency(Boolean(departure), Boolean(arrival))
 }

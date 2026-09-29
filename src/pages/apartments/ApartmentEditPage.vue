@@ -9,6 +9,7 @@ import {
 import { useCurrentUser } from '#fsd/shared/auth'
 import { DeleteConfirmModal, PageHeader } from '#fsd/shared/ui'
 import ApartmentPhotoPanel, { type ApartmentPhotoAttachment } from './ApartmentPhotoPanel.vue'
+import IcalIntegrationPanel from '../calendar/IcalIntegrationPanel.vue'
 import { useI18n } from 'vue-i18n'
 
 type ApartmentRecord = ApartmentInput & {
@@ -21,7 +22,9 @@ const route = useRoute()
 const apartmentId = String(route.params.id)
 const currentUser = useCurrentUser()
 const { t } = useI18n()
-if (currentUser.value && !currentUser.value.roles.includes('administrator')) {
+const isAdministrator = computed(() => Boolean(currentUser.value?.roles.includes('administrator')))
+const canOpenApartmentSettings = computed(() => Boolean(currentUser.value?.roles.some(role => ['administrator', 'manager'].includes(role))))
+if (currentUser.value && !canOpenApartmentSettings.value) {
   await navigateTo('/apartments')
 }
 
@@ -33,10 +36,10 @@ const [
   { data: photos, status: photosStatus, refresh: refreshPhotos }
 ] = await Promise.all([
   useAsyncData(`apartment-edit-${apartmentId}`, () => currentUser.value ? $fetch<ApartmentRecord>(`/api/apartments/${apartmentId}`) : Promise.resolve(null), { server: false, default: () => null, watch: [currentUser] }),
-  useAsyncData('apartment-form-hotels', () => currentUser.value ? $fetch<ApartmentFormHotel[]>('/api/hotels') : Promise.resolve([]), { server: false, default: () => [], watch: [currentUser] }),
-  useAsyncData('apartment-form-users', () => currentUser.value ? $fetch<ApartmentFormManager[]>('/api/users') : Promise.resolve([]), { server: false, default: () => [], watch: [currentUser] }),
-  useAsyncData('apartment-form-types', () => currentUser.value ? $fetch<ApartmentFormType[]>('/api/apartment-types') : Promise.resolve([]), { server: false, default: () => [], watch: [currentUser] }),
-  useAsyncData(`apartment-photos-${apartmentId}`, () => currentUser.value ? $fetch<Attachment[]>('/api/attachments', { query: { entityType: 'apartment', entityId: apartmentId } }) : Promise.resolve([]), { server: false, default: () => [], watch: [currentUser] })
+  useAsyncData('apartment-form-hotels', () => isAdministrator.value ? $fetch<ApartmentFormHotel[]>('/api/hotels') : Promise.resolve([]), { server: false, default: () => [], watch: [currentUser] }),
+  useAsyncData('apartment-form-users', () => isAdministrator.value ? $fetch<ApartmentFormManager[]>('/api/users') : Promise.resolve([]), { server: false, default: () => [], watch: [currentUser] }),
+  useAsyncData('apartment-form-types', () => isAdministrator.value ? $fetch<ApartmentFormType[]>('/api/apartment-types') : Promise.resolve([]), { server: false, default: () => [], watch: [currentUser] }),
+  useAsyncData(`apartment-photos-${apartmentId}`, () => isAdministrator.value ? $fetch<Attachment[]>('/api/attachments', { query: { entityType: 'apartment', entityId: apartmentId } }) : Promise.resolve([]), { server: false, default: () => [], watch: [currentUser] })
 ])
 
 const loading = computed(() => [apartmentStatus.value, hotelsStatus.value, usersStatus.value, typesStatus.value].some(status => status === 'idle' || status === 'pending'))
@@ -156,7 +159,7 @@ async function removeApartment() {
 
 <template>
   <section class="page-wrap space-y-6">
-    <PageHeader :title="t('apartments.edit')">
+    <PageHeader :title="isAdministrator ? t('apartments.edit') : t('icalImport.apartmentSettings')">
       <template #actions>
         <UButton
           to="/apartments"
@@ -188,6 +191,7 @@ async function removeApartment() {
       <UAlert v-if="actionError && !deleteOpen" color="error" variant="soft" icon="i-lucide-circle-alert" :description="actionError" />
 
       <ApartmentPhotoPanel
+        v-if="isAdministrator"
         :attachments="photos ?? []"
         :pending-photos="pendingPhotos"
         :loading="photosStatus === 'pending'"
@@ -199,6 +203,7 @@ async function removeApartment() {
       />
 
       <ApartmentForm
+        v-if="isAdministrator"
         mode="edit"
         :apartment-id="apartmentId"
         :initial-value="initialValue"
@@ -207,7 +212,9 @@ async function removeApartment() {
         :apartment-types="types ?? []"
       />
 
-      <section class="apartment-management surface">
+      <IcalIntegrationPanel :apartment-id="apartmentId" :apartment-name="apartment.name" @synced="refreshApartment" />
+
+      <section v-if="isAdministrator" class="apartment-management surface">
         <div class="apartment-danger-zone">
           <div class="min-w-0">
             <h3 class="font-semibold">{{ t('common.deleteForever') }}</h3>

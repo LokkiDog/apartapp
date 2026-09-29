@@ -15,6 +15,7 @@ import CalendarEventMarker from './CalendarEventMarker.vue'
 import StayBookingRow from './StayBookingRow.vue'
 import ApartmentBookingsView from './ApartmentBookingsView.vue'
 import StayBookingsPanel from './StayBookingsPanel.vue'
+import IcalConflictPanel from './IcalConflictPanel.vue'
 import { useI18n } from 'vue-i18n'
 import { assignMonthWeekLanes, createWeekSegments, type CalendarStaySegment } from './model/calendar-timeline'
 import { createCalendarEventMarkers } from './model/calendar-event-markers'
@@ -45,6 +46,7 @@ function emptyStayForm(): StayForm {
 }
 
 const user = useCurrentUser()
+const route = useRoute()
 const notificationState = useNotificationState()
 const { locale } = useI18n()
 const { t } = useI18n()
@@ -148,6 +150,10 @@ const formApartments = computed(() => {
   return (apartments.value ?? []).filter(apartment => apartment.id === editingStay.value?.apartmentId)
 })
 const calendarStays = computed(() => stays.value ?? [])
+async function refreshStayDetails() {
+  await refresh()
+  if (selectedStay.value) selectedStay.value = (stays.value ?? []).find(stay => stay.id === selectedStay.value?.id) ?? selectedStay.value
+}
 const currentStays = computed(() => calendarStays.value.filter(stay => !isPastStay(stay, todayKey())))
 const uncleanedPastStays = computed(() => isAdministrator.value
   ? calendarStays.value.filter(stay => isPastStay(stay, todayKey()) && !stay.hasCleaning).sort((left, right) => left.checkOutOn.localeCompare(right.checkOutOn))
@@ -361,7 +367,7 @@ function openDelete(stay: Stay) { stayToDelete.value = stay; deleteOpen.value = 
 function stayMenuItems(stay: Stay): DropdownMenuItem[][] {
   const items: DropdownMenuItem[] = []
   if (canEditStays.value) items.push({ label: t('calendar.editBooking'), icon: 'i-lucide-pencil', onSelect: () => openEdit(stay) })
-  if (user.value?.roles.some(role => ['administrator', 'manager'].includes(role)) && (isAdministrator.value || stay.checkInOn > todayKey())) items.push({ label: t('calendar.deleteBooking'), icon: 'i-lucide-trash-2', color: 'error', onSelect: () => openDelete(stay) })
+  if (user.value?.roles.some(role => ['administrator', 'manager'].includes(role)) && stay.source !== 'ical' && (isAdministrator.value || stay.checkInOn > todayKey())) items.push({ label: t('calendar.deleteBooking'), icon: 'i-lucide-trash-2', color: 'error', onSelect: () => openDelete(stay) })
   return items.length ? [items] : []
 }
 async function removeStay() { if (!stayToDelete.value) return; pending.value = true; error.value = ''; try { await $fetch(`/api/stays/${stayToDelete.value.id}`, { method: 'DELETE' }); deleteOpen.value = false; stayToDelete.value = null; await refresh() } catch (cause: any) { error.value = cause?.data?.statusMessage ?? t('common.error') } finally { pending.value = false } }
@@ -392,6 +398,8 @@ async function saveStay() {
         </div>
       </template>
     </PageHeader>
+
+    <IcalConflictPanel :is-administrator="isAdministrator" :focus-id="typeof route.query.icalConflict === 'string' ? route.query.icalConflict : undefined" @resolved="refresh" />
 
     <div class="calendar-controls surface">
       <div class="calendar-controls__top calendar-controls__top--agenda">
@@ -651,7 +659,7 @@ async function saveStay() {
       <span class="calendar-events-legend__item" role="listitem"><span class="calendar-events-legend__swatch calendar-events-legend__swatch--departure" aria-hidden="true" />{{ t('calendar.departures') }}</span>
     </div>
 
-    <LazyStayDetailsSlideover v-if="detailsOpen" v-model:open="detailsOpen" :stay="selectedStay" :can-edit="canEditStays" :can-manage-cleaning="Boolean(user?.roles.includes('administrator'))" :show-service-prices="showFinancialDetails" @edit="openEdit" />
+    <LazyStayDetailsSlideover v-if="detailsOpen" v-model:open="detailsOpen" :stay="selectedStay" :can-edit="canEditStays" :can-manage-cleaning="Boolean(user?.roles.includes('administrator'))" :show-service-prices="showFinancialDetails" @edit="openEdit" @saved="refreshStayDetails" />
 
     <USlideover v-model:open="open" :title="editingStay ? t('calendar.editBooking') : t('calendar.newStay')" :modal="true" :overlay="true">
       <template #body>

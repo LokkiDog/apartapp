@@ -1,8 +1,9 @@
 type AppLocale = 'ru' | 'en' | 'he'
-type NotificationType = 'stay_changed' | 'work_assigned' | 'work_rescheduled' | 'work_canceled' | 'problem' | 'manager_expense_report_published' | 'cleaning_changed' | 'task_resolved' | 'task_returned' | 'manual'
+type NotificationType = 'stay_changed' | 'stay_conflict' | 'work_assigned' | 'work_rescheduled' | 'work_canceled' | 'problem' | 'manager_expense_report_published' | 'cleaning_changed' | 'task_resolved' | 'task_returned' | 'manual'
 
 const titles: Partial<Record<NotificationType, Record<AppLocale, string>>> = {
   stay_changed: { ru: 'Изменение заезда', en: 'Booking updated', he: 'הזמנה עודכנה' },
+  stay_conflict: { ru: 'Конфликт бронирований', en: 'Booking conflict', he: 'התנגשות בהזמנות' },
   work_assigned: { ru: 'Назначена работа', en: 'Work assigned', he: 'עבודה הוקצתה' },
   work_rescheduled: { ru: 'Работа перенесена', en: 'Work rescheduled', he: 'מועד העבודה שונה' },
   work_canceled: { ru: 'Работа отменена', en: 'Work canceled', he: 'העבודה בוטלה' },

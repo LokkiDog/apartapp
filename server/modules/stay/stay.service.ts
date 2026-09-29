@@ -14,7 +14,7 @@ import { reconcileCleaningGuestPreparation } from '../cleaning/guest-preparation
 import { syncCashTasksForStay } from '../task/cash-task.service'
 
 async function assertNoOverlap(organizationId: string, apartmentId: string, checkInOn: string, checkOutOn: string, exceptId?: string) {
-  const criteria = [eq(stays.organizationId, organizationId), eq(stays.apartmentId, apartmentId), lt(stays.checkInOn, checkOutOn), gt(stays.checkOutOn, checkInOn)]
+  const criteria = [eq(stays.organizationId, organizationId), eq(stays.apartmentId, apartmentId), eq(stays.state, 'active'), lt(stays.checkInOn, checkOutOn), gt(stays.checkOutOn, checkInOn)]
   if (exceptId) criteria.push(ne(stays.id, exceptId))
   const conflict = await db.query.stays.findFirst({ where: and(...criteria) })
   if (conflict) throw createError({ statusCode: 409, statusMessage: 'Заезд пересекается с существующим бронированием' })
@@ -29,7 +29,7 @@ async function serviceSnapshots(serviceIds: string[], organizationId: string) {
 
 export async function listStays(actor: Actor, query: StayListQuery = {}) {
   requireRole(actor, 'administrator', 'manager')
-  const criteria = [eq(stays.organizationId, actor.organizationId)]
+  const criteria = [eq(stays.organizationId, actor.organizationId), eq(stays.state, 'active')]
   if (query.onlyVika) {
     requireRole(actor, 'administrator')
     criteria.push(exists(db.select({ apartmentId: apartmentManagers.apartmentId })

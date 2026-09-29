@@ -40,11 +40,12 @@ async function nextStay(connection: any, organizationId: string, apartmentId: st
     where: and(
       eq(stays.organizationId, organizationId),
       eq(stays.apartmentId, apartmentId),
+      eq(stays.state, 'active'),
       gte(stays.checkInOn, effectiveDate(scheduledOn))
     ),
     columns: { id: true, checkInOn: true, adultCount: true, childCount: true },
     orderBy: [asc(stays.checkInOn)]
-  }) as Promise<StaySnapshot | undefined>
+  }).then((stay: StaySnapshot | undefined) => stay?.adultCount !== null && stay?.childCount !== null ? stay : undefined) as Promise<StaySnapshot | undefined>
 }
 
 export async function captureCleaningGuestPreparation(tx: any, input: { cleaningId: string; organizationId: string; apartmentId: string; scheduledOn: string; defaultLinenGuestCount: number }) {

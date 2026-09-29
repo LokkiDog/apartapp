@@ -13,6 +13,8 @@ const user = useCurrentUser()
 const { t, locale } = useI18n()
 const { data: apartments, status } = await useAsyncData('apartments', () => user.value ? $fetch<Apartment[]>('/api/apartments') : Promise.resolve([]), { server: false, default: () => [], watch: [user] })
 const canEdit = computed(() => user.value?.roles.includes('administrator') ?? false)
+const isAdministrator = canEdit
+const canOpenSettings = computed(() => Boolean(user.value?.roles.some(role => ['administrator', 'manager'].includes(role))))
 const view = ref<ApartmentView>('standard')
 const sort = ref<ApartmentSort>('name')
 const search = ref('')
@@ -62,7 +64,7 @@ function hotelLabel(apartment: Apartment) { return [apartment.hotel.name, apartm
 function statusLabel(apartment: Apartment) { return apartment.status === 'active' ? t('apartments.active') : apartment.status === 'inactive' ? t('apartments.inactive') : t('apartments.archived') }
 function statusTone(apartment: Apartment) { return apartment.status === 'active' ? 'success' : 'neutral' }
 function openApartment(apartmentId: string) {
-  if (canEdit.value) void navigateTo(`/apartments/${apartmentId}/edit`)
+  if (canOpenSettings.value) void navigateTo(`/apartments/${apartmentId}/edit`)
 }
 </script>
 
@@ -85,7 +87,7 @@ function openApartment(apartmentId: string) {
     <div v-if="status === 'pending'" class="apartments-collection" :class="`apartments-collection--${view}`"><USkeleton v-for="item in 6" :key="item" class="apartments-collection__skeleton" /></div>
 
     <div v-else-if="sortedApartments.length && view === 'compact'" class="apartments-collection apartments-collection--compact">
-      <article v-for="apartment in sortedApartments" :key="apartment.id" class="apartment-compact-card surface" :class="{ 'apartment-compact-card--interactive': canEdit }" :role="canEdit ? 'link' : undefined" :tabindex="canEdit ? 0 : undefined" :aria-label="canEdit ? `${t('apartments.edit')}: ${apartment.name}` : undefined" @click="openApartment(apartment.id)" @keydown.enter="openApartment(apartment.id)" @keydown.space.prevent="openApartment(apartment.id)">
+      <article v-for="apartment in sortedApartments" :key="apartment.id" class="apartment-compact-card surface" :class="{ 'apartment-compact-card--interactive': canOpenSettings }" :role="canOpenSettings ? 'link' : undefined" :tabindex="canOpenSettings ? 0 : undefined" :aria-label="canOpenSettings ? `${t(isAdministrator ? 'apartments.edit' : 'icalImport.apartmentSettings')}: ${apartment.name}` : undefined" @click="openApartment(apartment.id)" @keydown.enter="openApartment(apartment.id)" @keydown.space.prevent="openApartment(apartment.id)">
         <div class="apartment-compact-card__media">
           <img v-if="apartment.photo" :src="`/api/attachments/${apartment.photo.id}/file?variant=card`" :alt="`${apartment.name}: ${apartment.photo.fileName}`" class="apartment-card__image" loading="lazy" decoding="async">
           <div v-else class="apartment-card__placeholder"><UIcon name="i-lucide-building-2" class="size-7" /><span>{{ t('apartments.photo') }}</span></div>
@@ -96,7 +98,7 @@ function openApartment(apartmentId: string) {
     </div>
 
     <div v-else-if="sortedApartments.length && view === 'list'" class="apartments-collection apartments-collection--list">
-      <article v-for="apartment in sortedApartments" :key="apartment.id" class="apartment-list-item surface" :class="{ 'apartment-list-item--interactive': canEdit }" :role="canEdit ? 'link' : undefined" :tabindex="canEdit ? 0 : undefined" :aria-label="canEdit ? `${t('apartments.edit')}: ${apartment.name}` : undefined" @click="openApartment(apartment.id)" @keydown.enter="openApartment(apartment.id)" @keydown.space.prevent="openApartment(apartment.id)">
+      <article v-for="apartment in sortedApartments" :key="apartment.id" class="apartment-list-item surface" :class="{ 'apartment-list-item--interactive': canOpenSettings }" :role="canOpenSettings ? 'link' : undefined" :tabindex="canOpenSettings ? 0 : undefined" :aria-label="canOpenSettings ? `${t(isAdministrator ? 'apartments.edit' : 'icalImport.apartmentSettings')}: ${apartment.name}` : undefined" @click="openApartment(apartment.id)" @keydown.enter="openApartment(apartment.id)" @keydown.space.prevent="openApartment(apartment.id)">
         <div class="apartment-list-item__media"><img v-if="apartment.photo" :src="`/api/attachments/${apartment.photo.id}/file?variant=card`" :alt="`${apartment.name}: ${apartment.photo.fileName}`" class="apartment-card__image" loading="lazy" decoding="async"><div v-else class="apartment-list-item__placeholder"><UIcon name="i-lucide-building-2" class="size-5" /></div></div>
         <div class="apartment-list-item__details"><div class="min-w-0"><h2 class="truncate font-semibold">{{ apartment.name }}</h2><p class="truncate text-sm text-[var(--color-muted)]">{{ hotelLabel(apartment) }}</p></div><p class="hidden truncate text-sm text-[var(--color-muted)] sm:block">{{ apartment.locationDetails || apartment.type.name }}</p><p class="apartment-list-item__facts"><span>{{ t('apartments.guests') }}: <b>{{ apartment.capacity }}</b></span><span>{{ t('apartments.rooms') }}: <b>{{ apartment.rooms }}</b></span></p></div>
         <div class="apartment-list-item__owners"><p class="text-xs text-[var(--color-muted)]">{{ t('apartments.managers') }}</p><p class="truncate text-sm font-semibold">{{ apartment.managers.map(manager => manager.name).join(', ') || t('apartments.notAssigned') }}</p></div>
@@ -105,7 +107,7 @@ function openApartment(apartmentId: string) {
     </div>
 
     <div v-else-if="sortedApartments.length" class="apartments-collection" :class="`apartments-collection--${view}`">
-      <article v-for="(apartment, index) in sortedApartments" :key="apartment.id" class="apartment-card surface" :class="{ 'apartment-card--dense': view === 'dense', 'apartment-card--interactive': canEdit }" :role="canEdit ? 'link' : undefined" :tabindex="canEdit ? 0 : undefined" :aria-label="canEdit ? `${t('apartments.edit')}: ${apartment.name}` : undefined" @click="openApartment(apartment.id)" @keydown.enter="openApartment(apartment.id)" @keydown.space.prevent="openApartment(apartment.id)">
+      <article v-for="(apartment, index) in sortedApartments" :key="apartment.id" class="apartment-card surface" :class="{ 'apartment-card--dense': view === 'dense', 'apartment-card--interactive': canOpenSettings }" :role="canOpenSettings ? 'link' : undefined" :tabindex="canOpenSettings ? 0 : undefined" :aria-label="canOpenSettings ? `${t(isAdministrator ? 'apartments.edit' : 'icalImport.apartmentSettings')}: ${apartment.name}` : undefined" @click="openApartment(apartment.id)" @keydown.enter="openApartment(apartment.id)" @keydown.space.prevent="openApartment(apartment.id)">
         <div class="apartment-card__media"><ApartmentPhotoCarousel v-if="apartment.photos.length" :photos="apartment.photos" :apartment-name="apartment.name" :eager="index < 3" /><div v-else class="apartment-card__placeholder"><UIcon name="i-lucide-building-2" class="size-9" /><span>{{ t('apartments.photo') }}</span></div><StatusBadge class="apartment-card__status" :label="statusLabel(apartment)" :tone="statusTone(apartment)" /></div>
         <div class="apartment-card__body"><div class="min-w-0"><p class="truncate text-sm font-medium text-[var(--color-primary)]">{{ hotelLabel(apartment) }}</p><h2 class="mt-1 truncate text-xl font-semibold tracking-[-0.03em]">{{ apartment.name }}</h2><p class="mt-1 min-h-10 text-sm leading-5 text-[var(--color-muted)]">{{ apartment.locationDetails || apartment.type.name }}</p></div><dl class="apartment-card__facts"><div><dt>{{ t('apartments.guests') }}</dt><dd>{{ apartment.capacity }}</dd></div><div><dt>{{ t('apartments.rooms') }}</dt><dd>{{ apartment.rooms }}</dd></div></dl><div class="apartment-card__footer"><div class="min-w-0"><p class="text-xs text-[var(--color-muted)]">{{ t('apartments.managers') }}</p><p class="truncate text-sm font-semibold">{{ apartment.managers.map(manager => manager.name).join(', ') || t('apartments.notAssigned') }}</p></div></div></div>
       </article>

@@ -77,6 +77,7 @@ const pushDescription = computed(() => t(`notifications.push${push.description.v
 
 const notificationAppearance: Record<NotificationType, { icon: string; className: string }> = {
   stay_changed: { icon: 'i-lucide-calendar-range', className: 'bg-[var(--color-primary-soft)] text-[var(--color-primary)]' },
+  stay_conflict: { icon: 'i-lucide-calendar-sync', className: 'bg-[#fff4d7] text-[#9a5b10]' },
   work_assigned: { icon: 'i-lucide-clipboard-check', className: 'bg-[#edf3f7] text-[#356882]' },
   work_rescheduled: { icon: 'i-lucide-calendar-clock', className: 'bg-[#fff4d7] text-[#9a5b10]' },
   work_canceled: { icon: 'i-lucide-circle-x', className: 'bg-[#f1f3f2] text-[#647a70]' },

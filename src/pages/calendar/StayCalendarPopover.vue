@@ -52,7 +52,8 @@ const contextLabel = computed(() => ({ arrival: t('calendar.arrival'), stay: t('
 const hasCleaning = computed(() => Boolean(props.stay.cleaning?.id))
 const cleaningPresentation = computed(() => stayCleaningPresentation(props.stay, t))
 const nights = computed(() => Math.max(0, Math.round((Date.parse(`${props.stay.checkOutOn}T12:00:00Z`) - Date.parse(`${props.stay.checkInOn}T12:00:00Z`)) / 86400000)))
-const guestCount = computed(() => props.stay.adultCount + props.stay.childCount)
+const guestCount = computed(() => props.stay.adultCount === null || props.stay.childCount === null ? null : props.stay.adultCount + props.stay.childCount)
+const guestBreakdown = computed(() => guestCount.value === null ? t('icalImport.guestsEnteredSeparately') : `${guestCount.value} · ${props.stay.adultCount}${props.stay.childCount ? `, ${props.stay.childCount} ${t('calendar.children').toLocaleLowerCase()}` : ''}`)
 const servicesLabel = computed(() => props.stay.services?.map(service => service.nameSnapshot).join(', ') ?? '')
 
 function editStay() {
@@ -103,7 +104,7 @@ function editStay() {
             <div><dt>{{ t('calendar.arrival') }}</dt><dd>{{ formatDate(stay.checkInOn) }}</dd></div>
             <div><dt>{{ t('calendar.departure') }}</dt><dd>{{ formatDate(stay.checkOutOn) }}</dd></div>
             <div><dt>{{ t('calendar.stays') }}</dt><dd>{{ nights }}</dd></div>
-            <div><dt>{{ t('calendar.adults') }}</dt><dd>{{ guestCount }} · {{ stay.adultCount }}<span v-if="stay.childCount">, {{ stay.childCount }} {{ t('calendar.children').toLocaleLowerCase() }}</span></dd></div>
+            <div><dt>{{ t('calendar.adults') }}</dt><dd>{{ guestBreakdown }}</dd></div>
           </dl>
 
           <StayServiceIcons v-if="stay.services?.length" :services="stay.services" :compact="false" />
