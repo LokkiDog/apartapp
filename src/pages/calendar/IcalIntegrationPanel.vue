@@ -32,7 +32,7 @@ watch(() => props.apartmentId, load, { immediate: true })
 </script>
 
 <template>
-  <section class="mx-auto w-full max-w-[1040px] surface space-y-3 p-4">
+  <section class="mx-auto w-full max-w-[1040px] surface space-y-3 p-4" style="display: none">
       <header class="flex items-center gap-3"><span class="grid size-10 shrink-0 place-items-center rounded-xl bg-[var(--color-primary-soft)] text-[var(--color-primary)]"><UIcon name="i-lucide-calendar-sync" class="size-5" /></span><div><h2 class="font-semibold">{{ t('icalImport.title') }}</h2><p class="text-sm text-[var(--color-muted)]">{{ apartmentName }}</p></div></header>
       <p class="text-sm text-[var(--color-muted)]">{{ t('icalImport.hint') }}</p>
       <div class="flex flex-col gap-2 sm:flex-row">
