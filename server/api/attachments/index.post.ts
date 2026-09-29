@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { and, eq } from 'drizzle-orm'
-import { canAccessAssignedWork, requireActor } from '../../infrastructure/auth/actor'
+import { canAccessAssignedWork, canManageApartment, requireActor } from '../../infrastructure/auth/actor'
 import { db } from '../../infrastructure/database/client'
 import { apartments, attachments, cleaningProblems, cleanings, tasks } from '../../infrastructure/database/schema'
 import { fileStorage } from '../../infrastructure/storage/local'
@@ -26,7 +26,7 @@ export default defineEventHandler(async event => {
     if (entityType === 'apartment') {
       const apartment = await db.query.apartments.findFirst({ where: and(eq(apartments.id, entityId), eq(apartments.organizationId, actor.organizationId)) })
       if (!apartment) throw createError({ statusCode: 404, statusMessage: 'Апартамент не найден' })
-      return actor.roles.includes('administrator')
+      return actor.roles.includes('administrator') || (actor.roles.includes('manager') && await canManageApartment(actor, entityId))
     }
     if (entityType === 'cleaning_problem') {
       const problem = await db.query.cleaningProblems.findFirst({ where: and(eq(cleaningProblems.id, entityId), eq(cleaningProblems.organizationId, actor.organizationId)), with: { cleaning: { with: { assignments: true } } } })

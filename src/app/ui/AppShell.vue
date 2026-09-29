@@ -245,6 +245,17 @@ async function logout() {
         <NuxtLink :to="homeHref" class="brand-mark lg:hidden"
           >aparts<span>.</span></NuxtLink
         >
+        <UButton
+          v-if="usesManagerOnlyNavigation(user)"
+          class="topbar-action lg:hidden"
+          color="neutral"
+          variant="ghost"
+          icon="i-lucide-log-out"
+          :aria-label="$t('common.logout')"
+          :loading="logoutPending"
+          :disabled="logoutPending"
+          @click="logout"
+        />
         <div class="app-topbar__actions">
           <LanguageSwitcher />
           <UButton
@@ -315,7 +326,7 @@ async function logout() {
         }}</span>
       </NuxtLink>
       <button
-        v-if="!isSpecialistNavigation && (mobileMore.length || user)"
+        v-if="!usesManagerOnlyNavigation(user) && !isSpecialistNavigation && (mobileMore.length || user)"
         type="button"
         class="mobile-nav__item"
         :class="{

@@ -23,6 +23,7 @@ const apartmentId = String(route.params.id)
 const currentUser = useCurrentUser()
 const { t } = useI18n()
 const isAdministrator = computed(() => Boolean(currentUser.value?.roles.includes('administrator')))
+const isApartmentOwner = computed(() => Boolean(currentUser.value?.roles.includes('manager') && !isAdministrator.value))
 const canOpenApartmentSettings = computed(() => Boolean(currentUser.value?.roles.some(role => ['administrator', 'manager'].includes(role))))
 if (currentUser.value && !canOpenApartmentSettings.value) {
   await navigateTo('/apartments')
@@ -39,10 +40,10 @@ const [
   useAsyncData('apartment-form-hotels', () => isAdministrator.value ? $fetch<ApartmentFormHotel[]>('/api/hotels') : Promise.resolve([]), { server: false, default: () => [], watch: [currentUser] }),
   useAsyncData('apartment-form-users', () => isAdministrator.value ? $fetch<ApartmentFormManager[]>('/api/users') : Promise.resolve([]), { server: false, default: () => [], watch: [currentUser] }),
   useAsyncData('apartment-form-types', () => isAdministrator.value ? $fetch<ApartmentFormType[]>('/api/apartment-types') : Promise.resolve([]), { server: false, default: () => [], watch: [currentUser] }),
-  useAsyncData(`apartment-photos-${apartmentId}`, () => isAdministrator.value ? $fetch<Attachment[]>('/api/attachments', { query: { entityType: 'apartment', entityId: apartmentId } }) : Promise.resolve([]), { server: false, default: () => [], watch: [currentUser] })
+  useAsyncData(`apartment-photos-${apartmentId}`, () => isAdministrator.value || isApartmentOwner.value ? $fetch<Attachment[]>('/api/attachments', { query: { entityType: 'apartment', entityId: apartmentId } }) : Promise.resolve([]), { server: false, default: () => [], watch: [currentUser] })
 ])
 
-const loading = computed(() => [apartmentStatus.value, hotelsStatus.value, usersStatus.value, typesStatus.value].some(status => status === 'idle' || status === 'pending'))
+const loading = computed(() => [apartmentStatus.value, hotelsStatus.value, usersStatus.value, typesStatus.value, photosStatus.value].some(status => status === 'idle' || status === 'pending'))
 const loadError = computed(() => apartmentError.value || hotelsError.value || usersError.value || typesError.value)
 
 const initialValue = computed<Partial<ApartmentInput>>(() => apartment.value ? {
@@ -71,6 +72,29 @@ const deleteOpen = ref(false)
 const deletePending = ref(false)
 const actionError = ref(route.query.photoUploadFailed ? t('apartments.photoUploadPartial') : '')
 const actionSuccess = ref('')
+const ownerTimes = reactive({ checkInTime: '', checkOutTime: '' })
+const ownerTimesPending = ref(false)
+
+watch(apartment, value => {
+  if (!value) return
+  ownerTimes.checkInTime = value.checkInTime
+  ownerTimes.checkOutTime = value.checkOutTime
+}, { immediate: true })
+
+async function saveOwnerTimes() {
+  ownerTimesPending.value = true
+  actionError.value = ''
+  actionSuccess.value = ''
+  try {
+    await $fetch(`/api/apartments/${apartmentId}`, { method: 'PATCH', body: { ...ownerTimes } })
+    await refreshApartment()
+    actionSuccess.value = t('taskNotice.saved')
+  } catch (cause: any) {
+    actionError.value = cause?.data?.statusMessage ?? t('apartments.saveError')
+  } finally {
+    ownerTimesPending.value = false
+  }
+}
 
 function removePendingPhoto(index: number) {
   pendingPhotos.value = pendingPhotos.value.filter((_, itemIndex) => itemIndex !== index)
@@ -191,7 +215,7 @@ async function removeApartment() {
       <UAlert v-if="actionError && !deleteOpen" color="error" variant="soft" icon="i-lucide-circle-alert" :description="actionError" />
 
       <ApartmentPhotoPanel
-        v-if="isAdministrator"
+        v-if="isAdministrator || isApartmentOwner"
         :attachments="photos ?? []"
         :pending-photos="pendingPhotos"
         :loading="photosStatus === 'pending'"
@@ -201,6 +225,26 @@ async function removeApartment() {
         @remove-attachment="askToDeletePhoto"
         @invalid-files="actionError = t('apartments.photoFormatError')"
       />
+
+      <section v-if="isApartmentOwner" class="apartment-form-section surface">
+        <div class="apartment-form-section__header">
+          <div class="apartment-form-section__icon"><UIcon name="i-lucide-clock-3" class="size-5" /></div>
+          <h2 class="text-lg font-semibold">{{ t('apartments.parameters') }}</h2>
+        </div>
+        <form class="mt-5 space-y-4" @submit.prevent="saveOwnerTimes">
+          <div class="apartment-form-fields apartment-form-fields--two">
+            <UFormField name="checkInTime" :label="t('apartments.standardCheckIn')" required>
+              <UInput v-model="ownerTimes.checkInTime" class="w-full tabular-nums" size="xl" type="time" />
+            </UFormField>
+            <UFormField name="checkOutTime" :label="t('apartments.standardCheckOut')" required>
+              <UInput v-model="ownerTimes.checkOutTime" class="w-full tabular-nums" size="xl" type="time" />
+            </UFormField>
+          </div>
+          <UButton type="submit" :loading="ownerTimesPending" :disabled="ownerTimesPending" class="min-h-11">
+            {{ t('apartments.saveChanges') }}
+          </UButton>
+        </form>
+      </section>
 
       <ApartmentForm
         v-if="isAdministrator"

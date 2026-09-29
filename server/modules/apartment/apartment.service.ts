@@ -1,6 +1,6 @@
 import { and, asc, eq, gte, inArray, or } from 'drizzle-orm'
 import Decimal from 'decimal.js'
-import { apartmentInputSchema, apartmentTypeInputSchema, apartmentUpdateSchema, isApartmentOwnerEligible } from '@contracts/crm'
+import { apartmentInputSchema, apartmentOwnerSettingsSchema, apartmentTypeInputSchema, apartmentUpdateSchema, isApartmentOwnerEligible } from '@contracts/crm'
 import { canManageApartment, managedApartmentIds, requireRole, type Actor } from '../../infrastructure/auth/actor'
 import { writeAuditLog } from '../../infrastructure/audit/log'
 import { db } from '../../infrastructure/database/client'
@@ -188,14 +188,27 @@ export async function getApartment(actor: Actor, apartmentId: string) {
 }
 
 export async function updateApartment(actor: Actor, apartmentId: string, input: unknown) {
-  requireRole(actor, 'administrator')
-  const data = apartmentUpdateSchema.parse(input)
-  const { managerIds, ...apartmentData } = data
   const existing = await db.query.apartments.findFirst({
     where: and(eq(apartments.id, apartmentId), eq(apartments.organizationId, actor.organizationId)),
     with: { type: true }
   })
   if (!existing) throw createError({ statusCode: 404, statusMessage: 'Апартамент не найден' })
+
+  if (!actor.roles.includes('administrator')) {
+    requireRole(actor, 'manager')
+    if (!(await canManageApartment(actor, apartmentId))) throw createError({ statusCode: 403, statusMessage: 'Нет доступа к апартаменту' })
+    const settings = apartmentOwnerSettingsSchema.parse(input)
+    const [updated] = await db.update(apartments)
+      .set({ ...settings, updatedAt: new Date() })
+      .where(and(eq(apartments.id, apartmentId), eq(apartments.organizationId, actor.organizationId)))
+      .returning()
+    if (!updated) throw createError({ statusCode: 404, statusMessage: 'Апартамент не найден' })
+    await writeAuditLog({ organizationId: actor.organizationId, actorId: actor.id, action: 'apartment.owner_settings_updated', entityType: 'apartment', entityId: apartmentId, payload: { checkInTime: settings.checkInTime, checkOutTime: settings.checkOutTime } })
+    return getApartment(actor, updated.id)
+  }
+
+  const data = apartmentUpdateSchema.parse(input)
+  const { managerIds, ...apartmentData } = data
   if (data.hotelId && data.hotelId !== existing.hotelId) {
     const hotel = await db.query.hotels.findFirst({ where: and(eq(hotels.id, data.hotelId), eq(hotels.organizationId, actor.organizationId), eq(hotels.status, 'active')) })
     if (!hotel) throw createError({ statusCode: 400, statusMessage: 'Нельзя перенести апартамент в неактивный отель' })

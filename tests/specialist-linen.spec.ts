@@ -109,7 +109,7 @@ describe('specialist and linen collection', () => {
     expect(shell).toContain('const specialistWork = computed<NavItem[]>(() => [')
     expect(shell).toContain('{ to: "/tasks", label: t("work.tasks"), icon: "i-lucide-clipboard-check" }')
     expect(shell).toContain('if (isSpecialistNavigation.value) return specialistWork.value')
-    expect(shell).toContain('v-if="!isSpecialistNavigation && (mobileMore.length || user)"')
+    expect(shell).toContain('v-if="!usesManagerOnlyNavigation(user) && !isSpecialistNavigation && (mobileMore.length || user)"')
     expect(shell).toContain('v-if="isSpecialistNavigation"')
     expect(specialistTasksPage).toContain('<WorkPage />')
     expect(specialistHome).toContain("roles.includes('specialist') && !user.value.roles.includes('administrator')")

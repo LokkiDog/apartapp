@@ -7,8 +7,8 @@ describe('stay history UI', () => {
     const panel = readFileSync('src/pages/calendar/StayBookingsPanel.vue', 'utf8')
     const row = readFileSync('src/pages/calendar/StayBookingRow.vue', 'utf8')
 
-    expect(page).toContain("bookingView === 'dates' && historyDays")
-    expect(page).toContain("bookingView === 'apartments' && historyDays")
+    expect(page).toContain("bookingView === 'dates' && (historyDays || (!isAdministrator && historyStays.length))")
+    expect(page).toContain("bookingView === 'apartments' && (historyDays || (!isAdministrator && historyStays.length))")
     expect(page).toContain("t('calendarHistoryExtra.uncleanedTitle')")
     expect(page).toContain('collapsible')
     expect(page).toContain('warning')

@@ -84,6 +84,10 @@ export const apartmentInputSchema = z.object({
   tariffOverride: apartmentTariffInputSchema.optional()
 })
 export const apartmentUpdateSchema = apartmentInputSchema.partial().extend({ managerIds: apartmentManagerIdsSchema.optional() })
+export const apartmentOwnerSettingsSchema = z.object({
+  checkInTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Укажите время заезда'),
+  checkOutTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Укажите время выезда')
+}).strict()
 
 export const specialServiceInputSchema = z.object({
   name: z.string().trim().min(1).max(120),
