@@ -1600,16 +1600,21 @@ img {
   font-variant-numeric: tabular-nums;
 }
 .stay-bookings-panel__chevron {
-  width: 44px;
-  min-width: 44px;
-  height: 44px;
-  padding: 12px;
+  width: 20px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0;
   transition-property: rotate;
   transition-duration: 150ms;
   transition-timing-function: ease-out;
 }
 .stay-bookings-panel__chevron--open {
   rotate: 180deg;
+}
+.stay-bookings-panel__chevron--small {
+  width: 16px;
+  min-width: 16px;
+  height: 16px;
 }
 .stay-bookings-panel--warning {
   background: #fffaf0;

@@ -12,7 +12,7 @@ export interface Stay {
   cashTaskState?: 'none' | 'pending' | 'collected'
   apartmentId: string
   apartment: { name: string; hotel: { name: string } }
-  hasCleaning: boolean
+  hasCleaning?: boolean
   cleaning?: { id: string; status: string; scheduledOn: string } | null
   services?: Array<{
     id: string

@@ -2,6 +2,7 @@
 import type { DropdownMenuItem } from '@nuxt/ui'
 import type { Stay } from '#fsd/entities/stay'
 import { formatDate, formatEuro, getFormatLocale } from '#fsd/shared/lib'
+import { useCurrentUser } from '#fsd/shared/auth'
 import StayServiceIcons from './StayServiceIcons.vue'
 import { stayCleaningHref, stayCleaningPresentation } from './model/stay-cleaning'
 import { useI18n } from 'vue-i18n'
@@ -15,6 +16,7 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{ open: [stay: Stay]; edit: [stay: Stay]; delete: [stay: Stay] }>()
 const { t } = useI18n()
+const user = useCurrentUser()
 
 function guestBreakdownLabel(stay: Stay) {
   const adults = `${t('calendar.adults')}: ${stay.adultCount}`
@@ -36,7 +38,9 @@ function cashLabel(stay: Stay) {
 function menuItems(stay: Stay): DropdownMenuItem[][] {
   const items: DropdownMenuItem[] = []
   if (props.canEdit) items.push({ label: t('calendar.editBooking'), icon: 'i-lucide-pencil', onSelect: () => emit('edit', stay) })
-  if (props.canDelete) items.push({ label: t('calendar.deleteBooking'), icon: 'i-lucide-trash-2', color: 'error', onSelect: () => emit('delete', stay) })
+  const isAdministrator = user.value?.roles.includes('administrator') ?? false
+  const today = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'Europe/Sofia' }).format(new Date())
+  if (props.canDelete && (isAdministrator || stay.checkInOn > today)) items.push({ label: t('calendar.deleteBooking'), icon: 'i-lucide-trash-2', color: 'error', onSelect: () => emit('delete', stay) })
   return items.length ? [items] : []
 }
 </script>

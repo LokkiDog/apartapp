@@ -89,6 +89,7 @@ const validate = createFormValidator(stayInputSchema, t, { pathMap: { checkOutOn
 const showGuestDetails = computed(() => Boolean(user.value?.roles.some(role => ['administrator', 'manager'].includes(role))))
 const showFinancialDetails = computed(() => Boolean(user.value?.roles.includes('administrator')))
 const canEditStays = computed(() => Boolean(user.value?.roles.some(role => ['administrator', 'manager'].includes(role))))
+const canDeleteStays = computed(() => Boolean(user.value?.roles.some(role => ['administrator', 'manager'].includes(role))))
 
 const isAdministrator = computed(() => Boolean(user.value?.roles.includes('administrator')))
 const [
@@ -148,8 +149,12 @@ const formApartments = computed(() => {
 })
 const calendarStays = computed(() => stays.value ?? [])
 const currentStays = computed(() => calendarStays.value.filter(stay => !isPastStay(stay, todayKey())))
-const uncleanedPastStays = computed(() => calendarStays.value.filter(stay => isPastStay(stay, todayKey()) && !(stay.hasCleaning ?? Boolean(stay.cleaning?.id))).sort((left, right) => left.checkOutOn.localeCompare(right.checkOutOn)))
-const historyStays = computed(() => calendarStays.value.filter(stay => isPastStay(stay, todayKey()) && (stay.hasCleaning ?? Boolean(stay.cleaning?.id))).sort((left, right) => right.checkOutOn.localeCompare(left.checkOutOn) || right.checkInOn.localeCompare(left.checkInOn)))
+const uncleanedPastStays = computed(() => isAdministrator.value
+  ? calendarStays.value.filter(stay => isPastStay(stay, todayKey()) && !stay.hasCleaning).sort((left, right) => left.checkOutOn.localeCompare(right.checkOutOn))
+  : [])
+const historyStays = computed(() => calendarStays.value.filter(stay => isPastStay(stay, todayKey()) && (
+  !isAdministrator.value || stay.hasCleaning
+)).sort((left, right) => right.checkOutOn.localeCompare(left.checkOutOn) || right.checkInOn.localeCompare(left.checkInOn)))
 const weekDays = computed(() => daysBetween(range.value.from, range.value.to))
 const monthDays = computed(() => daysBetween(range.value.from, range.value.to))
 const monthWeeks = computed(() => Array.from({ length: Math.ceil(monthDays.value.length / 7) }, (_, index) => monthDays.value.slice(index * 7, index * 7 + 7)))
@@ -356,7 +361,7 @@ function openDelete(stay: Stay) { stayToDelete.value = stay; deleteOpen.value = 
 function stayMenuItems(stay: Stay): DropdownMenuItem[][] {
   const items: DropdownMenuItem[] = []
   if (canEditStays.value) items.push({ label: t('calendar.editBooking'), icon: 'i-lucide-pencil', onSelect: () => openEdit(stay) })
-  if (user.value?.roles.includes('administrator')) items.push({ label: t('calendar.deleteBooking'), icon: 'i-lucide-trash-2', color: 'error', onSelect: () => openDelete(stay) })
+  if (user.value?.roles.some(role => ['administrator', 'manager'].includes(role)) && (isAdministrator.value || stay.checkInOn > todayKey())) items.push({ label: t('calendar.deleteBooking'), icon: 'i-lucide-trash-2', color: 'error', onSelect: () => openDelete(stay) })
   return items.length ? [items] : []
 }
 async function removeStay() { if (!stayToDelete.value) return; pending.value = true; error.value = ''; try { await $fetch(`/api/stays/${stayToDelete.value.id}`, { method: 'DELETE' }); deleteOpen.value = false; stayToDelete.value = null; await refresh() } catch (cause: any) { error.value = cause?.data?.statusMessage ?? t('common.error') } finally { pending.value = false } }
@@ -454,6 +459,7 @@ async function saveStay() {
       :row-variant="bookingView === 'dates' ? 'agenda' : 'apartment'"
       :can-edit="canEditStays"
       :can-delete="Boolean(user?.roles.includes('administrator'))"
+      :can-manage-cleaning="isAdministrator"
       collapsible
       warning
       @open="openDetails"
@@ -488,7 +494,7 @@ async function saveStay() {
                 <span class="stay-agenda-category__count">{{ category.items.length }}</span>
               </header>
               <div class="stay-agenda-category__items">
-                <StayBookingRow v-for="item in category.items" :key="`${day.date}-${item.stay.id}-${item.status}`" :stay="item.stay" variant="agenda" :can-edit="canEditStays" :can-delete="Boolean(user?.roles.includes('administrator'))" :can-manage-cleaning="Boolean(user?.roles.includes('administrator'))" @open="openDetails" @edit="openEdit" @delete="openDelete" />
+                <StayBookingRow v-for="item in category.items" :key="`${day.date}-${item.stay.id}-${item.status}`" :stay="item.stay" variant="agenda" :can-edit="canEditStays" :can-delete="canDeleteStays" :can-manage-cleaning="isAdministrator" @open="openDetails" @edit="openEdit" @delete="openDelete" />
               </div>
             </section>
           </div>
@@ -497,14 +503,14 @@ async function saveStay() {
     </div>
     <EmptyState v-else-if="bookingView === 'dates' && !historyDays && !uncleanedPastStays.length && !historyStays.length" icon="i-lucide-calendar-check-2" :title="t('calendar.eventTypes')" :description="t('calendar.chooseScope')"><template #actions><UButton :disabled="!canCreateStays" @click="openCreate">{{ t('calendar.newBooking') }}</UButton><p v-if="!canCreateStays" class="text-sm text-[var(--color-muted)]">{{ t('calendar.noOwnedApartments') }}</p></template></EmptyState>
 
-    <template v-if="bookingView === 'dates' && historyDays">
-      <StayBookingsPanel :stays="historyStays" :title="t('calendarHistoryExtra.pastTitle')" group-by="date" row-variant="agenda" :can-edit="canEditStays" :can-delete="Boolean(user?.roles.includes('administrator'))" :empty-label="t('calendarHistoryExtra.pastEmpty')" @open="openDetails" @edit="openEdit" @delete="openDelete" />
+    <template v-if="bookingView === 'dates' && (historyDays || (!isAdministrator && historyStays.length))">
+      <StayBookingsPanel :stays="historyStays" :title="t('calendarHistoryExtra.pastTitle')" group-by="date" row-variant="agenda" :can-edit="canEditStays" :can-delete="canDeleteStays" :can-manage-cleaning="isAdministrator" :empty-label="t('calendarHistoryExtra.pastEmpty')" collapsible small-chevron @open="openDetails" @edit="openEdit" @delete="openDelete" />
     </template>
     <UButton v-if="scopeReady && bookingView === 'dates'" color="neutral" variant="soft" block :loading="historyLoading" icon="i-lucide-history" class="min-h-11 active:scale-[0.96] transition-transform" @click="loadMoreHistory">{{ historyDays ? t('calendarHistoryExtra.loadMorePast') : t('calendarHistoryExtra.pastTitle') }}</UButton>
 
-    <ApartmentBookingsView v-if="bookingView === 'apartments' && visibleApartments.length" :apartments="visibleApartments" :stays="currentStays" :can-edit="canEditStays" :can-delete="Boolean(user?.roles.includes('administrator'))" @open="openDetails" @edit="openEdit" @delete="openDelete" />
-    <template v-if="bookingView === 'apartments' && historyDays">
-      <StayBookingsPanel :stays="historyStays" :title="t('calendarHistoryExtra.pastTitle')" group-by="apartment" row-variant="apartment" :can-edit="canEditStays" :can-delete="Boolean(user?.roles.includes('administrator'))" :empty-label="t('calendarHistoryExtra.pastEmpty')" @open="openDetails" @edit="openEdit" @delete="openDelete" />
+    <ApartmentBookingsView v-if="bookingView === 'apartments' && visibleApartments.length" :apartments="visibleApartments" :stays="currentStays" :can-edit="canEditStays" :can-delete="canDeleteStays" :can-manage-cleaning="isAdministrator" @open="openDetails" @edit="openEdit" @delete="openDelete" />
+    <template v-if="bookingView === 'apartments' && (historyDays || (!isAdministrator && historyStays.length))">
+      <StayBookingsPanel :stays="historyStays" :title="t('calendarHistoryExtra.pastTitle')" group-by="apartment" row-variant="apartment" :can-edit="canEditStays" :can-delete="canDeleteStays" :can-manage-cleaning="isAdministrator" :empty-label="t('calendarHistoryExtra.pastEmpty')" collapsible small-chevron @open="openDetails" @edit="openEdit" @delete="openDelete" />
     </template>
     <UButton v-if="scopeReady && bookingView === 'apartments' && visibleApartments.length" color="neutral" variant="soft" block :loading="historyLoading" icon="i-lucide-history" class="min-h-11 active:scale-[0.96] transition-transform" @click="loadMoreHistory">{{ historyDays ? t('calendarHistoryExtra.loadMorePast') : t('calendarHistoryExtra.pastTitle') }}</UButton>
     <EmptyState v-if="bookingView === 'apartments' && !visibleApartments.length" icon="i-lucide-building-2" :title="t('scope.apartmentsLabel')" :description="t('scope.loadErrorDescription')" />
@@ -687,6 +693,6 @@ async function saveStay() {
       </template>
     </USlideover>
 
-    <UModal v-model:open="deleteOpen" :title="t('calendar.deleteBooking')"><template #body><div class="space-y-5"><p>{{ t('calendar.deleteWarning') }}</p><UAlert color="error" variant="soft" :title="t('common.error')" /><UAlert v-if="error" color="error" variant="soft" :description="error" /><div class="form-actions"><UButton color="neutral" variant="ghost" @click="deleteOpen = false">{{ t('calendar.cancel') }}</UButton><UButton color="error" :loading="pending" @click="removeStay">{{ t('calendar.deleteForever') }}</UButton></div></div></template></UModal>
+    <UModal v-model:open="deleteOpen" :title="t('calendar.deleteBooking')"><template #body><div class="space-y-5"><p>{{ t('calendar.deleteWarning') }}</p><UAlert v-if="error" color="error" variant="soft" :description="error" /><div class="form-actions"><UButton color="neutral" variant="ghost" @click="deleteOpen = false">{{ t('calendar.cancel') }}</UButton><UButton color="error" :loading="pending" @click="removeStay">{{ t('work.delete') }}</UButton></div></div></template></UModal>
   </section>
 </template>

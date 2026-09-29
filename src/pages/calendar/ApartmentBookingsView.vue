@@ -10,6 +10,7 @@ const props = defineProps<{
   stays: Stay[]
   canEdit: boolean
   canDelete: boolean
+  canManageCleaning?: boolean
 }>()
 const emit = defineEmits<{ open: [stay: Stay]; edit: [stay: Stay]; delete: [stay: Stay] }>()
 const { t } = useI18n()
@@ -32,7 +33,7 @@ const groups = computed(() => props.apartments.map(apartment => ({
       </template>
       <template #content>
         <div v-if="group.stays.length" class="apartment-bookings__items">
-          <StayBookingRow v-for="stay in group.stays" :key="stay.id" :stay="stay" variant="apartment" :can-edit="canEdit" :can-delete="canDelete" :can-manage-cleaning="canDelete" @open="emit('open', $event)" @edit="emit('edit', $event)" @delete="emit('delete', $event)" />
+          <StayBookingRow v-for="stay in group.stays" :key="stay.id" :stay="stay" variant="apartment" :can-edit="canEdit" :can-delete="canDelete" :can-manage-cleaning="canManageCleaning ?? false" @open="emit('open', $event)" @edit="emit('edit', $event)" @delete="emit('delete', $event)" />
         </div>
         <p v-else class="apartment-bookings__empty">{{ t('calendarExtra.noBookings') }}</p>
       </template>

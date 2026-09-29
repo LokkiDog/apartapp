@@ -11,9 +11,11 @@ const props = defineProps<{
   rowVariant: 'agenda' | 'apartment'
   canEdit: boolean
   canDelete: boolean
+  canManageCleaning?: boolean
   emptyLabel?: string
   collapsible?: boolean
   warning?: boolean
+  smallChevron?: boolean
 }>()
 const emit = defineEmits<{ open: [stay: Stay]; edit: [stay: Stay]; delete: [stay: Stay] }>()
 const { t } = useI18n()
@@ -38,7 +40,7 @@ const groups = computed(() => {
       <template #default="{ open }">
         <button type="button" class="stay-bookings-panel__header stay-bookings-panel__header--toggle" :aria-label="title">
           <span class="stay-bookings-panel__title"><span>{{ title }}</span><span class="stay-bookings-panel__count">{{ stays.length }}</span></span>
-          <UIcon name="i-lucide-chevron-down" class="stay-bookings-panel__chevron" :class="{ 'stay-bookings-panel__chevron--open': open }" aria-hidden="true" />
+          <UIcon name="i-lucide-chevron-down" class="stay-bookings-panel__chevron" :class="{ 'stay-bookings-panel__chevron--open': open, 'stay-bookings-panel__chevron--small': smallChevron }" aria-hidden="true" />
         </button>
       </template>
       <template #content>
@@ -46,7 +48,7 @@ const groups = computed(() => {
           <section v-for="group in groups" :key="group.key" class="stay-bookings-panel__group">
             <h3 class="stay-bookings-panel__group-title">{{ group.label }}</h3>
             <div :class="rowVariant === 'agenda' ? 'stay-bookings-panel__agenda-items' : 'apartment-bookings__items'">
-              <StayBookingRow v-for="stay in group.stays" :key="stay.id" :stay="stay" :variant="rowVariant" :can-edit="canEdit" :can-delete="canDelete" :can-manage-cleaning="canDelete" @open="emit('open', $event)" @edit="emit('edit', $event)" @delete="emit('delete', $event)" />
+              <StayBookingRow v-for="stay in group.stays" :key="stay.id" :stay="stay" :variant="rowVariant" :can-edit="canEdit" :can-delete="canDelete" :can-manage-cleaning="canManageCleaning ?? false" @open="emit('open', $event)" @edit="emit('edit', $event)" @delete="emit('delete', $event)" />
             </div>
           </section>
         </div>
@@ -62,7 +64,7 @@ const groups = computed(() => {
         <section v-for="group in groups" :key="group.key" class="stay-bookings-panel__group">
           <h3 class="stay-bookings-panel__group-title">{{ group.label }}</h3>
           <div :class="rowVariant === 'agenda' ? 'stay-bookings-panel__agenda-items' : 'apartment-bookings__items'">
-            <StayBookingRow v-for="stay in group.stays" :key="stay.id" :stay="stay" :variant="rowVariant" :can-edit="canEdit" :can-delete="canDelete" :can-manage-cleaning="canDelete" @open="emit('open', $event)" @edit="emit('edit', $event)" @delete="emit('delete', $event)" />
+            <StayBookingRow v-for="stay in group.stays" :key="stay.id" :stay="stay" :variant="rowVariant" :can-edit="canEdit" :can-delete="canDelete" :can-manage-cleaning="canManageCleaning ?? false" @open="emit('open', $event)" @edit="emit('edit', $event)" @delete="emit('delete', $event)" />
           </div>
         </section>
       </div>

@@ -70,7 +70,7 @@ export async function listStays(actor: Actor, query: StayListQuery = {}) {
       const cashTaskState = cashTaskStateByStayId.get(stay.id) ?? 'none'
       if (actor.roles.includes('administrator')) return { ...stay, apartment, hasCleaning, cashTaskState }
       const { cleaning: _cleaning, ...safeStay } = stay
-      return { ...safeStay, apartment, hasCleaning, cashTaskState }
+      return { ...safeStay, apartment, cashTaskState }
     })
 }
 
@@ -144,9 +144,14 @@ export async function updateStay(actor: Actor, stayId: string, input: unknown) {
 }
 
 export async function deleteStay(actor: Actor, stayId: string) {
-  requireRole(actor, 'administrator')
+  requireRole(actor, 'administrator', 'manager')
   const stay = await db.query.stays.findFirst({ where: and(eq(stays.id, stayId), eq(stays.organizationId, actor.organizationId)), with: { services: true } })
   if (!stay) throw createError({ statusCode: 404, statusMessage: 'Заезд не найден' })
+  if (!(await canManageApartment(actor, stay.apartmentId))) throw createError({ statusCode: 403, statusMessage: 'Нет доступа к заезду' })
+  if (!actor.roles.includes('administrator') && actor.roles.includes('manager')) {
+    const today = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'Europe/Sofia' }).format(new Date())
+    if (stay.checkInOn <= today) throw createError({ statusCode: 403, statusMessage: 'Владелец может удалить только бронирование до даты заезда' })
+  }
   await syncCashTasksForStay(actor, stayId)
   await db.transaction(async tx => {
     const cleaning = await tx.query.cleanings.findFirst({ where: eq(cleanings.stayId, stayId) })
