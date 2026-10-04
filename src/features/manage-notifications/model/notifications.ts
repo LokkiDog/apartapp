@@ -26,7 +26,7 @@ export type NotificationRealtimeMessage =
   | { type: 'notifications.heartbeat' }
   | CleaningChangeMessage
   | TaskChangeMessage
-  | { type: 'session.revoked'; reason: 'archived' }
+  | { type: 'session.revoked'; reason: 'archived' | 'blocked' }
 
 export function useNotificationState() {
   const unreadCount = useState('notification-unread-count', () => 0)

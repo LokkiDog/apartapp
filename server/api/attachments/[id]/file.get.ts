@@ -37,7 +37,7 @@ export default defineEventHandler(async event => {
   }
   const isCardPreview = getQuery(event).variant === 'card'
   const etag = `"${attachment.id}-${isCardPreview ? 'card-v1' : 'original'}"`
-  setHeader(event, 'cache-control', 'private, max-age=31536000, immutable')
+  setHeader(event, 'cache-control', 'private, no-store')
   setHeader(event, 'etag', etag)
   if (getHeader(event, 'if-none-match') === etag) {
     setResponseStatus(event, 304)

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { clientResourceUrl } from "#fsd/shared/auth"
 import { useCurrentUser } from '#fsd/shared/auth'
 import { EmptyState, PageHeader, StatusBadge } from '#fsd/shared/ui'
 import { matchesApartmentSearch } from '#fsd/features/select-apartment'
@@ -89,7 +90,7 @@ function openApartment(apartmentId: string) {
     <div v-else-if="sortedApartments.length && view === 'compact'" class="apartments-collection apartments-collection--compact">
       <article v-for="apartment in sortedApartments" :key="apartment.id" class="apartment-compact-card surface" :class="{ 'apartment-compact-card--interactive': canOpenSettings }" :role="canOpenSettings ? 'link' : undefined" :tabindex="canOpenSettings ? 0 : undefined" :aria-label="canOpenSettings ? `${t(isAdministrator ? 'apartments.edit' : 'icalImport.apartmentSettings')}: ${apartment.name}` : undefined" @click="openApartment(apartment.id)" @keydown.enter="openApartment(apartment.id)" @keydown.space.prevent="openApartment(apartment.id)">
         <div class="apartment-compact-card__media">
-          <img v-if="apartment.photo" :src="`/api/attachments/${apartment.photo.id}/file?variant=card`" :alt="`${apartment.name}: ${apartment.photo.fileName}`" class="apartment-card__image" loading="lazy" decoding="async">
+          <img v-if="apartment.photo" :src="clientResourceUrl(`/api/attachments/${apartment.photo.id}/file?variant=card`)" :alt="`${apartment.name}: ${apartment.photo.fileName}`" class="apartment-card__image" loading="lazy" decoding="async">
           <div v-else class="apartment-card__placeholder"><UIcon name="i-lucide-building-2" class="size-7" /><span>{{ t('apartments.photo') }}</span></div>
           <StatusBadge class="apartment-compact-card__status" :label="statusLabel(apartment)" :tone="statusTone(apartment)" />
         </div>
@@ -99,7 +100,7 @@ function openApartment(apartmentId: string) {
 
     <div v-else-if="sortedApartments.length && view === 'list'" class="apartments-collection apartments-collection--list">
       <article v-for="apartment in sortedApartments" :key="apartment.id" class="apartment-list-item surface" :class="{ 'apartment-list-item--interactive': canOpenSettings }" :role="canOpenSettings ? 'link' : undefined" :tabindex="canOpenSettings ? 0 : undefined" :aria-label="canOpenSettings ? `${t(isAdministrator ? 'apartments.edit' : 'icalImport.apartmentSettings')}: ${apartment.name}` : undefined" @click="openApartment(apartment.id)" @keydown.enter="openApartment(apartment.id)" @keydown.space.prevent="openApartment(apartment.id)">
-        <div class="apartment-list-item__media"><img v-if="apartment.photo" :src="`/api/attachments/${apartment.photo.id}/file?variant=card`" :alt="`${apartment.name}: ${apartment.photo.fileName}`" class="apartment-card__image" loading="lazy" decoding="async"><div v-else class="apartment-list-item__placeholder"><UIcon name="i-lucide-building-2" class="size-5" /></div></div>
+        <div class="apartment-list-item__media"><img v-if="apartment.photo" :src="clientResourceUrl(`/api/attachments/${apartment.photo.id}/file?variant=card`)" :alt="`${apartment.name}: ${apartment.photo.fileName}`" class="apartment-card__image" loading="lazy" decoding="async"><div v-else class="apartment-list-item__placeholder"><UIcon name="i-lucide-building-2" class="size-5" /></div></div>
         <div class="apartment-list-item__details"><div class="min-w-0"><h2 class="truncate font-semibold">{{ apartment.name }}</h2><p class="truncate text-sm text-[var(--color-muted)]">{{ hotelLabel(apartment) }}</p></div><p class="hidden truncate text-sm text-[var(--color-muted)] sm:block">{{ apartment.locationDetails || apartment.type.name }}</p><p class="apartment-list-item__facts"><span>{{ t('apartments.guests') }}: <b>{{ apartment.capacity }}</b></span><span>{{ t('apartments.rooms') }}: <b>{{ apartment.rooms }}</b></span></p></div>
         <div class="apartment-list-item__owners"><p class="text-xs text-[var(--color-muted)]">{{ t('apartments.managers') }}</p><p class="truncate text-sm font-semibold">{{ apartment.managers.map(manager => manager.name).join(', ') || t('apartments.notAssigned') }}</p></div>
         <StatusBadge class="apartment-list-item__status" :label="statusLabel(apartment)" :tone="statusTone(apartment)" />

@@ -81,7 +81,8 @@ export default defineNuxtConfig({
       maxAge: AUTH_SESSION_IDLE_MAX_AGE_SECONDS
     },
     databaseUrl: process.env.DATABASE_URL,
-    organizationName: process.env.ORGANIZATION_NAME || 'Aparts Bansko',
+    organizationName: process.env.ORGANIZATION_NAME || 'Aparts',
+    superuserEmail: process.env.SUPERUSER_EMAIL,
     bootstrapAdminEmail: process.env.BOOTSTRAP_ADMIN_EMAIL,
     bootstrapAdminPassword: process.env.BOOTSTRAP_ADMIN_PASSWORD,
     brevoApiKey: process.env.BREVO_API_KEY,

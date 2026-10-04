@@ -46,6 +46,17 @@ describe('notification realtime broker', () => {
     unregisterNotificationPeer('user-b', otherUser)
   })
 
+  it('closes blocked-client sockets and stops their heartbeat immediately', () => {
+    vi.useFakeTimers()
+    const peer = { id: 'blocked-socket', send: vi.fn(), close: vi.fn() }
+    registerNotificationPeer('blocked-user', peer)
+    publishNotification('blocked-user', { type: 'session.revoked', reason: 'blocked' })
+    expect(peer.close).toHaveBeenCalledWith(1008, 'Session revoked')
+    peer.send.mockClear()
+    vi.advanceTimersByTime(25_000)
+    expect(peer.send).not.toHaveBeenCalled()
+  })
+
   it('delivers a cleaning change only to addressed users', () => {
     const addressed = { id: 'cleaning-addressed', send: vi.fn() }
     const unrelated = { id: 'cleaning-unrelated', send: vi.fn() }

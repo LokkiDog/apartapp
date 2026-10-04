@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import {
+  switchClientContext,
   canAccessWorkSection,
   useCurrentUser,
   usesManagerOnlyNavigation,
@@ -288,6 +289,10 @@ async function logout() {
         </div>
       </header>
       <main class="app-main" :aria-busy="isPageLoading">
+        <div v-if="user?.isSuperuser" class="sticky top-0 z-30 mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-amber-100 p-3 text-amber-950 shadow-sm">
+          <span>Клиент: <strong>{{ user.organizationName }}</strong><span v-if="user.organizationStatus === 'blocked'"> · Заблокирован</span></span>
+          <UButton color="neutral" variant="soft" class="min-h-11 cursor-pointer" @click="switchClientContext(null)">К клиентам</UButton>
+        </div>
         <slot />
         <Transition name="page-loading">
           <div

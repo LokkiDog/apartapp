@@ -1,9 +1,9 @@
 import { useNotificationState, type NotificationRealtimeMessage } from '#fsd/features/manage-notifications'
 import { useCurrentUser } from '#fsd/shared/auth'
 
-function websocketUrl() {
+function websocketUrl(context?: string) {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-  return `${protocol}//${window.location.host}/api/notifications/ws`
+  return `${protocol}//${window.location.host}/api/notifications/ws${context ? `?clientContext=${encodeURIComponent(context)}` : ''}`
 }
 
 export default defineNuxtPlugin(() => {
@@ -32,14 +32,15 @@ export default defineNuxtPlugin(() => {
     return error.response?.status === 401 || error.status === 401
   }
 
-  async function invalidateSession() {
+  async function invalidateSession(reason: 'archived' | 'blocked' = 'archived') {
     if (stopped) return
     stopped = true
     close()
     userSession.session.value = null
     notifications.unreadCount.value = 0
     await $fetch('/api/auth/logout', { method: 'POST' }).catch(() => undefined)
-    await navigateTo('/login?reason=archived')
+    if (reason === 'blocked') await navigateTo('/login?reason=blocked')
+    else await navigateTo('/login?reason=archived')
   }
 
   async function validateSession() {
@@ -54,7 +55,7 @@ export default defineNuxtPlugin(() => {
   }
 
   function scheduleReconnect() {
-    if (stopped || !user.value || retryTimer || !navigator.onLine) return
+    if (stopped || !user.value || user.value.inSystem || retryTimer || !navigator.onLine) return
     const delay = [1_000, 2_000, 5_000, 10_000, 30_000][Math.min(attempts, 4)]!
     attempts += 1
     retryTimer = setTimeout(() => {
@@ -64,8 +65,8 @@ export default defineNuxtPlugin(() => {
   }
 
   function connect() {
-    if (stopped || !user.value || socket?.readyState === WebSocket.OPEN || socket?.readyState === WebSocket.CONNECTING) return
-    socket = new WebSocket(websocketUrl())
+    if (stopped || !user.value || user.value.inSystem || socket?.readyState === WebSocket.OPEN || socket?.readyState === WebSocket.CONNECTING) return
+    socket = new WebSocket(websocketUrl(user.value?.isSuperuser ? `${user.value.organizationId}:${user.value.contextRevision}` : undefined))
     socket.addEventListener('open', () => {
       const reconnected = connectedOnce
       connectedOnce = true
@@ -80,7 +81,7 @@ export default defineNuxtPlugin(() => {
       try {
         const message = JSON.parse(String(event.data)) as NotificationRealtimeMessage
         if (message.type === 'session.revoked') {
-          void invalidateSession()
+          void invalidateSession(message.reason)
           return
         }
         notifications.applyRealtimeMessage(message)
@@ -100,7 +101,7 @@ export default defineNuxtPlugin(() => {
   }
 
   watch(user, currentUser => {
-    if (currentUser) {
+    if (currentUser && !currentUser.inSystem) {
       stopped = false
       void notifications.refreshUnreadCount()
       void connectAfterValidation()

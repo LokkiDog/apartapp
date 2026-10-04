@@ -160,7 +160,7 @@ async function approveDiscrepancy() {
       </section>
       <div v-if="status === 'pending'" class="grid gap-3"><USkeleton v-for="item in 4" :key="item" class="h-20 rounded-2xl" /></div>
       <div v-else-if="stocks?.length" class="surface inventory-list divide-y divide-[var(--color-line)] px-4 sm:px-6">
-        <div v-for="stock in stocks" :key="stock.id" class="inventory-stock-card flex min-h-16 items-center gap-3 py-2 sm:gap-4" :class="isAdministrator ? 'cursor-pointer' : ''" :role="isAdministrator ? 'button' : undefined" :tabindex="isAdministrator ? 0 : undefined" @click="isAdministrator && openEditStock(stock)" @keydown.enter="isAdministrator && openEditStock(stock)">
+        <div v-for="stock in stocks" :key="stock.id" class="inventory-stock-card flex min-h-16 items-center gap-3 py-2 sm:gap-4" :class="isAdministrator ? 'cursor-pointer' : ''" :role="isAdministrator ? 'button' : undefined" :tabindex="isAdministrator ? 0 : undefined" @click="isAdministrator && openEditStock(stock)" @keydown.enter.self.prevent="isAdministrator && openEditStock(stock)" @keydown.space.self.prevent="isAdministrator && openEditStock(stock)">
           <div class="grid size-9 shrink-0 place-items-center rounded-[10px] bg-[var(--color-primary-soft)] text-[var(--color-primary)]"><UIcon name="i-lucide-package" class="size-4" /></div>
           <div class="min-w-0 flex-1"><p class="truncate font-semibold">{{ stock.consumable.name }}</p><p class="truncate text-sm text-[var(--color-muted)]">{{ t('inventory.threshold') }}: {{ stock.minimumQuantity }} · {{ t('inventory.target') }}: {{ stock.targetQuantity }} {{ stock.consumable.unit }}</p><p v-if="stock.autoWriteOffQuantity !== null" class="truncate text-xs text-[var(--color-muted)]">{{ t('inventory.auto') }}: {{ stock.autoWriteOffQuantity }} {{ stock.consumable.unit }} {{ t('common.afterCleaning') }}</p></div>
           <div class="text-right"><p class="text-base font-semibold tabular-nums">{{ stock.quantity }} {{ stock.consumable.unit }}</p><StatusBadge v-if="stock.isLow" :label="t('inventory.lowStock')" tone="danger" /></div>
@@ -170,7 +170,7 @@ async function approveDiscrepancy() {
     </template>
     <template v-else>
       <div v-if="consumables?.length" class="surface inventory-list divide-y divide-[var(--color-line)] px-4 sm:px-6">
-        <div v-for="item in consumables" :key="item.id" class="inventory-catalog-card flex min-h-16 cursor-pointer items-center gap-3 py-2 sm:gap-4" role="button" tabindex="0" @click="openEditCatalog(item)" @keydown.enter="openEditCatalog(item)" @keydown.space.prevent="openEditCatalog(item)">
+        <div v-for="item in consumables" :key="item.id" class="inventory-catalog-card flex min-h-16 cursor-pointer items-center gap-3 py-2 sm:gap-4" role="button" tabindex="0" @click="openEditCatalog(item)" @keydown.enter.self.prevent="openEditCatalog(item)" @keydown.space.self.prevent="openEditCatalog(item)">
           <div class="grid size-9 shrink-0 place-items-center rounded-[10px] bg-[var(--color-primary-soft)] text-[var(--color-primary)]">
             <UIcon name="i-lucide-spray-can" class="size-4" />
           </div>

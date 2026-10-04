@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { DropdownMenuItem } from '@nuxt/ui'
-import { PageHeader, EmptyState } from '#fsd/shared/ui'
+import { PageHeader, EmptyState, StatusBadge } from '#fsd/shared/ui'
 import { useCurrentUser } from '#fsd/shared/auth'
 import { useI18n } from 'vue-i18n'
 
@@ -39,7 +39,7 @@ const visibleUsers = computed(() => {
   })
 })
 const statusLabel = (status: string) => ({ active: t('users.active'), invited: t('users.invited'), blocked: t('users.blocked'), archived: t('users.archived') }[status] ?? status)
-const statusColor = (status: string) => ({ active: 'success', invited: 'warning', blocked: 'error', archived: 'neutral' }[status] ?? 'neutral') as 'success' | 'warning' | 'error' | 'neutral'
+const statusColor = (status: string) => ({ active: 'success', invited: 'warning', blocked: 'danger', archived: 'neutral' }[status] ?? 'neutral') as 'success' | 'warning' | 'danger' | 'neutral'
 const canBeVika = (member: Member) => member.status !== 'archived' && (member.roles.includes('manager') || member.roles.includes('administrator'))
 const mobileRoleLabel = (member: Member) => member.roles[0] ? roleLabels.value[member.roles[0]] ?? member.roles[0] : ''
 let countdownTimer: ReturnType<typeof setInterval> | undefined
@@ -141,7 +141,7 @@ async function deletePermanently() {
       <div v-for="member in visibleUsers" :key="member.id" class="user-list-row">
         <div class="user-list-row__identity"><div class="user-list-row__name"><p class="user-list-row__name-text truncate font-semibold">{{ member.name }}<span v-if="member.isVika" class="user-list-row__vika-marker" role="img" :aria-label="t('users.vikaAccount')"><span aria-hidden="true">·</span><strong aria-hidden="true" class="user-list-row__vika-letter">В</strong></span></p></div><p class="truncate text-sm text-[var(--color-muted)]">{{ member.email }}</p></div>
         <div class="user-list-row__roles"><UBadge v-for="role in member.roles" :key="role" color="neutral" variant="soft" class="user-list-row__role user-list-row__role--desktop">{{ roleLabels[role] ?? role }}</UBadge><UBadge v-if="mobileRoleLabel(member)" color="neutral" variant="soft" class="user-list-row__role user-list-row__role--mobile" :title="mobileRoleLabel(member)">{{ mobileRoleLabel(member) }}</UBadge><UBadge v-if="member.roles.length > 1" color="neutral" variant="soft" class="user-list-row__role user-list-row__role--mobile">+{{ member.roles.length - 1 }}</UBadge></div>
-        <div class="user-list-row__status"><span class="user-list-row__status-dot" :data-tone="statusColor(member.status)" role="img" :aria-label="statusLabel(member.status)" /><UBadge :color="statusColor(member.status)" variant="soft" class="user-list-row__status-badge">{{ statusLabel(member.status) }}</UBadge></div>
+        <div class="user-list-row__status"><span class="user-list-row__status-dot" :data-tone="statusColor(member.status)" role="img" :aria-label="statusLabel(member.status)" /><StatusBadge :tone="statusColor(member.status)" :label="statusLabel(member.status)" class="user-list-row__status-badge" /></div>
         <UDropdownMenu v-if="userMenuItems(member).length" :items="userMenuItems(member)" :content="{ align: 'end' }" :modal="false"><UButton color="neutral" variant="ghost" icon="i-lucide-ellipsis-vertical" :aria-label="`${t('users.title')}: ${member.name}`" class="user-list-row__menu-button min-h-11 min-w-11 active:scale-[0.96] transition-transform" /></UDropdownMenu>
       </div>
     </div>

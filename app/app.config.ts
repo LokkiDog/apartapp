@@ -1,7 +1,7 @@
 export default defineAppConfig({
   ui: {
     colors: { primary: 'emerald', neutral: 'slate' },
-    button: { slots: { base: 'min-h-11 rounded-[10px] font-semibold transition-transform duration-150 ease-out active:scale-[0.96]' } },
+    button: { slots: { base: 'min-h-11 rounded-[10px] font-semibold cursor-pointer disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[background-color,color,box-shadow,scale] duration-150 ease-out active:scale-[0.96]' } },
     input: { slots: { root: 'w-full', base: 'min-h-11 rounded-[10px] bg-white text-[var(--color-ink)] ring-[var(--color-line)] focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]' } },
     select: { slots: { base: 'w-full h-11 min-h-11 rounded-[10px] bg-white text-[var(--color-ink)] ring-[var(--color-line)] hover:bg-white focus:bg-white focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]' } },
     selectMenu: { slots: {

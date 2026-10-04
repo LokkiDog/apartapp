@@ -1,2 +1,2 @@
-import { requireActor } from '../../infrastructure/auth/actor'
-export default defineEventHandler(async event => requireActor(event))
+import { requirePrincipal } from '../../infrastructure/auth/platform'
+export default defineEventHandler(async event => requirePrincipal(event))

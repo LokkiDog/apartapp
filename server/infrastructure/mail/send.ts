@@ -43,10 +43,21 @@ export async function sendAccountLink(input: { to: string; name: string; type: '
       : { invitation: 'Приглашение в Aparts CRM', reset: 'Восстановление пароля Aparts CRM', hello: 'Здравствуйте', inviteText: 'Создайте пароль для входа в Aparts CRM', resetText: 'Установите новый пароль для Aparts CRM' }
   const subject = input.type === 'invitation' ? copy.invitation : copy.reset
   const text = `${copy.hello}, ${input.name}! ${input.type === 'invitation' ? copy.inviteText : copy.resetText}: ${link}`
+  await sendMail({ to: input.to, name: input.name, subject, text })
+}
+
+export async function sendRegistrationLink(input: { to: string; name: string; token: string }) {
+  const baseUrl = useRuntimeConfig().public.appUrl || 'http://localhost:3000'
+  const link = `${baseUrl}/register?token=${encodeURIComponent(input.token)}`
+  await sendMail({ to: input.to, name: input.name, subject: 'Подтверждение регистрации Aparts CRM', text: `Здравствуйте, ${input.name}! Подтвердите email для создания компании в Aparts CRM: ${link}` })
+}
+
+async function sendMail(input: { to: string; name: string; subject: string; text: string }) {
+  const config = useRuntimeConfig()
   const from = config.smtpFrom || 'noreply@aparts.local'
   const brevoApiKey = config.brevoApiKey?.trim()
   if (brevoApiKey) {
-    await sendWithBrevoApi({ apiKey: brevoApiKey, from, to: input.to, toName: input.name, subject, text })
+    await sendWithBrevoApi({ apiKey: brevoApiKey, from, to: input.to, toName: input.name, subject: input.subject, text: input.text })
     return
   }
   const smtpUser = config.smtpUser?.trim()
@@ -61,5 +72,5 @@ export async function sendAccountLink(input: { to: string; name: string; type: '
     greetingTimeout: 10_000,
     socketTimeout: MAIL_TIMEOUT_MS
   })
-  await transport.sendMail({ from, to: input.to, subject, text })
+  await transport.sendMail({ from, to: input.to, subject: input.subject, text: input.text })
 }

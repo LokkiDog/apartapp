@@ -3,7 +3,7 @@ import type { DropdownMenuItem, FormSubmitEvent } from "@nuxt/ui";
 import type { Hotel } from "#fsd/entities/hotel";
 import { useCurrentUser } from "#fsd/shared/auth";
 import { createFormValidator, useSubmitFormValidation } from "#fsd/shared/lib";
-import { EmptyState, PageHeader, StatusBadge } from "#fsd/shared/ui";
+import { DeleteConfirmModal, EmptyState, PageHeader, StatusBadge } from "#fsd/shared/ui";
 import { useI18n } from "vue-i18n";
 import { hotelInputSchema, type HotelInput } from "@contracts/crm";
 
@@ -12,6 +12,7 @@ const LazyHotelLocationPicker = defineAsyncComponent(() =>
 );
 
 const user = useCurrentUser();
+const isAdministrator = computed(() => Boolean(user.value?.roles.includes("administrator")));
 const { t } = useI18n();
 const [
   { data: hotels, refresh, status },
@@ -237,8 +238,13 @@ function hotelMenuItems(hotel: Hotel): DropdownMenuItem[] {
         v-for="hotel in hotels"
         :key="hotel.id"
         class="surface hotel-card"
-        :class="{ 'cursor-pointer': user?.roles.includes('administrator') }"
-        @click="user?.roles.includes('administrator') && openEdit(hotel)"
+        :class="{ 'hotel-card--interactive': isAdministrator }"
+        :role="isAdministrator ? 'button' : undefined"
+        :tabindex="isAdministrator ? 0 : undefined"
+        :aria-label="isAdministrator ? `${t('hotels.edit')}: ${hotel.name}` : undefined"
+        @click="isAdministrator && openEdit(hotel)"
+        @keydown.enter.self.prevent="isAdministrator && openEdit(hotel)"
+        @keydown.space.self.prevent="isAdministrator && openEdit(hotel)"
       >
         <div class="hotel-card__header">
           <div class="hotel-card__icon">
@@ -403,7 +409,7 @@ function hotelMenuItems(hotel: Hotel): DropdownMenuItem[] {
             <UInput
               v-model="form.address"
               class="w-full"
-              placeholder="Street, number, Bansko"
+              :placeholder="t('hotels.addressPlaceholder')"
           /></UFormField>
           <UAlert
             v-if="error"
@@ -434,37 +440,13 @@ function hotelMenuItems(hotel: Hotel): DropdownMenuItem[] {
       </template>
     </USlideover>
 
-    <UModal v-model:open="deleteOpen" :title="t('hotels.delete')">
-      <template #body>
-        <div class="space-y-5">
-          <p>{{ deleteHotel?.name }}</p>
-          <UAlert
-            color="error"
-            variant="soft"
-            :title="t('common.irreversible')"
-            :description="t('calendar.deleteWarning')"
-          />
-          <UAlert
-            v-if="error"
-            color="error"
-            variant="soft"
-            :description="error"
-          />
-          <div class="form-actions">
-            <UButton
-              color="neutral"
-              variant="ghost"
-              @click="deleteOpen = false"
-              >{{ t("hotels.cancel") }}</UButton
-            ><UButton
-              color="error"
-              :loading="deletePending"
-              @click="removeHotel"
-              >{{ t("common.deleteForever") }}</UButton
-            >
-          </div>
-        </div>
-      </template>
-    </UModal>
+    <DeleteConfirmModal
+      v-model:open="deleteOpen"
+      :title="t('hotels.delete')"
+      :description="`${deleteHotel?.name ?? ''}. ${t('calendar.deleteWarning')}`"
+      :loading="deletePending"
+      :error="error"
+      @confirm="removeHotel"
+    />
   </section>
 </template>

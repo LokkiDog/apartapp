@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { clientResourceUrl } from "#fsd/shared/auth"
 import type { ApartmentInput } from '@contracts/crm'
 import {
   ApartmentForm,

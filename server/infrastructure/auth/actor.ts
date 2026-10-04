@@ -1,8 +1,11 @@
 import { and, eq } from 'drizzle-orm'
 import { db } from '../database/client'
-import { apartmentManagers, users } from '../database/schema'
+import { apartmentManagers, apartments, users } from '../database/schema'
 import type { UserRole } from '@contracts/crm'
+import { requirePrincipal, sessionExpiry } from './platform'
 import { refreshUserSession } from './session'
+import { platformSessions } from '../database/schema'
+import { getHeader, getQuery, getMethod } from 'h3'
 
 export interface Actor {
   id: string
@@ -11,31 +14,25 @@ export interface Actor {
   name: string
   roles: UserRole[]
   locale: 'ru' | 'en' | 'he'
+  isSuperuser?: boolean
+  inSystem?: boolean
+  organizationName?: string
+  organizationStatus?: 'active' | 'blocked'
+  platformSessionId?: string
+  contextRevision?: string
+  sessionVersion?: number
 }
 
 export async function requireActor(event: Parameters<typeof setUserSession>[0]): Promise<Actor> {
-  const session = await requireUserSession(event)
-  const userId = (session.user as { id?: string } | undefined)?.id
-  if (!userId) throw createError({ statusCode: 401, statusMessage: 'Требуется вход' })
-
-  const user = await db.query.users.findFirst({ where: eq(users.id, userId) })
-  if (!user || user.status !== 'active') {
-    throw createError({ statusCode: 401, statusMessage: 'Сессия недействительна' })
+  const actor = await requirePrincipal(event, false)
+  if (actor.inSystem) throw createError({ statusCode: 409, statusMessage: 'Выберите клиента' })
+  if (actor.isSuperuser && (getHeader(event, 'x-client-context') ?? (getMethod(event) === 'GET' ? getQuery(event).clientContext : undefined)) !== `${actor.organizationId}:${actor.contextRevision}`) {
+    throw createError({ statusCode: 409, statusMessage: 'Контекст клиента изменился', data: { code: 'CLIENT_CONTEXT_CHANGED' } })
   }
-
-  const actor = {
-    id: user.id,
-    organizationId: user.organizationId,
-    email: user.email,
-    name: user.name,
-    roles: user.roles,
-    locale: user.locale
-  }
-
-  // h3's maxAge is measured from the session's original createdAt. Replacing
-  // the session after every valid request makes the expiry an inactivity limit.
+  // Do not renew a stale-context request or overwrite a newly selected context.
+  await db.update(platformSessions).set({ expiresAt: sessionExpiry() }).where(eq(platformSessions.id, actor.platformSessionId!))
   await refreshUserSession(event, actor)
-
+  event.context.platformActor = actor
   return actor
 }
 
@@ -64,6 +61,8 @@ export function canAccessAssignedWork(actor: Actor, assigneeId: string | null) {
 }
 
 export async function canManageApartment(actor: Actor, apartmentId: string) {
+  const apartment = await db.query.apartments.findFirst({ where: and(eq(apartments.id, apartmentId), eq(apartments.organizationId, actor.organizationId)), columns: { id: true } })
+  if (!apartment) return false
   if (isAdministrator(actor)) return true
   return isAssignedToApartment(actor, apartmentId)
 }

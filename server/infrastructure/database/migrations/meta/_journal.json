@@ -302,6 +302,20 @@
       "when": 1790553600000,
       "tag": "0042_booking_ical_sync",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1790985600000,
+      "tag": "0043_platform_clients",
+      "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1790985600001,
+      "tag": "0044_client_reference_guards",
+      "breakpoints": true
     }
   ]
 }

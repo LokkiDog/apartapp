@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { StatusBadge } from '#fsd/shared/ui'
 import { formatDate } from '#fsd/shared/lib'
 import { useI18n } from 'vue-i18n'
 
@@ -27,12 +28,12 @@ watch(() => props.isAdministrator, load)
 <template>
   <section v-if="conflicts.length" class="space-y-3" :aria-label="t('icalImport.conflicts')">
     <article v-for="conflict in conflicts" :id="`ical-conflict-${conflict.id}`" :key="conflict.id" class="surface space-y-3 border-s-4 border-warning p-4">
-      <header class="flex items-center justify-between gap-2"><h2 class="font-semibold">{{ t('icalImport.conflictTitle', { apartment: conflict.apartmentName }) }}</h2><UBadge v-if="conflict.status === 'needs_admin'" color="warning">{{ t('icalImport.adminReview') }}</UBadge></header>
+      <header class="flex items-center justify-between gap-2"><h2 class="font-semibold">{{ t('icalImport.conflictTitle', { apartment: conflict.apartmentName }) }}</h2><StatusBadge v-if="conflict.status === 'needs_admin'" tone="warning" :label="t('icalImport.adminReview')" /></header>
       <div class="grid gap-3 sm:grid-cols-2">
-        <div class="rounded-md bg-[var(--color-elevated)] p-3"><p class="text-xs text-[var(--color-muted)]">{{ t('icalImport.bookingCalendar') }}</p><p class="font-medium">{{ conflict.importedStay.icalSummary || t('icalImport.bookingCalendar') }}</p><p>{{ formatDate(conflict.importedStay.checkInOn) }} → {{ formatDate(conflict.importedStay.checkOutOn) }}</p><p class="text-sm">{{ t('icalImport.guestsEnteredSeparately') }}</p></div>
-        <div class="rounded-md bg-[var(--color-elevated)] p-3"><p class="text-xs text-[var(--color-muted)]">{{ t('icalImport.bookingAparts') }}</p><p class="font-medium">{{ conflict.existingStay.guestName || t('icalImport.bookingAparts') }}</p><p>{{ formatDate(conflict.existingStay.checkInOn) }} → {{ formatDate(conflict.existingStay.checkOutOn) }}</p></div>
+        <div class="rounded-md bg-[var(--color-surface-muted)] p-3"><p class="text-xs text-[var(--color-muted)]">{{ t('icalImport.bookingCalendar') }}</p><p class="font-medium">{{ conflict.importedStay.icalSummary || t('icalImport.bookingCalendar') }}</p><p>{{ formatDate(conflict.importedStay.checkInOn) }} → {{ formatDate(conflict.importedStay.checkOutOn) }}</p><p class="text-sm">{{ t('icalImport.guestsEnteredSeparately') }}</p></div>
+        <div class="rounded-md bg-[var(--color-surface-muted)] p-3"><p class="text-xs text-[var(--color-muted)]">{{ t('icalImport.bookingAparts') }}</p><p class="font-medium">{{ conflict.existingStay.guestName || t('icalImport.bookingAparts') }}</p><p>{{ formatDate(conflict.existingStay.checkInOn) }} → {{ formatDate(conflict.existingStay.checkOutOn) }}</p></div>
       </div>
-      <div v-for="entry in cleaningEntries(conflict)" :key="entry.label" class="rounded-md border border-[var(--color-border)] p-3 text-sm">
+      <div v-for="entry in cleaningEntries(conflict)" :key="entry.label" class="rounded-md border border-[var(--color-line)] p-3 text-sm">
         <p class="font-medium">{{ entry.label }} · {{ entry.cleaning ? cleaningStatusLabel(entry.cleaning.status) : t('icalImport.noCleaning') }}</p>
         <template v-if="entry.cleaning">
           <p>{{ t('icalImport.cleaners') }}: {{ entry.cleaning.cleaners.join(', ') || '—' }} · {{ t('icalImport.problems') }}: {{ entry.cleaning.problems.length }} · {{ t('icalImport.attachments') }}: {{ entry.cleaning.attachments.join(', ') || '—' }}</p>

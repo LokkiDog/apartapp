@@ -277,7 +277,7 @@ watch(notificationState.revision, () => {
                 v-for="item in group.items"
                 :key="item.id"
                 type="button"
-                class="group relative flex min-h-18 w-full items-center gap-3 px-4 py-3 text-start transition-[background-color] duration-150 hover:bg-[var(--color-surface-muted)] focus-visible:z-10 focus-visible:bg-[var(--color-primary-soft)] focus-visible:outline-none focus-visible:shadow-[inset_0_0_0_2px_var(--color-primary)] disabled:cursor-progress sm:px-5"
+                class="interactive-row group relative flex min-h-18 w-full items-center gap-3 px-4 py-3 text-start transition-[background-color] duration-150 hover:bg-[var(--color-surface-muted)] focus-visible:z-10 focus-visible:bg-[var(--color-primary-soft)] focus-visible:outline-none focus-visible:shadow-[inset_0_0_0_2px_var(--color-primary)] disabled:cursor-progress sm:px-5"
                 :class="{ 'notification-row--unread': !item.readAt }"
                 :disabled="Boolean(itemPendingId) || markAllPending"
                 @click="read(item)"
@@ -362,10 +362,13 @@ watch(notificationState.revision, () => {
 }
 
 .notification-row--unread {
-  background-color: #dceee5;
+  background-color: color-mix(in srgb, var(--color-primary-soft) 70%, var(--color-line));
 }
 
-.notification-row--unread:hover {
-  background-color: #d2e8dd;
+.notification-row--unread:not(:disabled):hover {
+  background-color: color-mix(in srgb, var(--color-primary-soft) 45%, var(--color-line));
+}
+.notification-row--unread:not(:disabled):active {
+  background-color: var(--color-primary-soft);
 }
 </style>

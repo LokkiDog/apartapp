@@ -75,7 +75,7 @@ export async function createTask(actor: Actor, input: unknown) {
   requireRole(actor, 'administrator')
   const data = taskCreateInputSchema.parse(input)
   if (data.assigneeId) {
-    const assignee = await db.query.users.findFirst({ where: and(eq(users.id, data.assigneeId), eq(users.organizationId, actor.organizationId), eq(users.status, 'active')) })
+    const assignee = await db.query.users.findFirst({ where: and(eq(users.id, data.assigneeId), eq(users.organizationId, actor.organizationId), eq(users.status, 'active'), eq(users.isSuperuser, false)) })
     if (!assignee || !canBeWorkAssignee(assignee.roles)) throw createError({ statusCode: 400, statusMessage: 'Исполнитель должен быть активным исполнителем, специалистом или администратором' })
   }
   const { expectedAmountEur, reportIncluded, ...taskData } = data.category === 'cash' ? data : { ...data, expectedAmountEur: undefined, reportIncluded: undefined }
@@ -175,7 +175,7 @@ export async function updateTask(actor: Actor, taskId: string, input: unknown) {
     if (!apartment) throw createError({ statusCode: 400, statusMessage: 'Апартамент не найден' })
   }
   if (data.assigneeId) {
-    const assignee = await db.query.users.findFirst({ where: and(eq(users.id, data.assigneeId), eq(users.organizationId, actor.organizationId), eq(users.status, 'active')) })
+    const assignee = await db.query.users.findFirst({ where: and(eq(users.id, data.assigneeId), eq(users.organizationId, actor.organizationId), eq(users.status, 'active'), eq(users.isSuperuser, false)) })
     if (!assignee || !canBeWorkAssignee(assignee.roles)) throw createError({ statusCode: 400, statusMessage: 'Исполнитель должен быть активным исполнителем, специалистом или администратором' })
   }
   const [updated] = await db.update(tasks).set({ ...data, updatedAt: new Date() }).where(eq(tasks.id, taskId)).returning()

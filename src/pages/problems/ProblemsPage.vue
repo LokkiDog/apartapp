@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { clientResourceUrl } from "#fsd/shared/auth"
 import type { Apartment } from '#fsd/entities/apartment'
 import { ApartmentSelect } from '#fsd/features/select-apartment'
 import { useCurrentUser } from '#fsd/shared/auth'
@@ -45,6 +46,10 @@ const formOpen = ref(false)
 const resolveOpen = ref(false)
 const deleteOpen = ref(false)
 const expenseOpen = ref(false)
+const expenseDeleteOpen = ref(false)
+const expenseDeletePending = ref(false)
+const expenseDeleteError = ref('')
+const expenseToDelete = ref<{ problemId: string; expense: Expense } | null>(null)
 const taskOpen = ref(false)
 const pending = ref(false)
 const error = ref('')
@@ -189,12 +194,28 @@ async function saveExpense() {
   } catch (cause: any) { error.value = cause?.data?.statusMessage ?? t('common.error') }
   finally { pending.value = false }
 }
-async function removeExpense(expense: Expense) {
-  if (!selected.value || !confirm(t('problems.deleteExpenseQuestion'))) return
-  pending.value = true; error.value = ''
-  try { selected.value = await $fetch<Problem>(`/api/problems/${selected.value.id}/expenses/${expense.id}`, { method: 'DELETE' }); await refresh() }
-  catch (cause: any) { error.value = cause?.data?.statusMessage ?? t('common.error') }
-  finally { pending.value = false }
+function askToDeleteExpense(expense: Expense) {
+  if (!selected.value || expenseDeletePending.value) return
+  expenseToDelete.value = { problemId: selected.value.id, expense }
+  expenseDeleteError.value = ''
+  expenseDeleteOpen.value = true
+}
+async function removeExpense() {
+  const target = expenseToDelete.value
+  if (!target || expenseDeletePending.value) return
+  expenseDeletePending.value = true
+  expenseDeleteError.value = ''
+  try {
+    const updated = await $fetch<Problem>(`/api/problems/${target.problemId}/expenses/${target.expense.id}`, { method: 'DELETE' })
+    if (selected.value?.id === target.problemId) selected.value = updated
+    expenseDeleteOpen.value = false
+    expenseToDelete.value = null
+    await refresh()
+  } catch (cause: any) {
+    expenseDeleteError.value = cause?.data?.statusMessage ?? t('common.error')
+  } finally {
+    expenseDeletePending.value = false
+  }
 }
 async function removeProblem() {
   if (!selected.value) return
@@ -212,7 +233,7 @@ onBeforeUnmount(resetPhotos)
     <div class="surface grid gap-3 p-4 sm:grid-cols-2 sm:p-5"><UFormField :label="t('problems.status')"><USelect v-model="statusFilter" :items="statusOptions" class="w-full" /></UFormField><UFormField :label="t('expenses.apartment')"><ApartmentSelect v-model="apartmentId" :apartments="apartments" :prepend-items="[{ label: t('problems.allApartments'), value: 'all' }]" /></UFormField></div>
     <div v-if="status === 'pending'" class="grid gap-2"><USkeleton v-for="item in 4" :key="item" class="h-14 rounded-2xl" /></div>
     <div v-else-if="problems.length" class="grid gap-2">
-      <button v-for="problem in problems" :key="problem.id" type="button" class="surface flex min-h-14 items-center justify-between gap-3 px-4 py-3 text-left transition-[background-color] duration-150 hover:bg-[var(--color-surface-muted)] focus-visible:outline-2 focus-visible:outline-[var(--color-primary)]" @click="openDetail(problem)">
+      <button v-for="problem in problems" :key="problem.id" type="button" class="surface interactive-row flex min-h-14 items-center justify-between gap-3 px-4 py-3 text-left transition-[background-color] duration-150 hover:bg-[var(--color-surface-muted)] focus-visible:outline-2 focus-visible:outline-[var(--color-primary)]" @click="openDetail(problem)">
         <div class="min-w-0 flex-1"><p class="truncate font-semibold" style="text-align: left">{{ capitalizeProblemDescription(problem.description) }}</p><span v-if="problem.origin === 'guest_count_change'" class="mt-1 inline-flex rounded-md bg-[var(--color-primary-soft)] px-2 py-0.5 text-xs font-medium text-[var(--color-primary)]">{{ t('problems.automatic') }}</span></div>
         <div class="flex shrink-0 items-center justify-end gap-3">
           <p class="hidden min-w-0 max-w-64 truncate text-sm text-[var(--color-muted)] sm:block">{{ problem.apartment.hotel.name }} · {{ problem.apartment.name }}</p>
@@ -250,7 +271,7 @@ onBeforeUnmount(resetPhotos)
               <UFormField :label="t('problems.description')"><UTextarea v-model="selected.details" class="w-full" :rows="5" :disabled="!selectedOpen || selected.origin === 'guest_count_change'" /></UFormField>
             </div>
             <div v-if="selected.attachments.length || photoPreviews.length" class="grid grid-cols-2 gap-2">
-              <a v-for="attachment in selected.attachments" :key="attachment.id" :href="`/api/attachments/${attachment.id}/file`" target="_blank" rel="noreferrer" class="overflow-hidden rounded-xl bg-[var(--color-surface-muted)]"><img :src="`/api/attachments/${attachment.id}/file?variant=card`" :alt="attachment.fileName" class="aspect-[2/1] w-full object-cover" /><span class="block truncate p-2 text-xs">{{ attachment.fileName }}</span></a>
+              <a v-for="attachment in selected.attachments" :key="attachment.id" :href="clientResourceUrl(`/api/attachments/${attachment.id}/file`)" target="_blank" rel="noreferrer" class="overflow-hidden rounded-xl bg-[var(--color-surface-muted)]"><img :src="clientResourceUrl(`/api/attachments/${attachment.id}/file?variant=card`)" :alt="attachment.fileName" class="aspect-[2/1] w-full object-cover" /><span class="block truncate p-2 text-xs">{{ attachment.fileName }}</span></a>
               <figure v-for="preview in photoPreviews" :key="preview.url" class="overflow-hidden rounded-xl bg-[var(--color-surface-muted)]"><img :src="preview.url" :alt="preview.file.name" class="aspect-[2/1] w-full object-cover ring-1 ring-inset ring-black/10 dark:ring-white/10" /><figcaption class="truncate p-2 text-xs">{{ preview.file.name }}</figcaption></figure>
             </div>
             <UFormField v-if="selectedOpen" :label="t('problems.photos')"><PhotoFileInput :files="photos" @select="choosePhotos" /></UFormField>
@@ -277,6 +298,7 @@ onBeforeUnmount(resetPhotos)
     <USlideover v-model:open="taskOpen" title="Назначить" :modal="true" :overlay="true"><template #body><form id="problem-task-form" class="form-grid" @submit.prevent="saveTask"><UFormField label="Исполнитель"><USelectMenu v-model="taskForm.assigneeId" :items="taskAssigneeOptions as any" value-key="value" :search-input="{ placeholder: t('common.searchAssignee'), variant: 'none', autofocus: false }" :content="{ bodyLock: true }" :ui="{ content: 'assignee-select-menu', viewport: 'min-h-0 overflow-y-auto overscroll-contain touch-pan-y', item: 'min-h-11 items-center' }" class="w-full" /></UFormField><UFormField label="Название"><UInput v-model="taskForm.title" /></UFormField><UFormField label="Описание" class="w-full"><UTextarea v-model="taskForm.description" class="w-full" /></UFormField><UFormField label="Приоритет"><USelect v-model="taskForm.priority" :items="[{ label: 'Обычный', value: 'normal' }, { label: 'Высокий', value: 'high' }]" class="w-full" /></UFormField><UFormField label="Срок"><DateInput v-model="taskForm.dueOn" /></UFormField><UFormField label="Стоимость"><MoneyInput v-model="taskForm.ownerCostEur" /></UFormField><UFormField label="Чек-лист" class="w-full"><div class="space-y-2"><div v-for="(item, index) in taskForm.checklist" :key="index" class="flex gap-2"><UInput v-model="item.label" class="min-w-0 flex-1" /><UButton color="error" variant="ghost" icon="i-lucide-trash-2" class="min-h-11 min-w-11" @click="taskForm.checklist.splice(index, 1)" /></div><UButton type="button" color="neutral" variant="soft" @click="addChecklistItem">Добавить пункт</UButton></div></UFormField><UAlert v-if="error" color="error" variant="soft" :description="error" /></form></template><template #footer><div class="form-actions form-actions--footer"><UButton color="neutral" variant="ghost" @click="taskOpen = false">{{ t('common.cancel') }}</UButton><UButton type="submit" form="problem-task-form" :loading="pending">Создать задачу</UButton></div></template></USlideover>
     <USlideover v-model:open="expenseOpen" :title="editExpense ? t('problems.editExpense') : t('problems.addExpense')" :modal="true" :overlay="true"><template #body><UForm :key="expenseValidation.formKey.value" id="problem-expense-form" :state="expenseForm" :validate="validateExpense" :validate-on="expenseValidation.validateOn.value" novalidate class="form-grid" @error="expenseValidation.onError" @submit="saveExpense"><UFormField name="occurredOn" :label="t('expenses.date')"><DateInput v-model="expenseForm.occurredOn" /></UFormField><UFormField name="amountEur" :label="t('expenses.amount')"><MoneyInput v-model="expenseForm.amountEur" /></UFormField><UFormField name="description" :label="t('expenses.description')" class="w-full"><UTextarea v-model="expenseForm.description" class="w-full" :rows="4" /></UFormField></UForm></template><template #footer><div class="form-actions form-actions--footer"><UButton color="neutral" variant="ghost" @click="expenseOpen = false">{{ t('common.cancel') }}</UButton><UButton type="submit" form="problem-expense-form" :loading="pending">{{ t('common.save') }}</UButton></div></template></USlideover>
     <UModal v-model:open="resolveOpen" :title="t('problems.resolve')"><template #body><div class="space-y-4"><UFormField :label="t('problems.resolutionComment')"><UTextarea v-model="resolutionComment" class="w-full" :rows="4" /></UFormField><UFormField v-if="selected?.activeSolutionTask" label="Связанная задача"><USelect v-model="taskDisposition" :items="[{ label: 'Отменить задачу', value: 'cancel' }, { label: 'Удалить задачу', value: 'delete' }]" class="w-full" /></UFormField><div class="form-actions"><UButton color="neutral" variant="ghost" @click="resolveOpen = false">{{ t('common.cancel') }}</UButton><UButton :loading="pending" @click="resolve">{{ t('problems.resolve') }}</UButton></div></div></template></UModal>
+    <DeleteConfirmModal v-model:open="expenseDeleteOpen" :title="t('problems.deleteExpenseQuestion')" :description="expenseToDelete ? `${expenseToDelete.expense.description} · ${formatEuro(expenseToDelete.expense.amountEur)}` : ''" :loading="expenseDeletePending" :error="expenseDeleteError" @confirm="removeExpense" />
     <DeleteConfirmModal v-model:open="deleteOpen" :title="t('problems.delete')" :description="t('problems.deleteDescription')" :loading="pending" :error="error" @confirm="removeProblem" />
   </section>
 </template>

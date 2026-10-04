@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
+import { resolveCssColor } from './helpers/css-colors'
 import { cleaningLinenUpdateSchema, userRoleSchema } from '../shared/contracts/crm'
 import { canAccessAssignedWork, canAccessWorkSection, type Actor } from '../server/infrastructure/auth/actor'
 import { canBeCleaningAssignee, canBeWorkAssignee } from '../server/modules/work/work-policy'
@@ -92,9 +93,11 @@ describe('specialist and linen collection', () => {
     expect(styles).toContain('.work-cleaning-status-dot[data-tone="success"] {')
     expect(styles).toContain('.work-cleaning-status-dot[data-tone="warning"] {')
     expect(styles).toContain('.work-cleaning-status-dot[data-tone="info"] {')
-    expect(styles).toMatch(/\.work-cleaning-status-dot\[data-tone="success"\] \{\s+background-color: #e7f6ef;/)
-    expect(styles).toMatch(/\.work-cleaning-status-dot\[data-tone="warning"\] \{\s+background-color: #fff4d7;/)
-    expect(styles).toMatch(/\.work-cleaning-status-dot\[data-tone="info"\] \{\s+background-color: #e8f1f7;/)
+    for (const [tone, color] of Object.entries({ success: '#e7f6ef', warning: '#fff4d7', info: '#e8f1f7' })) {
+      const background = new RegExp(`\\.work-cleaning-status-dot\\[data-tone="${tone}"\\] \\{\\s+background-color: ([^;]+);`).exec(styles)?.[1]
+      expect(background).toBeDefined()
+      expect(resolveCssColor(styles, background!)).toBe(color)
+    }
     expect(styles).not.toContain('margin-inline-start: 0.25rem;')
   })
 

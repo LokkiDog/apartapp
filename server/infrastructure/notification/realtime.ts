@@ -5,9 +5,9 @@ export type NotificationRealtimeMessage =
   | { type: 'notifications.heartbeat' }
   | { type: 'cleaning.changed'; cleaningId: string; reason: 'created' | 'updated' | 'accepted' | 'started' | 'progress' | 'inventory' | 'tariff' | 'route' | 'completed' | 'deleted' | 'linen'; occurredAt: string }
   | { type: 'task.changed'; taskId: string; reason: 'created' | 'updated' | 'started' | 'progress' | 'resolved' | 'completed' | 'returned' | 'deleted'; occurredAt: string }
-  | { type: 'session.revoked'; reason: 'archived' }
+  | { type: 'session.revoked'; reason: 'archived' | 'blocked' }
 
-type NotificationPeer = { id: string; send: (data: NotificationRealtimeMessage) => void }
+type NotificationPeer = { id: string; send: (data: NotificationRealtimeMessage) => void; close?: (code?: number, reason?: string) => void }
 
 const peersByUser = new Map<string, Set<NotificationPeer>>()
 const heartbeats = new Map<string, ReturnType<typeof setInterval>>()
@@ -32,6 +32,7 @@ export function publishNotification(userId: string, message: NotificationRealtim
   for (const peer of peersByUser.get(userId) ?? []) {
     try {
       peer.send(message)
+      if (message.type === 'session.revoked') { peer.close?.(1008, 'Session revoked'); unregisterNotificationPeer(userId, peer) }
     } catch {
       unregisterNotificationPeer(userId, peer)
     }

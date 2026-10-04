@@ -1,8 +1,9 @@
 import { and, eq, inArray } from 'drizzle-orm'
 import webpush from 'web-push'
 import { db } from '../database/client'
-import { notifications, pushSubscriptions, users } from '../database/schema'
+import { notifications, pushSubscriptions, users, organizations } from '../database/schema'
 import { localizedNotificationBody, localizedNotificationTitle } from './localize'
+import { isClientActive } from '../auth/platform'
 import { publishNotification } from './realtime'
 
 type AppLocale = 'ru' | 'en' | 'he'
@@ -20,7 +21,7 @@ export async function notifyUsers(input: {
   body: LocalizedCopy
   href: string | null
 }) {
-  if (!input.userIds.length) return 0
+  if (!input.userIds.length || !(await isClientActive(input.organizationId))) return 0
   const recipients = await db.select({ id: users.id, locale: users.locale }).from(users).where(and(
     eq(users.organizationId, input.organizationId),
     eq(users.status, 'active'),
@@ -29,14 +30,20 @@ export async function notifyUsers(input: {
   if (!recipients.length) return 0
 
   const recipientLocales = new Map(recipients.map(recipient => [recipient.id, recipient.locale]))
-  const created = await db.insert(notifications).values(recipients.map(recipient => ({
-    organizationId: input.organizationId,
-    userId: recipient.id,
-    type: input.type,
-    title: copyForLocale(input.title, recipient.locale),
-    body: copyForLocale(input.body, recipient.locale),
-    href: input.href
-  }))).returning()
+  if (!(await isClientActive(input.organizationId))) return 0
+  const created = await db.transaction(async tx => {
+    const [client] = await tx.select().from(organizations).where(eq(organizations.id, input.organizationId)).for('share')
+    if (client?.status !== 'active') return []
+    return tx.insert(notifications).values(recipients.map(recipient => ({
+      organizationId: input.organizationId,
+      userId: recipient.id,
+      type: input.type,
+      title: copyForLocale(input.title, recipient.locale),
+      body: copyForLocale(input.body, recipient.locale),
+      href: input.href
+    }))).returning()
+  })
+  if (!(await isClientActive(input.organizationId))) return created.length
   for (const notification of created) {
     const locale = recipientLocales.get(notification.userId) ?? 'ru'
     publishNotification(notification.userId, {
@@ -57,7 +64,8 @@ export async function notifyUsers(input: {
   webpush.setVapidDetails(config.vapidSubject, config.vapidPublicKey, config.vapidPrivateKey)
   const subscriptions = await db.select({ subscription: pushSubscriptions, locale: users.locale }).from(pushSubscriptions).innerJoin(users, eq(users.id, pushSubscriptions.userId)).where(and(eq(users.organizationId, input.organizationId), inArray(pushSubscriptions.userId, recipients.map(recipient => recipient.id))))
   const notificationByUser = new Map(created.map(notification => [notification.userId, notification]))
-  const results = await Promise.allSettled(subscriptions.map(({ subscription, locale }) => {
+  const results = await Promise.allSettled(subscriptions.map(async ({ subscription, locale }) => {
+    if (!(await isClientActive(input.organizationId))) return
     const notification = notificationByUser.get(subscription.userId)
     if (!notification) return Promise.resolve()
     return webpush.sendNotification({

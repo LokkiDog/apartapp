@@ -1,8 +1,10 @@
 import { and, eq, inArray, isNotNull, lt, gt, ne, or } from 'drizzle-orm'
 import { z } from 'zod'
 import { requireRole, canManageApartment, type Actor } from '../../infrastructure/auth/actor'
+import { isClientActive } from '../../infrastructure/auth/platform'
+import type { Connection } from '../auth/email-reservation'
 import { db } from '../../infrastructure/database/client'
-import { apartments, apartmentManagers, attachments, cashTaskDetails, cleaningAssignments, cleaningProblems, cleaningInventoryReports, cleanings, consumables, icalConflicts, icalFeeds, financialEntries, inventoryMovements, stays, tasks } from '../../infrastructure/database/schema'
+import { apartments, apartmentManagers, attachments, cashTaskDetails, cleaningAssignments, cleaningProblems, cleaningInventoryReports, cleanings, consumables, icalConflicts, icalFeeds, financialEntries, inventoryMovements, stays, tasks, organizations } from '../../infrastructure/database/schema'
 import { administratorsForOrganization, notifyUsers } from '../../infrastructure/notification/publish'
 import { writeAuditLog } from '../../infrastructure/audit/log'
 import { fetchIcal } from './ical'
@@ -46,23 +48,23 @@ export async function configureIcalFeed(actor: Actor, apartmentId: string, input
   return { ok: true }
 }
 
-async function reportConflict(conflictId: string) {
-  const conflict = await db.query.icalConflicts.findFirst({ where: eq(icalConflicts.id, conflictId), with: { apartment: { with: { managerAssignments: { columns: { userId: true } } } } } })
+async function reportConflict(conflictId: string, connection: typeof db | Connection = db) {
+  const conflict = await connection.query.icalConflicts.findFirst({ where: eq(icalConflicts.id, conflictId), with: { apartment: { with: { managerAssignments: { columns: { userId: true } } } } } })
   if (!conflict) return
   const ids = conflict.apartment.managerAssignments.map(assignment => assignment.userId)
   await notifyUsers({ organizationId: conflict.organizationId, userIds: ids, type: 'stay_conflict', title: 'Конфликт бронирований', body: `${conflict.apartment.name} · выберите, какое бронирование оставить`, href: `/calendar?icalConflict=${conflict.id}` })
 }
 
-async function recordConflicts(importedStayId: string, organizationId: string, apartmentId: string) {
-  const imported = await db.query.stays.findFirst({ where: and(eq(stays.id, importedStayId), eq(stays.organizationId, organizationId)) })
+async function recordConflicts(importedStayId: string, organizationId: string, apartmentId: string, connection: typeof db | Connection = db) {
+  const imported = await connection.query.stays.findFirst({ where: and(eq(stays.id, importedStayId), eq(stays.organizationId, organizationId)) })
   if (!imported) return
-  const overlaps = await db.query.stays.findMany({ where: and(
+  const overlaps = await connection.query.stays.findMany({ where: and(
     eq(stays.organizationId, organizationId), eq(stays.apartmentId, apartmentId), eq(stays.state, 'active'), ne(stays.id, importedStayId),
     lt(stays.checkInOn, imported.checkOutOn), gt(stays.checkOutOn, imported.checkInOn)
   ) })
   for (const existing of overlaps) {
-    const [created] = await db.insert(icalConflicts).values({ organizationId, apartmentId, importedStayId, existingStayId: existing.id }).onConflictDoNothing().returning()
-    if (created) await reportConflict(created.id)
+    const [created] = await connection.insert(icalConflicts).values({ organizationId, apartmentId, importedStayId, existingStayId: existing.id }).onConflictDoNothing().returning()
+    if (created) await reportConflict(created.id, connection)
   }
 }
 
@@ -71,64 +73,74 @@ export async function syncIcalFeed(feedId: string) {
   runningFeeds.add(feedId)
   try {
     const feed = await db.query.icalFeeds.findFirst({ where: and(eq(icalFeeds.id, feedId), eq(icalFeeds.enabled, true)) })
-    if (!feed) return { skipped: true }
+    if (!feed || !(await isClientActive(feed.organizationId))) return { skipped: true }
     try {
       const events = await fetchIcal(feed.url)
-      const incoming = new Map(events.map(event => [event.uid, event]))
-      const existingRows = await db.query.stays.findMany({ where: and(eq(stays.icalFeedId, feed.id), isNotNull(stays.icalUid)) })
-      for (const event of events) {
-        const existing = existingRows.find(row => row.icalUid === event.uid)
-        if (existing) {
-          const datesChanged = existing.checkInOn !== event.checkInOn || existing.checkOutOn !== event.checkOutOn
-          const [updated] = await db.update(stays).set({ checkInOn: event.checkInOn, checkOutOn: event.checkOutOn, icalSummary: event.summary, icalMissingCount: 0, state: datesChanged && existing.state === 'hidden' ? 'active' : existing.state, updatedAt: new Date() }).where(eq(stays.id, existing.id)).returning()
-          if (updated && datesChanged && updated.state === 'active') await recordConflicts(updated.id, feed.organizationId, feed.apartmentId)
-        } else {
-          const [created] = await db.insert(stays).values({ organizationId: feed.organizationId, apartmentId: feed.apartmentId, checkInOn: event.checkInOn, checkOutOn: event.checkOutOn, adultCount: null, childCount: null, guestName: '', guestPhone: '', guestComment: '', cashAmountEur: null, createdById: null, source: 'ical', state: 'active', icalFeedId: feed.id, icalUid: event.uid, icalSummary: event.summary }).onConflictDoNothing().returning()
-          if (created) await recordConflicts(created.id, feed.organizationId, feed.apartmentId)
+      return await db.transaction(async connection => {
+        // Block/unblock uses an UPDATE lock on this row. No sync write can
+        // commit after a block, even if the feed was fetched before it.
+        const [client] = await connection.select().from(organizations).where(eq(organizations.id, feed.organizationId)).for('share')
+        if (client?.status !== 'active') return { skipped: true }
+        const incoming = new Map(events.map(event => [event.uid, event]))
+        const existingRows = await connection.query.stays.findMany({ where: and(eq(stays.icalFeedId, feed.id), isNotNull(stays.icalUid)) })
+        for (const event of events) {
+          const existing = existingRows.find(row => row.icalUid === event.uid)
+          if (existing) {
+            const datesChanged = existing.checkInOn !== event.checkInOn || existing.checkOutOn !== event.checkOutOn
+            const [updated] = await connection.update(stays).set({ checkInOn: event.checkInOn, checkOutOn: event.checkOutOn, icalSummary: event.summary, icalMissingCount: 0, state: datesChanged && existing.state === 'hidden' ? 'active' : existing.state, updatedAt: new Date() }).where(eq(stays.id, existing.id)).returning()
+            if (updated && datesChanged && updated.state === 'active') await recordConflicts(updated.id, feed.organizationId, feed.apartmentId, connection)
+          } else {
+            const [created] = await connection.insert(stays).values({ organizationId: feed.organizationId, apartmentId: feed.apartmentId, checkInOn: event.checkInOn, checkOutOn: event.checkOutOn, adultCount: null, childCount: null, guestName: '', guestPhone: '', guestComment: '', cashAmountEur: null, createdById: null, source: 'ical', state: 'active', icalFeedId: feed.id, icalUid: event.uid, icalSummary: event.summary }).onConflictDoNothing().returning()
+            if (created) await recordConflicts(created.id, feed.organizationId, feed.apartmentId, connection)
+          }
         }
-      }
-      for (const row of existingRows) {
-        if (row.state !== 'active' || incoming.has(row.icalUid ?? '')) continue
-        const missing = row.icalMissingCount + 1
-        await db.update(stays).set({ icalMissingCount: missing, ...(missing >= 2 ? { state: 'canceled' as const } : {}), updatedAt: new Date() }).where(eq(stays.id, row.id))
-        if (missing >= 2) await cancelUnstartedCleaning(row.id, feed.organizationId)
-      }
-      await db.update(icalFeeds).set({ lastSyncedAt: new Date(), lastError: '', updatedAt: new Date() }).where(eq(icalFeeds.id, feed.id))
-      return { ok: true, eventCount: events.length }
+        for (const row of existingRows) {
+          if (row.state !== 'active' || incoming.has(row.icalUid ?? '')) continue
+          const missing = row.icalMissingCount + 1
+          await connection.update(stays).set({ icalMissingCount: missing, ...(missing >= 2 ? { state: 'canceled' as const } : {}), updatedAt: new Date() }).where(eq(stays.id, row.id))
+          if (missing >= 2) await cancelUnstartedCleaning(row.id, feed.organizationId, connection)
+        }
+        await connection.update(icalFeeds).set({ lastSyncedAt: new Date(), lastError: '', updatedAt: new Date() }).where(eq(icalFeeds.id, feed.id))
+        return { ok: true, eventCount: events.length }
+      })
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Не удалось загрузить календарь'
-      await db.update(icalFeeds).set({ lastError: message.slice(0, 300), updatedAt: new Date() }).where(eq(icalFeeds.id, feed.id))
-      return { ok: false, error: message }
+      return db.transaction(async tx => {
+        const [client] = await tx.select().from(organizations).where(eq(organizations.id, feed.organizationId)).for('share')
+        if (client?.status !== 'active') return { skipped: true }
+        await tx.update(icalFeeds).set({ lastError: message.slice(0, 300), updatedAt: new Date() }).where(eq(icalFeeds.id, feed.id))
+        return { ok: false, error: message }
+      })
     }
   } finally {
     runningFeeds.delete(feedId)
   }
 }
 
-async function cancelUnstartedCleaning(stayId: string, organizationId: string) {
-  const cleaning = await db.query.cleanings.findFirst({ where: and(eq(cleanings.stayId, stayId), eq(cleanings.organizationId, organizationId), inArray(cleanings.status, ['unassigned', 'assigned'])) })
-  if (!cleaning) { await notifyCleaningHistoryIfStarted(stayId, organizationId); return }
+async function cancelUnstartedCleaning(stayId: string, organizationId: string, connection: typeof db | Connection = db) {
+  const cleaning = await connection.query.cleanings.findFirst({ where: and(eq(cleanings.stayId, stayId), eq(cleanings.organizationId, organizationId), inArray(cleanings.status, ['unassigned', 'assigned'])) })
+  if (!cleaning) { await notifyCleaningHistoryIfStarted(stayId, organizationId, connection); return }
   const [assignmentRows, ownerRows] = await Promise.all([
-    db.select({ userId: cleaningAssignments.cleanerId }).from(cleaningAssignments).where(eq(cleaningAssignments.cleaningId, cleaning.id)),
-    db.select({ userId: apartmentManagers.userId }).from(apartmentManagers).where(and(eq(apartmentManagers.organizationId, organizationId), eq(apartmentManagers.apartmentId, cleaning.apartmentId)))
+    connection.select({ userId: cleaningAssignments.cleanerId }).from(cleaningAssignments).where(eq(cleaningAssignments.cleaningId, cleaning.id)),
+    connection.select({ userId: apartmentManagers.userId }).from(apartmentManagers).where(and(eq(apartmentManagers.organizationId, organizationId), eq(apartmentManagers.apartmentId, cleaning.apartmentId)))
   ])
-  await db.transaction(async tx => {
+  await connection.transaction(async tx => {
     await tx.update(cleanings).set({ status: 'canceled', updatedAt: new Date() }).where(eq(cleanings.id, cleaning.id))
     await tx.delete(cleaningAssignments).where(eq(cleaningAssignments.cleaningId, cleaning.id))
-    await tx.update(tasks).set({ status: 'canceled', updatedAt: new Date() }).where(and(eq(tasks.organizationId, organizationId), eq(tasks.status, 'open'), inArray(tasks.id, db.select({ taskId: cashTaskDetails.taskId }).from(cashTaskDetails).where(eq(cashTaskDetails.cleaningId, cleaning.id)))))
+    await tx.update(tasks).set({ status: 'canceled', updatedAt: new Date() }).where(and(eq(tasks.organizationId, organizationId), eq(tasks.status, 'open'), inArray(tasks.id, connection.select({ taskId: cashTaskDetails.taskId }).from(cashTaskDetails).where(eq(cashTaskDetails.cleaningId, cleaning.id)))))
   })
   await notifyUsers({ organizationId, userIds: [...assignmentRows.map(row => row.userId), ...ownerRows.map(row => row.userId), ...await administratorsForOrganization(organizationId)], type: 'stay_conflict', title: 'Уборка отменена', body: 'Бронирование больше не входит в календарь Booking.com', href: '/work' })
 }
 
-async function notifyCleaningHistoryIfStarted(stayId: string, organizationId: string) {
-  const cleaning = await db.query.cleanings.findFirst({ where: and(eq(cleanings.stayId, stayId), eq(cleanings.organizationId, organizationId), inArray(cleanings.status, ['in_progress', 'completed'])) })
+async function notifyCleaningHistoryIfStarted(stayId: string, organizationId: string, connection: typeof db | Connection = db) {
+  const cleaning = await connection.query.cleanings.findFirst({ where: and(eq(cleanings.stayId, stayId), eq(cleanings.organizationId, organizationId), inArray(cleanings.status, ['in_progress', 'completed'])) })
   if (!cleaning) return
   const adminIds = await administratorsForOrganization(organizationId)
   await notifyUsers({ organizationId, userIds: adminIds, type: 'stay_conflict', title: 'Проверьте уборку после отмены бронирования', body: 'Уборка уже начата или завершена; её история сохранена без изменений', href: '/work' })
 }
 
 export async function syncAllIcalFeeds() {
-  const feeds = await db.select({ id: icalFeeds.id }).from(icalFeeds).where(eq(icalFeeds.enabled, true))
+  const feeds = await db.select({ id: icalFeeds.id }).from(icalFeeds).innerJoin(organizations, eq(organizations.id, icalFeeds.organizationId)).where(and(eq(icalFeeds.enabled, true), eq(organizations.status, 'active')))
   for (const feed of feeds) await syncIcalFeed(feed.id)
 }
 

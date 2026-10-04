@@ -4,11 +4,13 @@ import type { Actor } from '../../infrastructure/auth/actor'
 import { requireRole } from '../../infrastructure/auth/actor'
 import { writeAuditLog } from '../../infrastructure/audit/log'
 import { db } from '../../infrastructure/database/client'
-import { apartmentManagers, attachments, authTokens, cleaningAssignments, cleaningProblems, cleanings, financialEntries, inventoryLots, inventoryMovements, notifications, stays, stayServices, tasks, users } from '../../infrastructure/database/schema'
+import { apartmentManagers, attachments, authTokens, cleaningAssignments, cleaningProblems, cleanings, financialEntries, inventoryLots, inventoryMovements, notifications, stays, stayServices, tasks, users, organizations } from '../../infrastructure/database/schema'
 import { sendAccountLink } from '../../infrastructure/mail/send'
 import { fileStorage } from '../../infrastructure/storage/local'
 import { publishNotification } from '../../infrastructure/notification/realtime'
 import { invitationResendAvailableAt, invitationResendWaitSeconds } from './invitation-cooldown'
+import { ensureEmailAvailable, lockEmail, normalizeEmail, type Connection } from './email-reservation'
+import { isClientActive } from '../../infrastructure/auth/platform'
 import { isApartmentOwnerEligible } from '@contracts/crm'
 
 const hash = (value: string) => createHash('sha256').update(value).digest('hex')
@@ -20,15 +22,28 @@ async function issueToken(userId: string, type: 'invitation' | 'password_reset')
   return token
 }
 
-export async function inviteUser(input: { organizationId: string; name: string; email: string; roles: Array<'administrator' | 'manager' | 'cleaner' | 'specialist'>; locale?: 'ru' | 'en' | 'he' }) {
-  const email = input.email.toLowerCase()
-  const existing = await db.query.users.findFirst({ where: and(eq(users.organizationId, input.organizationId), eq(users.email, email)) })
-  if (existing) throw createError({ statusCode: 409, statusMessage: 'Пользователь с этим email уже существует' })
-  const [user] = await db.insert(users).values({ organizationId: input.organizationId, name: input.name, email, roles: input.roles, locale: input.locale ?? 'ru', passwordHash: await hashPassword(randomBytes(32).toString('hex')), status: 'invited' }).returning()
+export type InviteInput = { organizationId: string; name: string; email: string; roles: Array<'administrator' | 'manager' | 'cleaner' | 'specialist'>; locale?: 'ru' | 'en' | 'he' }
+
+export async function createInvitation(tx: Connection, input: InviteInput) {
+  const email = normalizeEmail(input.email)
+  await lockEmail(tx, email)
+  await ensureEmailAvailable(tx, email)
+  const [user] = await tx.insert(users).values({ organizationId: input.organizationId, name: input.name, email, roles: input.roles, locale: input.locale ?? 'ru', passwordHash: await hashPassword(randomBytes(32).toString('hex')), status: 'invited' }).returning()
   if (!user) throw createError({ statusCode: 500, statusMessage: 'Не удалось создать приглашение' })
-  const token = await issueToken(user.id, 'invitation')
+  const token = randomBytes(32).toString('base64url')
+  await tx.insert(authTokens).values({ userId: user.id, type: 'invitation', tokenHash: hash(token), expiresAt: expiry() })
+  return { user, token }
+}
+
+export async function deliverInvitation(invitation: Awaited<ReturnType<typeof createInvitation>>) {
+  const { user, token } = invitation
   await sendAccountLink({ to: user.email, name: user.name, type: 'invitation', token, locale: user.locale })
-  return { id: user.id, email: user.email }
+}
+
+export async function inviteUser(input: InviteInput) {
+  const invitation = await db.transaction(tx => createInvitation(tx, input))
+  await deliverInvitation(invitation)
+  return { id: invitation.user.id, email: invitation.user.email }
 }
 
 export async function resendInvitation(actor: Actor, userId: string) {
@@ -69,8 +84,9 @@ export async function resendInvitation(actor: Actor, userId: string) {
 }
 
 export async function requestPasswordReset(email: string) {
-  const user = await db.query.users.findFirst({ where: eq(users.email, email.toLowerCase()) })
+  const user = await db.query.users.findFirst({ where: eq(users.email, normalizeEmail(email)) })
   if (!user || user.status !== 'active') return
+  if (!user.isSuperuser && !(await isClientActive(user.organizationId))) return
   const token = await issueToken(user.id, 'password_reset')
   await sendAccountLink({ to: user.email, name: user.name, type: 'password_reset', token, locale: user.locale })
 }
@@ -81,6 +97,10 @@ export async function setPassword(token: string, password: string) {
   await db.transaction(async tx => {
     const [usedToken] = await tx.update(authTokens).set({ usedAt: new Date() }).where(and(eq(authTokens.id, record.id), isNull(authTokens.usedAt))).returning()
     if (!usedToken) throw createError({ statusCode: 400, statusMessage: 'Ссылка недействительна или истекла' })
+    const target = await tx.query.users.findFirst({ where: eq(users.id, usedToken.userId) })
+    if (!target) throw createError({ statusCode: 400, statusMessage: 'Клиент недоступен' })
+    const [client] = await tx.select().from(organizations).where(eq(organizations.id, target.organizationId)).for('share')
+    if (!client || (!target.isSuperuser && client.status !== 'active')) throw createError({ statusCode: 400, statusMessage: 'Клиент недоступен' })
     const expectedStatus = usedToken.type === 'invitation' ? 'invited' : 'active'
     const [user] = await tx.update(users).set({ passwordHash: await hashPassword(password), status: 'active', updatedAt: new Date() }).where(and(eq(users.id, usedToken.userId), eq(users.status, expectedStatus))).returning()
     if (!user) throw createError({ statusCode: 400, statusMessage: 'Ссылка недействительна или истекла' })
@@ -92,6 +112,7 @@ async function ensureUserCanBeRemoved(actor: Actor, userId: string) {
   if (actor.id === userId) throw createError({ statusCode: 409, statusMessage: 'Нельзя удалить собственную учетную запись' })
   const user = await db.query.users.findFirst({ where: and(eq(users.id, userId), eq(users.organizationId, actor.organizationId)) })
   if (!user) throw createError({ statusCode: 404, statusMessage: 'Пользователь не найден' })
+  if (user.isSuperuser) throw createError({ statusCode: 403, statusMessage: 'Системная учётная запись защищена' })
   if (user.status === 'active' && user.roles.includes('administrator')) {
     const activeUsers = await db.query.users.findMany({ where: and(eq(users.organizationId, actor.organizationId), eq(users.status, 'active')) })
     if (activeUsers.filter(candidate => candidate.roles.includes('administrator')).length < 2) throw createError({ statusCode: 409, statusMessage: 'Нельзя удалить или архивировать последнего активного администратора' })

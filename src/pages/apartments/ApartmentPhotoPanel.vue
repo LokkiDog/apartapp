@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { clientResourceUrl } from "#fsd/shared/auth"
 import { useI18n } from 'vue-i18n'
 
 export type ApartmentPhotoAttachment = { id: string; fileName: string }
@@ -66,7 +67,7 @@ function selectPhotos(event: Event) {
     <USkeleton v-if="loading" class="apartment-photo-panel__skeleton" />
     <div v-else-if="attachments.length || previews.length" class="apartment-photo-panel__gallery">
       <figure v-for="attachment in attachments" :key="attachment.id" class="apartment-photo-panel__item">
-        <img :src="`/api/attachments/${attachment.id}/file?variant=card`" :alt="attachment.fileName" class="apartment-photo-panel__image" loading="lazy" decoding="async">
+        <img :src="clientResourceUrl(`/api/attachments/${attachment.id}/file?variant=card`)" :alt="attachment.fileName" class="apartment-photo-panel__image" loading="lazy" decoding="async">
         <UButton color="error" variant="solid" icon="i-lucide-trash-2" size="sm" class="apartment-photo-panel__remove min-h-11 min-w-11 active:scale-[0.96] transition-transform" :aria-label="`${t('common.delete')}: ${attachment.fileName}`" @click="emit('removeAttachment', attachment)" />
       </figure>
       <figure v-for="(preview, index) in previews" :key="preview.url" class="apartment-photo-panel__item apartment-photo-panel__item--pending">

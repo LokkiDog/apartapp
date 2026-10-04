@@ -3,7 +3,7 @@ import type { AppLocale } from '@contracts/crm'
 import { useCurrentUser } from '#fsd/shared/auth'
 import { setFormatLocale } from '#fsd/shared/lib'
 
-const props = withDefaults(defineProps<{ persist?: boolean }>(), { persist: true })
+const props = withDefaults(defineProps<{ persist?: boolean; labeled?: boolean }>(), { persist: true, labeled: false })
 const { locale, setLocale, t } = useI18n()
 const toast = useToast()
 const user = useCurrentUser()
@@ -52,12 +52,13 @@ watch(() => user.value?.locale, value => {
     <UButton
       color="neutral"
       variant="ghost"
-      icon="i-lucide-languages"
+      :icon="labeled ? undefined : 'i-lucide-languages'"
+      :trailing-icon="labeled ? 'i-lucide-chevron-down' : undefined"
       class="cursor-pointer topbar-action language-switcher"
-      :aria-label="$t('common.language')"
+      :aria-label="labeled ? `${t('common.language')}: ${choices.find(choice => choice.code === locale)?.label}` : t('common.language')"
       :loading="pending"
     >
-      <span class="sr-only sm:not-sr-only">{{ locale.toUpperCase() }}</span>
+      <span :class="labeled ? 'language-switcher__label' : 'sr-only sm:not-sr-only'">{{ locale.toUpperCase() }}</span>
     </UButton>
   </UDropdownMenu>
 </template>

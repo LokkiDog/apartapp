@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { clientResourceUrl } from "#fsd/shared/auth"
 import type { ApartmentPhotoAttachment } from './ApartmentPhotoPanel.vue'
 import { useI18n } from 'vue-i18n'
 
@@ -29,7 +30,7 @@ function next() { showPhoto((activeIndex.value + 1) % props.photos.length) }
       <img
         v-for="(photo, index) in photos"
         :key="photo.id"
-        :src="`/api/attachments/${photo.id}/file?variant=card`"
+        :src="clientResourceUrl(`/api/attachments/${photo.id}/file?variant=card`)"
         :alt="`${apartmentName}: ${photo.fileName}`"
         class="apartment-card__image apartment-photo-carousel__image"
         :loading="eager && index === 0 ? 'eager' : 'lazy'"

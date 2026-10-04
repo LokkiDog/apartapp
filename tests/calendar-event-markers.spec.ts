@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
+import { resolveCssColor } from './helpers/css-colors'
 import { createCalendarEventMarkers, type CalendarEventMarkerSource } from '../src/pages/calendar/model/calendar-event-markers'
 
 function stay(id: string, apartmentId: string, checkInOn: string, checkOutOn: string): CalendarEventMarkerSource {
@@ -60,8 +61,8 @@ describe('calendar arrival and departure markers', () => {
     expect(marker).toContain("backgroundColor: 'var(--calendar-arrival-bg)'")
     expect(marker).toContain("backgroundColor: 'var(--calendar-departure-bg)'")
     expect(styles).toContain('.calendar-event-marker--combined')
-    expect(styles).toContain('--calendar-departure-bg: #e8f1f7')
-    expect(styles).toContain('--calendar-arrival-bg: #ffebec')
+    expect(resolveCssColor(styles, 'var(--calendar-departure-bg)')).toBe('#e8f1f7')
+    expect(resolveCssColor(styles, 'var(--calendar-arrival-bg)')).toBe('#ffebec')
     expect(styles).toContain('white-space: nowrap')
     expect(styles).toContain('.calendar-event-marker__segment .stay-service-icons')
     expect(styles).toContain('flex-shrink: 0')

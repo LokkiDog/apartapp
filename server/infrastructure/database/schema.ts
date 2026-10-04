@@ -42,6 +42,7 @@ export const authTokenTypeEnum = pgEnum('auth_token_type', ['invitation', 'passw
 export const organizations = pgTable('organizations', {
   id: uuid('id').primaryKey().defaultRandom(),
   name: text('name').notNull(),
+  status: text('status').$type<'active' | 'blocked'>().notNull().default('active'),
   timezone: text('timezone').notNull().default('Europe/Sofia'),
   ...timestamps
 })
@@ -56,10 +57,11 @@ export const users = pgTable('users', {
   locale: appLocaleEnum('locale').notNull().default('ru'),
   roles: userRoleEnum('roles').array().notNull().default(sql`ARRAY['manager']::user_role[]`),
   status: userStatusEnum('status').notNull().default('invited'),
+  isSuperuser: boolean('is_superuser').notNull().default(false),
   isVika: boolean('is_vika').notNull().default(false),
   ...timestamps
 }, table => [
-  uniqueIndex('users_organization_email_unique').on(table.organizationId, table.email),
+  uniqueIndex('users_email_unique').on(sql`lower(trim(${table.email}))`),
   uniqueIndex('users_one_vika_per_organization_unique').on(table.organizationId).where(sql`${table.isVika}`)
 ])
 
@@ -650,3 +652,46 @@ export const apartmentConsumablesRelations = relations(apartmentConsumables, ({ 
   apartment: one(apartments, { fields: [apartmentConsumables.apartmentId], references: [apartments.id] }),
   consumable: one(consumables, { fields: [apartmentConsumables.consumableId], references: [consumables.id] })
 }))
+
+
+// Platform state is deliberately separate from tenant operational data.
+export const systemSettings = pgTable('system_settings', {
+  id: text('id').primaryKey().default('platform'),
+  registrationMode: text('registration_mode').$type<'self_service' | 'superuser_only'>().notNull().default('superuser_only'),
+  ...timestamps
+})
+
+export const platformSessions = pgTable('platform_sessions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  organizationId: uuid('organization_id').references(() => organizations.id),
+  revision: uuid('revision').notNull().defaultRandom(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull()
+})
+
+export const pendingRegistrations = pgTable('pending_registrations', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  email: text('email').notNull().unique(),
+  companyName: text('company_name').notNull(),
+  name: text('name').notNull(),
+  passwordHash: text('password_hash').notNull(),
+  tokenHash: text('token_hash').notNull().unique(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  sentAt: timestamp('sent_at', { withTimezone: true }).notNull().defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+})
+
+export const platformAuditLogs = pgTable('platform_audit_logs', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  actorId: uuid('actor_id').references(() => users.id, { onDelete: 'set null' }),
+  organizationId: uuid('organization_id').references(() => organizations.id),
+  action: text('action').notNull(),
+  payload: jsonb('payload').$type<Record<string, unknown>>().notNull().default({}),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+})
+
+export const registrationAttempts = pgTable('registration_attempts', {
+  key: text('key').primaryKey(),
+  count: integer('count').notNull(),
+  resetsAt: timestamp('resets_at', { withTimezone: true }).notNull()
+})

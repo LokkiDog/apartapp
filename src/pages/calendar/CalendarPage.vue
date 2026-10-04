@@ -9,7 +9,7 @@ import { filterApartmentsByScope, isPropertyScopeReady, propertyScopeQuery, Prop
 import { apartmentCalendarColor, createFormValidator, formatDate, formatEuro, useSubmitFormValidation } from '#fsd/shared/lib'
 import { useCurrentUser } from '#fsd/shared/auth'
 import { useNotificationState } from '#fsd/features/manage-notifications'
-import { DateRangeInput, EmptyState, MoneyInput, PageHeader } from '#fsd/shared/ui'
+import { DateRangeInput, DeleteConfirmModal, EmptyState, MoneyInput, PageHeader } from '#fsd/shared/ui'
 import StayCalendarPopover from './StayCalendarPopover.vue'
 import CalendarEventMarker from './CalendarEventMarker.vue'
 import StayBookingRow from './StayBookingRow.vue'
@@ -701,6 +701,6 @@ async function saveStay() {
       </template>
     </USlideover>
 
-    <UModal v-model:open="deleteOpen" :title="t('calendar.deleteBooking')"><template #body><div class="space-y-5"><p>{{ t('calendar.deleteWarning') }}</p><UAlert v-if="error" color="error" variant="soft" :description="error" /><div class="form-actions"><UButton color="neutral" variant="ghost" @click="deleteOpen = false">{{ t('calendar.cancel') }}</UButton><UButton color="error" :loading="pending" @click="removeStay">{{ t('work.delete') }}</UButton></div></div></template></UModal>
+    <DeleteConfirmModal v-model:open="deleteOpen" :title="t('calendar.deleteBooking')" :description="t('calendar.deleteWarning')" :loading="pending" :error="error" @confirm="removeStay" />
   </section>
 </template>

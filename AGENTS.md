@@ -33,6 +33,10 @@
 - `cleaner` sees assigned work and can operate only on assigned cleanings/tasks.
 - Every server query and mutation must scope data by `actor.organizationId`; use `requireActor`, `requireRole` and `canManageApartment` instead of client-only checks.
 
+## Design skill
+
+Read [aparts-design](.agents/skills/aparts-design/SKILL.md) before creating or changing pages/UI components, cards, lists, forms, navigation or dialogs; before changing CSS, the Nuxt UI theme, typography, colours or animations; and when auditing or unifying interface design. Backend, database and business-logic-only tasks without UI changes do not require this skill.
+
 ## Frontend conventions
 
 - Keep route composition in `src/pages`; extract a feature only when the interaction is genuinely reused in multiple places.

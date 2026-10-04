@@ -6,8 +6,8 @@ describe('expenses page UI contracts', () => {
     const source = readFileSync('src/pages/expenses/ExpensesPage.vue', 'utf8')
 
     expect(source).toContain('role="button" tabindex="0" @click="openEdit(expense)"')
-    expect(source).toContain('@keydown.enter="openEdit(expense)"')
-    expect(source).toContain('@keydown.space.prevent="openEdit(expense)"')
+    expect(source).toContain('@keydown.enter.self.prevent="openEdit(expense)"')
+    expect(source).toContain('@keydown.space.self.prevent="openEdit(expense)"')
     expect(source).toContain('@click="openEdit(expense)"')
     expect(source).toContain('@click.stop @keydown.stop')
     expect(source).not.toContain('<button type="button" class="-ml-2 flex min-h-[72px]')

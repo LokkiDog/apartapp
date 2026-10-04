@@ -34,7 +34,7 @@ export async function createCleaning(actor: Actor, input: unknown) {
     linkedCashAmount = Number(stay.cashAmountEur ?? 0)
   }
   if (linkedCashAmount > 0 && data.cleanerIds.length && !data.cashAssigneeId) throw createError({ statusCode: 400, statusMessage: 'Выберите ответственного за наличные' })
-  const assignees = data.cleanerIds.length ? await db.select().from(users).where(and(inArray(users.id, data.cleanerIds), eq(users.organizationId, actor.organizationId), eq(users.status, 'active'))) : []
+  const assignees = data.cleanerIds.length ? await db.select().from(users).where(and(inArray(users.id, data.cleanerIds), eq(users.organizationId, actor.organizationId), eq(users.status, 'active'), eq(users.isSuperuser, false))) : []
   if (assignees.length !== data.cleanerIds.length || assignees.some(user => !canBeCleaningAssignee(user.roles))) throw createError({ statusCode: 400, statusMessage: 'Исполнитель должен быть активной уборщицей или администратором' })
   const status = data.cleanerIds.length ? 'assigned' : 'unassigned'
   const isUrgent = data.urgencyOverride ?? await calculateCleaningUrgency(actor.organizationId, data.apartmentId, data.scheduledOn)
@@ -186,7 +186,7 @@ export async function assignCleaners(actor: Actor, cleaningId: string, input: un
   const assignees = await db.select().from(users).where(and(
     inArray(users.id, data.cleanerIds),
     eq(users.organizationId, actor.organizationId),
-    eq(users.status, 'active')
+    eq(users.status, 'active'), eq(users.isSuperuser, false)
   ))
   if (assignees.length !== data.cleanerIds.length || assignees.some(user => !canBeCleaningAssignee(user.roles))) throw createError({ statusCode: 400, statusMessage: 'Исполнитель должен быть активной уборщицей или администратором' })
   await db.transaction(async tx => {
@@ -366,7 +366,7 @@ export async function updateCleaning(actor: Actor, cleaningId: string, input: un
     ? await db.select().from(users).where(and(
         inArray(users.id, data.cleanerIds),
         eq(users.organizationId, actor.organizationId),
-        eq(users.status, 'active')
+        eq(users.status, 'active'), eq(users.isSuperuser, false)
       ))
     : []
   if (assignees.length !== data.cleanerIds.length || assignees.some(user => !canBeCleaningAssignee(user.roles))) {
@@ -442,7 +442,7 @@ export async function updateCleaning(actor: Actor, cleaningId: string, input: un
 export async function reorderCleaningRoute(actor: Actor, input: unknown) {
   requireRole(actor, 'administrator')
   const data = cleaningRouteUpdateSchema.parse(input)
-  const cleaner = await db.query.users.findFirst({ where: and(eq(users.id, data.cleanerId), eq(users.organizationId, actor.organizationId), eq(users.status, 'active')) })
+  const cleaner = await db.query.users.findFirst({ where: and(eq(users.id, data.cleanerId), eq(users.organizationId, actor.organizationId), eq(users.status, 'active'), eq(users.isSuperuser, false)) })
   if (!cleaner || !canBeCleaningAssignee(cleaner.roles)) throw createError({ statusCode: 400, statusMessage: 'Исполнитель не найден' })
   const rows = await db.query.cleanings.findMany({ where: and(eq(cleanings.organizationId, actor.organizationId), eq(cleanings.scheduledOn, data.scheduledOn)), with: { assignments: true } })
   const selected = rows.filter(cleaning => data.cleaningIds.includes(cleaning.id))

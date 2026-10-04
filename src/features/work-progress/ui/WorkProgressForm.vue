@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { clientResourceUrl } from "#fsd/shared/auth"
 import type { FormErrorEvent } from '@nuxt/ui'
 import { createFormValidator, formatDateTime, useSubmitFormValidation } from '#fsd/shared/lib'
 import { MoneyInput, PhotoFileInput } from '#fsd/shared/ui'
@@ -207,7 +208,7 @@ onBeforeUnmount(() => { clearPhotoPreviews(); clearProblemPhotoPreviews() })
           <article v-for="(problem, problemIndex) in problems" :key="problem.id" class="work-problem-card">
             <div class="flex items-start gap-2"><div class="min-w-0 flex-1 space-y-3"><UFormField :name="`problems.${problemIndex}.description`" :label="t('progress.problemTitle')"><UInput v-model="problem.description" class="w-full" :disabled="!editable" :placeholder="t('progress.problemPlaceholder')" /></UFormField><UFormField :name="`problems.${problemIndex}.details`" :label="t('progress.problemDescription')"><UTextarea v-model="problem.details" class="w-full" :disabled="!editable" :rows="3" :placeholder="t('progress.problemDetailsPlaceholder')" /></UFormField></div><UButton v-if="editable" type="button" color="error" variant="ghost" icon="i-lucide-trash-2" class="min-h-11 min-w-11" :aria-label="t('progress.removeProblem')" @click="removeProblem(problemIndex)" /></div>
             <div v-if="problem.attachments.length || problem.previews.length" class="work-attachment-gallery mt-3">
-              <a v-for="attachment in problem.attachments" :key="attachment.id" :href="`/api/attachments/${attachment.id}/file`" target="_blank" rel="noreferrer" class="work-attachment-card"><img :src="`/api/attachments/${attachment.id}/file?variant=card`" :alt="attachment.fileName" class="work-attachment-card__image" /><span class="work-attachment-card__name">{{ attachment.fileName }}</span></a>
+              <a v-for="attachment in problem.attachments" :key="attachment.id" :href="clientResourceUrl(`/api/attachments/${attachment.id}/file`)" target="_blank" rel="noreferrer" class="work-attachment-card"><img :src="clientResourceUrl(`/api/attachments/${attachment.id}/file?variant=card`)" :alt="attachment.fileName" class="work-attachment-card__image" /><span class="work-attachment-card__name">{{ attachment.fileName }}</span></a>
               <figure v-for="preview in problem.previews" :key="preview.url" class="work-attachment-card work-attachment-card--preview"><img :src="preview.url" :alt="preview.file.name" class="work-attachment-card__image" /><figcaption class="work-attachment-card__name">{{ preview.file.name }}</figcaption></figure>
             </div>
             <UFormField :label="t('progress.problemPhotos')" class="mt-3"><PhotoFileInput :files="problem.photos" :disabled="!editable" @select="chooseProblemPhotos($event, problem)" /></UFormField>
@@ -223,8 +224,8 @@ onBeforeUnmount(() => { clearPhotoPreviews(); clearProblemPhotoPreviews() })
     <section v-if="kind === 'task'" class="progress-section">
       <div class="progress-section__heading"><div><h2>{{ t('work.photos') }}</h2><p>{{ t('progress.photoHint') }}</p></div><UIcon name="i-lucide-camera" class="size-5 text-[var(--color-primary)]" /></div>
       <div v-if="attachments.length || photoPreviews.length" class="work-attachment-gallery">
-        <a v-for="attachment in attachments" :key="attachment.id" :href="`/api/attachments/${attachment.id}/file`" target="_blank" rel="noreferrer" class="work-attachment-card">
-          <img :src="`/api/attachments/${attachment.id}/file?variant=card`" :alt="attachment.fileName" class="work-attachment-card__image" />
+        <a v-for="attachment in attachments" :key="attachment.id" :href="clientResourceUrl(`/api/attachments/${attachment.id}/file`)" target="_blank" rel="noreferrer" class="work-attachment-card">
+          <img :src="clientResourceUrl(`/api/attachments/${attachment.id}/file?variant=card`)" :alt="attachment.fileName" class="work-attachment-card__image" />
           <span class="work-attachment-card__name">{{ attachment.fileName }}</span>
         </a>
         <figure v-for="preview in photoPreviews" :key="preview.url" class="work-attachment-card work-attachment-card--preview">
