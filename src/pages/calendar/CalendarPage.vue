@@ -17,9 +17,9 @@ import ApartmentBookingsView from './ApartmentBookingsView.vue'
 import StayBookingsPanel from './StayBookingsPanel.vue'
 import IcalConflictPanel from './IcalConflictPanel.vue'
 import { useI18n } from 'vue-i18n'
-import { assignMonthWeekLanes, createWeekSegments, type CalendarStaySegment } from './model/calendar-timeline'
+import { assignMonthWeekLanes, type CalendarStaySegment } from './model/calendar-timeline'
 import { createCalendarEventMarkers } from './model/calendar-event-markers'
-import { bookingsForApartment, calendarRange as calendarPeriodRange, migrateCalendarView, type BookingView, type CalendarPeriod } from './model/calendar-view'
+import { bookingsForApartment, bookingCalendarRange, restoreBookingPreferences, shiftCalendarCursor, type BookingPreferences, type BookingView, type CalendarPeriod } from './model/calendar-view'
 import { createStayAgenda, filterStayAgenda, isPastStay, stayAgendaQueryFrom, stayHistoryQueryFrom, type StayAgendaStatus } from './model/stay-agenda'
 import { stayInputSchema } from '@contracts/crm'
 
@@ -63,8 +63,17 @@ const agendaStatusOptions = computed(() => [
   { label: t('calendar.departure'), value: 'departure' as const },
   { label: t('calendar.stays'), value: 'staying' as const }
 ])
-const bookingView = ref<BookingView>('dates')
-const calendarPeriod = ref<CalendarPeriod>('month')
+const preferencesKey = 'aparts.calendar.preferences-v2'
+const preferences = reactive<BookingPreferences>(restoreBookingPreferences(null, null, null, null))
+const bookingView = computed<BookingView>(() => preferences.layout === 'calendar' ? 'calendar' : preferences.grouping)
+const calendarLayout = computed({ get: () => preferences.calendarLayout, set: value => { preferences.calendarLayout = value } })
+const filtersOpen = ref(false)
+const effectivePeriod = computed(() => calendarLayout.value === 'grid' ? 'month' : calendarPeriod.value)
+const activeFilterCount = computed(() => Number(propertyScope.scope !== 'all') + Number(onlyVika.value) + Number(bookingView.value === 'dates' && selectedAgendaStatuses.value.length !== 3))
+const periodOptions = computed(() => [{ label: t('calendar.month'), value: 'month' }, { label: t('calendar.week'), value: 'week' }, { label: t('calendar.day'), value: 'day' }])
+const eventOptions = computed(() => [{ label: t('calendar.stays'), value: 'stays' }, { label: t('calendar.bookingsAndDepartures'), value: 'events' }])
+const eventMode = computed({ get: () => eventsOnly.value ? 'events' : 'stays', set: value => { eventsOnly.value = value === 'events' } })
+const calendarPeriod = computed<CalendarPeriod>({ get: () => preferences.period, set: value => { preferences.period = value } })
 const eventsOnly = ref(false)
 const onlyVika = ref(false)
 const calendarBoardRef = ref<HTMLElement | null>(null)
@@ -107,7 +116,7 @@ const [
 ])
 const vikaAccount = computed(() => (members.value ?? []).find(member => member.isVika) ?? null)
 watch(vikaAccount, account => { if (!account) onlyVika.value = false }, { immediate: true })
-const range = computed(() => calendarPeriodRange(calendarPeriod.value, cursor.value))
+const range = computed(() => bookingCalendarRange(calendarLayout.value, calendarPeriod.value, cursor.value))
 const selectedScope = computed<PropertyScopeValue>(() => ({ ...propertyScope, apartmentIds: [...propertyScope.apartmentIds] }))
 const scopeReady = computed(() => isPropertyScopeReady(selectedScope.value))
 const stayQuery = computed(() => ({
@@ -117,7 +126,7 @@ const stayQuery = computed(() => ({
     ? { from: historyDays.value ? stayHistoryQueryFrom(todayKey(), historyDays.value) : stayAgendaQueryFrom(todayKey()), includeUncleaned: true }
     : { from: addDays(range.value.from, -1), to: range.value.to })
 }))
-const { data: stays, status, refresh } = await useAsyncData('calendar-stays', () => {
+const { data: stays, status, error: staysError, refresh } = await useAsyncData('calendar-stays', () => {
   if (!user.value || !scopeReady.value) return Promise.resolve([] as Stay[])
   return $fetch<Stay[]>('/api/stays', { query: stayQuery.value })
 }, { server: false, default: () => [], watch: [user, stayQuery] })
@@ -167,27 +176,23 @@ const monthWeeks = computed(() => Array.from({ length: Math.ceil(monthDays.value
 const monthWeekdayHeadings = computed(() => monthWeeks.value[0] ?? [])
 const agendaDays = computed(() => filterStayAgenda(createStayAgenda(currentStays.value, todayKey()), selectedAgendaStatuses.value))
 const calendarDays = computed(() => calendarPeriod.value === 'day' ? [cursor.value] : weekDays.value)
-const calendarEventMarkers = computed(() => createCalendarEventMarkers(calendarStays.value, calendarPeriod.value === 'month' ? monthDays.value : calendarDays.value))
+const calendarEventMarkers = computed(() => createCalendarEventMarkers(calendarStays.value, calendarLayout.value === 'grid' ? monthDays.value : calendarDays.value))
 const monthWeekLayouts = computed(() => assignMonthWeekLanes(
   calendarStays.value,
   monthWeeks.value.filter(week => week.length).map(week => ({ from: week[0]!, to: addDays(week[0]!, 7) }))
 ))
-const heading = computed(() => calendarPeriod.value === 'month'
+const heading = computed(() => effectivePeriod.value === 'month'
   ? new Intl.DateTimeFormat(formatLocale.value, { month: 'long', year: 'numeric', timeZone: 'Europe/Sofia' }).format(dateFromKey(cursor.value))
-  : calendarPeriod.value === 'day' ? formatDate(cursor.value)
+  : effectivePeriod.value === 'day' ? formatDate(cursor.value)
   : `${formatDate(range.value.from)} — ${formatDate(addDays(range.value.to, -1))}`)
 
 onMounted(() => {
   const storedView = localStorage.getItem(bookingViewStorageKey)
   const storedPeriod = localStorage.getItem(calendarPeriodStorageKey)
   const storedEventsOnly = localStorage.getItem(eventsOnlyStorageKey)
-  if (storedView === 'dates' || storedView === 'apartments' || storedView === 'calendar') bookingView.value = storedView
-  else {
-    const migrated = migrateCalendarView(localStorage.getItem(legacyCalendarViewStorageKey))
-    bookingView.value = migrated.bookingView
-    calendarPeriod.value = migrated.calendarPeriod
-  }
-  if (storedPeriod === 'month' || storedPeriod === 'week' || storedPeriod === 'day') calendarPeriod.value = storedPeriod
+  let saved: unknown = null
+  try { saved = JSON.parse(localStorage.getItem(preferencesKey) ?? 'null') } catch { /* restore previous preferences */ }
+  Object.assign(preferences, restoreBookingPreferences(saved, storedView, storedPeriod, localStorage.getItem(legacyCalendarViewStorageKey)))
   if (storedEventsOnly === 'true' || storedEventsOnly === 'false') eventsOnly.value = storedEventsOnly === 'true'
   const storedStatuses = localStorage.getItem(agendaStatusStorageKey)
   if (storedStatuses) {
@@ -198,13 +203,9 @@ onMounted(() => {
   }
 })
 
-watch(bookingView, value => {
-  if (import.meta.client) localStorage.setItem(bookingViewStorageKey, value)
-})
-
-watch(calendarPeriod, value => {
-  if (import.meta.client) localStorage.setItem(calendarPeriodStorageKey, value)
-})
+watch(preferences, value => {
+  if (import.meta.client) localStorage.setItem(preferencesKey, JSON.stringify(value))
+}, { deep: true })
 
 watch(eventsOnly, value => {
   if (import.meta.client) localStorage.setItem(eventsOnlyStorageKey, String(value))
@@ -214,7 +215,7 @@ watch(selectedAgendaStatuses, value => {
   if (import.meta.client) localStorage.setItem(agendaStatusStorageKey, JSON.stringify(value))
 })
 
-watch([bookingView, calendarPeriod, cursor, eventsOnly, status], () => {
+watch([bookingView, calendarLayout, calendarPeriod, cursor, eventsOnly, status], () => {
   void scrollCalendarToToday()
 }, { flush: 'post' })
 
@@ -231,29 +232,35 @@ function daysBetween(from: string, to: string) { const days: string[] = []; for 
 function isToday(day: string) { return day === todayKey() }
 function isCurrentMonth(day: string) { const current = dateFromKey(cursor.value); const date = dateFromKey(day); return current.getUTCMonth() === date.getUTCMonth() && current.getUTCFullYear() === date.getUTCFullYear() }
 async function scrollCalendarToToday() {
-  if (!import.meta.client || bookingView.value !== 'calendar' || calendarPeriod.value === 'day' || !window.matchMedia('(max-width: 639px)').matches) return
+  if (!import.meta.client || bookingView.value !== 'calendar' || effectivePeriod.value === 'day') return
   await nextTick()
 
-  const container = calendarPeriod.value === 'month' ? calendarMonthRef.value : calendarBoardRef.value
+  const container = calendarLayout.value === 'grid' ? calendarMonthRef.value : calendarBoardRef.value
   const target = container?.querySelector<HTMLElement>('.calendar-day-heading--today, .calendar-month-day--today, .calendar-month-date-cell--today')
   if (!container || !target) return
 
-  const scrollKey = `${calendarPeriod.value}:${cursor.value}:${eventsOnly.value}`
+  const scrollKey = `${calendarLayout.value}:${effectivePeriod.value}:${cursor.value}:${eventsOnly.value}`
   if (lastTodayScrollContainer === container && lastTodayScrollKey === scrollKey) return
 
   const containerRect = container.getBoundingClientRect()
   const targetRect = target.getBoundingClientRect()
-  const stickyApartmentWidth = calendarPeriod.value === 'week' ? Math.min(164, container.clientWidth) : 0
-  const visibleCenter = stickyApartmentWidth + (container.clientWidth - stickyApartmentWidth) / 2
+  const stickyApartmentWidth = calendarLayout.value === 'timeline' ? Math.min(164, container.clientWidth) : 0
+  const visibleCenter = locale.value === 'he' ? (container.clientWidth - stickyApartmentWidth) / 2 : stickyApartmentWidth + (container.clientWidth - stickyApartmentWidth) / 2
   const targetCenter = targetRect.left - containerRect.left + container.scrollLeft + targetRect.width / 2
-  container.scrollTo({ left: Math.max(0, targetCenter - visibleCenter), behavior: 'auto' })
+  container.scrollTo({ left: locale.value === 'he' ? Math.min(0, targetCenter - visibleCenter) : Math.max(0, targetCenter - visibleCenter), behavior: 'auto' })
   lastTodayScrollContainer = container
   lastTodayScrollKey = scrollKey
 }
 function weekday(day: string, short = false) { return new Intl.DateTimeFormat(formatLocale.value, { weekday: short ? 'short' : 'long', timeZone: 'Europe/Sofia' }).format(dateFromKey(day)) }
 function dayNumber(day: string) { return dateFromKey(day).getUTCDate() }
 function staysForApartmentWeek(apartmentId: string) { return calendarStays.value.filter(stay => stay.apartmentId === apartmentId && stay.checkInOn < range.value.to && stay.checkOutOn >= range.value.from) }
-function weekSegmentsForApartment(apartmentId: string) { return createWeekSegments(staysForApartmentWeek(apartmentId), range.value.from, range.value.to) }
+function weekSegmentsForApartment(apartmentId: string) {
+  return assignMonthWeekLanes(staysForApartmentWeek(apartmentId), [range.value], Number.MAX_SAFE_INTEGER)[0]?.segments ?? []
+}
+function timelineRowStyle(apartmentId: string) {
+  const segments = weekSegmentsForApartment(apartmentId)
+  return { '--timeline-lanes': String(Math.max(1, ...segments.map(segment => segment.lane + 1))) }
+}
 function markersForApartmentWeek(apartmentId: string) { return calendarEventMarkers.value.filter(marker => marker.apartmentId === apartmentId) }
 function isStayDateDisabled(date: DateValue) {
   if (!form.apartmentId) return false
@@ -313,8 +320,8 @@ function monthWeekStyle(laneCount: number, expanded: boolean, hasToggle: boolean
   }
 }
 function eventStyle(stay: Stay) { const color = apartmentCalendarColor(stay.apartmentId); return { backgroundColor: color.background, color: color.foreground, '--departure-color': color.departure } }
-function shift(direction: number) { cursor.value = addDays(cursor.value, direction * (calendarPeriod.value === 'month' ? 31 : calendarPeriod.value === 'week' ? 7 : 1)) }
-function goToday() { cursor.value = todayKey() }
+function shift(direction: number) { cursor.value = shiftCalendarCursor(effectivePeriod.value, cursor.value, direction) }
+function goToday() { cursor.value = todayKey(); lastTodayScrollKey = ''; void scrollCalendarToToday() }
 async function loadMoreHistory() {
   if (historyLoading.value) return
   historyLoading.value = true
@@ -389,8 +396,9 @@ async function saveStay() {
 </script>
 
 <template>
-  <section class="page-wrap space-y-6">
-    <PageHeader :title="t('calendar.title')">
+  <section class="bookings-page" :class="bookingView === 'calendar' ? 'bookings-page--calendar' : 'page-wrap space-y-6'">
+    <h1 v-if="bookingView === 'calendar'" class="sr-only">{{ t('calendar.title') }}</h1>
+    <PageHeader v-if="bookingView !== 'calendar'" :title="t('calendar.title')">
       <template #actions>
         <div class="space-y-1 text-end">
           <UButton icon="i-lucide-plus" :disabled="!canCreateStays" @click="openCreate">{{ t('calendar.newBooking') }}</UButton>
@@ -399,41 +407,38 @@ async function saveStay() {
       </template>
     </PageHeader>
 
-    <IcalConflictPanel :is-administrator="isAdministrator" :focus-id="typeof route.query.icalConflict === 'string' ? route.query.icalConflict : undefined" @resolved="refresh" />
+    <IcalConflictPanel class="bookings-conflicts" :is-administrator="isAdministrator" :focus-id="typeof route.query.icalConflict === 'string' ? route.query.icalConflict : undefined" @resolved="refresh" />
 
-    <div class="calendar-controls surface">
-      <div class="calendar-controls__top calendar-controls__top--agenda">
-        <UFieldGroup class="calendar-view-switch calendar-switch-group">
-          <UButton :variant="bookingView === 'dates' ? 'solid' : 'soft'" @click="bookingView = 'dates'">{{ t('calendar.byDates') }}</UButton>
-          <UButton :variant="bookingView === 'apartments' ? 'solid' : 'soft'" @click="bookingView = 'apartments'">{{ t('calendar.byApartments') }}</UButton>
-          <UButton :variant="bookingView === 'calendar' ? 'solid' : 'soft'" @click="bookingView = 'calendar'">{{ t('calendar.calendar') }}</UButton>
-        </UFieldGroup>
+    <div class="bookings-toolbar" :class="{ 'surface': bookingView !== 'calendar' }">
+      <UFieldGroup class="bookings-toolbar__views">
+        <UButton :variant="preferences.layout === 'list' ? 'solid' : 'ghost'" color="primary" :aria-pressed="preferences.layout === 'list'" @click="preferences.layout = 'list'">{{ t('bookingWorkspace.list') }}</UButton>
+        <UButton :variant="preferences.layout === 'calendar' ? 'solid' : 'ghost'" color="primary" :aria-pressed="preferences.layout === 'calendar'" @click="preferences.layout = 'calendar'">{{ t('calendar.calendar') }}</UButton>
+      </UFieldGroup>
+      <UFieldGroup v-if="bookingView !== 'calendar'" class="bookings-toolbar__subviews">
+        <UButton :variant="preferences.grouping === 'dates' ? 'soft' : 'ghost'" :aria-pressed="preferences.grouping === 'dates'" @click="preferences.grouping = 'dates'">{{ t('calendar.byDates') }}</UButton>
+        <UButton :variant="preferences.grouping === 'apartments' ? 'soft' : 'ghost'" :aria-pressed="preferences.grouping === 'apartments'" @click="preferences.grouping = 'apartments'">{{ t('calendar.byApartments') }}</UButton>
+      </UFieldGroup>
+      <UFieldGroup v-else class="bookings-toolbar__subviews">
+        <UButton :variant="calendarLayout === 'timeline' ? 'soft' : 'ghost'" :aria-pressed="calendarLayout === 'timeline'" @click="calendarLayout = 'timeline'">{{ t('bookingWorkspace.timeline') }}</UButton>
+        <UButton :variant="calendarLayout === 'grid' ? 'soft' : 'ghost'" :aria-pressed="calendarLayout === 'grid'" @click="calendarLayout = 'grid'">{{ t('bookingWorkspace.grid') }}</UButton>
+      </UFieldGroup>
+      <div v-if="bookingView === 'calendar'" class="bookings-toolbar__navigation">
+        <UButton color="neutral" variant="ghost" @click="goToday">{{ t('calendar.today') }}</UButton>
+        <UButton color="neutral" variant="ghost" icon="i-lucide-chevron-left" :aria-label="t('calendar.previous')" @click="shift(-1)" />
+        <p class="bookings-toolbar__date" aria-live="polite">{{ heading }}</p>
+        <UButton color="neutral" variant="ghost" icon="i-lucide-chevron-right" :aria-label="t('calendar.next')" @click="shift(1)" />
       </div>
-      <div v-if="bookingView === 'calendar'" class="calendar-controls__calendar-options">
-        <div class="calendar-controls__calendar-context">
-          <div class="calendar-date-navigation">
-            <UButton color="neutral" variant="ghost" @click="goToday">{{ t('calendar.today') }}</UButton>
-            <UButton color="neutral" variant="ghost" icon="i-lucide-chevron-left" :aria-label="t('calendar.previous')" @click="shift(-1)" />
-            <UButton color="neutral" variant="ghost" icon="i-lucide-chevron-right" :aria-label="t('calendar.next')" @click="shift(1)" />
-            <p class="calendar-range-title">{{ heading }}</p>
-          </div>
-          <UButton :variant="eventsOnly ? 'solid' : 'soft'" color="primary" icon="i-lucide-arrow-left-right" class="calendar-events-toggle min-h-11 active:scale-[0.96] transition-transform" @click="eventsOnly = !eventsOnly">{{ eventsOnly ? t('calendar.bookingsAndDepartures') : t('calendar.stays') }}</UButton>
-        </div>
-        <UFieldGroup class="calendar-period-switch calendar-switch-group">
-          <UButton :variant="calendarPeriod === 'month' ? 'solid' : 'soft'" @click="calendarPeriod = 'month'">{{ t('calendar.month') }}</UButton>
-          <UButton :variant="calendarPeriod === 'week' ? 'solid' : 'soft'" @click="calendarPeriod = 'week'">{{ t('calendar.week') }}</UButton>
-          <UButton :variant="calendarPeriod === 'day' ? 'solid' : 'soft'" @click="calendarPeriod = 'day'">{{ t('calendar.day') }}</UButton>
-        </UFieldGroup>
+      <div v-if="bookingView === 'calendar'" class="bookings-toolbar__options">
+        <USelect v-if="calendarLayout === 'timeline'" v-model="calendarPeriod" :items="periodOptions" :aria-label="t('bookingWorkspace.period')" class="bookings-toolbar__period" />
+        <USelect v-model="eventMode" :items="eventOptions" :aria-label="t('bookingWorkspace.events')" class="bookings-toolbar__events" />
       </div>
-      <UCollapsible class="calendar-settings" :default-open="false">
-        <template #default="{ open: settingsOpen }">
-          <button type="button" class="calendar-settings__trigger">
-            <span class="calendar-settings__label"><UIcon name="i-lucide-sliders-horizontal" class="size-4" />{{ t('calendar.settings') }}</span>
-            <UIcon name="i-lucide-chevron-down" class="calendar-settings__chevron" :class="{ 'calendar-settings__chevron--open': settingsOpen }" />
-          </button>
-        </template>
-        <template #content>
-          <div class="calendar-settings__content">
+      <div class="bookings-toolbar__actions">
+        <UButton color="neutral" variant="ghost" icon="i-lucide-sliders-horizontal" :aria-label="t('bookingWorkspace.filters')" @click="filtersOpen = true"><span class="bookings-action-label">{{ t('bookingWorkspace.filters') }}</span><UBadge v-if="activeFilterCount" size="sm" color="primary">{{ activeFilterCount }}</UBadge></UButton>
+        <UButton v-if="bookingView === 'calendar'" icon="i-lucide-plus" :aria-label="t('bookingWorkspace.newBooking')" :disabled="!canCreateStays" :title="!canCreateStays ? t('calendar.noOwnedApartments') : undefined" @click="openCreate"><span class="bookings-action-label">{{ t('bookingWorkspace.newBooking') }}</span></UButton>
+      </div>
+    </div>
+    <USlideover :modal="true" :overlay="true" v-model:open="filtersOpen" :title="t('bookingWorkspace.filters')">
+      <template #body><div class="grid gap-5">
             <PropertyScopeFilter
               v-model:scope="propertyScope.scope"
               v-model:hotel-id="propertyScope.hotelId"
@@ -450,13 +455,13 @@ async function saveStay() {
             <UFormField v-if="bookingView === 'dates'" :label="t('calendar.eventTypes')" class="calendar-settings__event-types">
               <USelect v-model="selectedAgendaStatuses" :items="agendaStatusOptions" multiple class="w-full" />
             </UFormField>
-          </div>
-        </template>
-      </UCollapsible>
-    </div>
+      </div></template>
+    </USlideover>
 
-    <div v-if="status === 'pending'" class="grid gap-3"><USkeleton v-for="item in 6" :key="item" class="h-20 rounded-2xl" /></div>
+    <div class="bookings-content" :class="{ 'bookings-content--calendar': bookingView === 'calendar' }">
+    <div v-if="status === 'pending'" class="bookings-loading grid gap-3" role="status" :aria-label="t('common.pageLoading')"><USkeleton v-for="item in 6" :key="item" class="h-20 rounded-2xl" /></div>
 
+    <EmptyState v-if="staysError" icon="i-lucide-triangle-alert" :title="t('common.error')"><template #actions><UButton @click="refresh()">{{ t('bookingWorkspace.retry') }}</UButton></template></EmptyState>
     <EmptyState v-else-if="!scopeReady" icon="i-lucide-list-filter" :title="t('calendar.chooseScope')" :description="t('scope.loadErrorDescription')" />
 
     <StayBookingsPanel
@@ -523,13 +528,13 @@ async function saveStay() {
     <UButton v-if="scopeReady && bookingView === 'apartments' && visibleApartments.length" color="neutral" variant="soft" block :loading="historyLoading" icon="i-lucide-history" class="min-h-11 active:scale-[0.96] transition-transform" @click="loadMoreHistory">{{ historyDays ? t('calendarHistoryExtra.loadMorePast') : t('calendarHistoryExtra.pastTitle') }}</UButton>
     <EmptyState v-if="bookingView === 'apartments' && !visibleApartments.length" icon="i-lucide-building-2" :title="t('scope.apartmentsLabel')" :description="t('scope.loadErrorDescription')" />
 
-    <div v-else-if="bookingView === 'calendar' && calendarPeriod !== 'month' && visibleApartments.length" ref="calendarBoardRef" class="calendar-board surface">
-      <div class="calendar-week-grid" :class="{ 'calendar-week-grid--day': calendarPeriod === 'day' }">
+    <div v-else-if="bookingView === 'calendar' && calendarLayout === 'timeline' && scopeReady && !staysError && visibleApartments.length" ref="calendarBoardRef" class="calendar-board surface">
+      <div class="calendar-week-grid booking-timeline" :class="{ 'calendar-week-grid--day': calendarPeriod === 'day' }" :style="{ '--timeline-days': String(calendarDays.length), '--timeline-day-width': calendarPeriod === 'month' ? '64px' : '88px' }">
         <div class="calendar-corner">{{ t('calendar.apartment') }}</div>
-        <div class="calendar-week-headings"><div v-for="day in calendarDays" :key="day" class="calendar-day-heading" :class="{ 'calendar-day-heading--today': isToday(day) }"><span>{{ weekday(day, true) }}</span><strong>{{ dayNumber(day) }}</strong></div></div>
+        <div class="calendar-week-headings booking-timeline__headings"><div v-for="day in calendarDays" :key="day" class="calendar-day-heading" :class="{ 'calendar-day-heading--today': isToday(day) }"><span>{{ weekday(day, true) }}</span><strong>{{ dayNumber(day) }}</strong></div></div>
         <template v-for="apartment in visibleApartments" :key="apartment.id">
-          <div class="calendar-apartment-label"><p class="truncate font-semibold">{{ apartment.name }}</p><p class="truncate text-xs text-[var(--color-muted)]">{{ apartment.hotel.name }}</p></div>
-          <div class="calendar-week-timeline">
+          <div class="calendar-apartment-label" :style="timelineRowStyle(apartment.id)"><p class="truncate font-semibold">{{ apartment.name }}</p><p class="truncate text-xs text-[var(--color-muted)]">{{ apartment.hotel.name }}</p></div>
+          <div class="calendar-week-timeline" :style="timelineRowStyle(apartment.id)">
             <div v-for="day in calendarDays" :key="`${apartment.id}-${day}`" class="calendar-slot" :class="{ 'calendar-slot--today': isToday(day) }" />
             <div class="calendar-week-events">
               <StayCalendarPopover
@@ -538,10 +543,9 @@ async function saveStay() {
                 :key="segment.stay.id"
                 :stay="segment.stay"
                 :context="segment.hasActualArrival ? 'arrival' : 'stay'"
-                :left-label="segment.stay.apartment.name"
-                :right-label="segment.hasActualDeparture ? segment.stay.apartment.name : ''"
+                :left-label="showGuestDetails ? segment.stay.guestName ?? '' : ''"
                 event-class="calendar-stay calendar-stay-bar calendar-week-stay"
-                :event-style="{ ...eventStyle(segment.stay), ...segmentGrid(segment) }"
+                :event-style="{ backgroundColor: 'var(--color-primary)', color: 'var(--color-surface)', ...segmentGrid(segment, segment.lane) }"
                 :continues-left="segment.continuesLeft"
                 :continues-right="segment.continuesRight"
                 :show-guest-details="showGuestDetails"
@@ -569,9 +573,9 @@ async function saveStay() {
         </template>
       </div>
     </div>
-    <EmptyState v-else-if="bookingView === 'calendar' && calendarPeriod !== 'month'" icon="i-lucide-building-2" :title="t('scope.apartmentsLabel')" :description="t('scope.loadErrorDescription')" />
+    <EmptyState v-else-if="bookingView === 'calendar' && calendarLayout === 'timeline' && scopeReady && !staysError" icon="i-lucide-building-2" :title="t('scope.apartmentsLabel')" :description="t('scope.loadErrorDescription')" />
 
-    <div v-else-if="bookingView === 'calendar' && calendarPeriod === 'month'" ref="calendarMonthRef" class="calendar-month surface">
+    <div v-else-if="bookingView === 'calendar' && calendarLayout === 'grid' && scopeReady && !staysError" ref="calendarMonthRef" class="calendar-month surface">
       <div class="calendar-month-content">
         <div class="calendar-month-heading"><span v-for="day in monthWeekdayHeadings" :key="day">{{ weekday(day, true) }}</span></div>
 
@@ -657,6 +661,8 @@ async function saveStay() {
     <div v-if="bookingView === 'calendar' && eventsOnly" class="calendar-events-legend" role="list" :aria-label="t('calendar.bookingsAndDepartures')">
       <span class="calendar-events-legend__item" role="listitem"><span class="calendar-events-legend__swatch calendar-events-legend__swatch--arrival" aria-hidden="true" />{{ t('calendar.arrivals') }}</span>
       <span class="calendar-events-legend__item" role="listitem"><span class="calendar-events-legend__swatch calendar-events-legend__swatch--departure" aria-hidden="true" />{{ t('calendar.departures') }}</span>
+    </div>
+
     </div>
 
     <LazyStayDetailsSlideover v-if="detailsOpen" v-model:open="detailsOpen" :stay="selectedStay" :can-edit="canEditStays" :can-manage-cleaning="Boolean(user?.roles.includes('administrator'))" :show-service-prices="showFinancialDetails" @edit="openEdit" @saved="refreshStayDetails" />

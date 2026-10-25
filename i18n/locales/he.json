@@ -971,5 +971,16 @@
     "includeReport": "לכלול בדוח",
     "saveCorrection": "שמירת תיקון",
     "noTask": "לא הוקצתה משימה"
+  },
+  "bookingWorkspace": {
+    "list": "רשימה",
+    "timeline": "ציר זמן",
+    "grid": "לוח חודשי",
+    "filters": "מסננים",
+    "newBooking": "הזמנה חדשה",
+    "booking": "הזמנה",
+    "period": "תקופה",
+    "events": "סוג אירוע",
+    "retry": "נסה שוב"
   }
 }

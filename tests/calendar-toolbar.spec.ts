@@ -2,29 +2,13 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 describe('calendar toolbar', () => {
-  it('keeps date navigation beside the stay mode and gives both switches equal columns', () => {
+  it('separates layouts, grouping and calendar mode with compact controls', () => {
     const page = readFileSync('src/pages/calendar/CalendarPage.vue', 'utf8')
-    const styles = readFileSync('src/app/styles/main.css', 'utf8')
-    const toolbar = page.slice(page.indexOf('<div class="calendar-controls surface"'), page.indexOf('<UCollapsible class="calendar-settings"'))
-
-    expect(toolbar).toContain('calendar-controls__calendar-options')
-    expect(toolbar.indexOf('calendar-date-navigation')).toBeGreaterThan(toolbar.indexOf('calendar-controls__calendar-options'))
-    expect(toolbar.indexOf('calendar-date-navigation')).toBeLessThan(toolbar.indexOf('calendar-events-toggle'))
-    expect(styles).toContain('grid-template-columns: minmax(0, 1fr) minmax(0, 30rem);')
-    expect(styles).toContain('.calendar-controls__top--agenda .calendar-view-switch')
-    expect(styles).toContain('.calendar-period-switch {\n    grid-column: 2;')
-  })
-
-  it('centers the current day when a calendar renders on a phone', () => {
-    const page = readFileSync('src/pages/calendar/CalendarPage.vue', 'utf8')
-
-    expect(page).toContain("window.matchMedia('(max-width: 639px)').matches")
-    expect(page).toContain('ref="calendarBoardRef"')
-    expect(page).toContain('ref="calendarMonthRef"')
-    expect(page).toContain("querySelector<HTMLElement>('.calendar-day-heading--today, .calendar-month-day--today, .calendar-month-date-cell--today')")
-    expect(page).toContain("const stickyApartmentWidth = calendarPeriod.value === 'week' ? Math.min(164, container.clientWidth) : 0")
-    expect(page).toContain("container.scrollTo({ left: Math.max(0, targetCenter - visibleCenter), behavior: 'auto' })")
-    expect(page).toContain('lastTodayScrollContainer === container && lastTodayScrollKey === scrollKey')
+    expect(page).toContain("preferences.layout = 'list'")
+    expect(page).toContain("preferences.grouping = 'apartments'")
+    expect(page).toContain("calendarLayout = 'grid'")
+    expect(page).toContain('v-model="eventMode"')
+    expect(page).toContain('v-model:open="filtersOpen"')
   })
 
   it('shows a localized arrival and departure legend only in event mode', () => {
@@ -47,9 +31,10 @@ describe('calendar toolbar', () => {
     expect([ru.calendar.departures, en.calendar.departures, he.calendar.departures]).toEqual(['Выезды', 'Departures', 'יציאות'])
   })
 
-  it('makes every month day column fifty percent wider', () => {
+  it('fits seven month columns on desktop and retains readable mobile columns', () => {
     const styles = readFileSync('src/app/styles/main.css', 'utf8')
-
-    expect(styles).toMatch(/\.calendar-month-content\s*\{[^}]*width: 150%;[^}]*min-width: 1050px;/s)
+    expect(styles).toContain('.bookings-content--calendar .calendar-month-content { width: 100%; min-width: 700px;')
+    expect(styles).toContain('.bookings-content--calendar .calendar-month-content { min-width: 0; }')
+    expect(styles).toContain('@container (min-width: 1200px)')
   })
 })

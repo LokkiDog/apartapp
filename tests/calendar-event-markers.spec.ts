@@ -47,7 +47,7 @@ describe('calendar arrival and departure markers', () => {
     const styles = readFileSync('src/app/styles/main.css', 'utf8')
     const locale = JSON.parse(readFileSync('i18n/locales/ru.json', 'utf8'))
 
-    expect(locale.calendar.bookingsAndDepartures).toBe('Заезды \\ Выезды')
+    expect(locale.calendar.bookingsAndDepartures).toBe('Заезды и выезды')
     expect(page.match(/<CalendarEventMarker/g)).toHaveLength(2)
     expect(marker.match(/<StayCalendarPopover/g)).toHaveLength(2)
     expect(marker).toContain("context=\"departure\"")

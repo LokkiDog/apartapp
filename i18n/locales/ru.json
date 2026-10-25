@@ -772,7 +772,7 @@
     "month": "Месяц",
     "week": "Неделя",
     "day": "День",
-    "bookingsAndDepartures": "Заезды \\ Выезды",
+    "bookingsAndDepartures": "Заезды и выезды",
     "stays": "Проживания",
     "settings": "Настройки",
     "show": "Показывать",
@@ -971,5 +971,16 @@
     "includeReport": "Учесть в отчёте",
     "saveCorrection": "Сохранить корректировку",
     "noTask": "Задача не назначена"
+  },
+  "bookingWorkspace": {
+    "list": "Список",
+    "timeline": "Лента",
+    "grid": "Сетка",
+    "filters": "Фильтры",
+    "newBooking": "Новая бронь",
+    "booking": "Бронь",
+    "period": "Период",
+    "events": "Тип событий",
+    "retry": "Повторить"
   }
 }

@@ -971,5 +971,16 @@
     "includeReport": "Include in report",
     "saveCorrection": "Save correction",
     "noTask": "Task not assigned"
+  },
+  "bookingWorkspace": {
+    "list": "List",
+    "timeline": "Timeline",
+    "grid": "Grid",
+    "filters": "Filters",
+    "newBooking": "New booking",
+    "booking": "Booking",
+    "period": "Period",
+    "events": "Event type",
+    "retry": "Retry"
   }
 }
