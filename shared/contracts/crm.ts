@@ -89,7 +89,15 @@ export const apartmentOwnerSettingsSchema = z.object({
   checkOutTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Укажите время выезда')
 }).strict()
 
+export const nameTranslationsSchema = z.object({
+  ru: z.string().trim().max(240).optional(),
+  en: z.string().trim().max(240).optional(),
+  he: z.string().trim().max(240).optional()
+}).strict()
+export const serviceTranslationInputSchema = z.object({ name: z.string().trim().min(1).max(120) }).strict()
+
 export const specialServiceInputSchema = z.object({
+  nameTranslations: nameTranslationsSchema.optional(),
   name: z.string().trim().min(1).max(120),
   priceEur: moneyEurSchema,
   managerSharePercent: z.coerce.number().int().min(0).max(100),

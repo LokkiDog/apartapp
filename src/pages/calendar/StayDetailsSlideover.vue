@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { localizedName } from '#shared/utils/localized-name'
 import type { Stay } from '#fsd/entities/stay'
 import { formatDate, formatEuro } from '#fsd/shared/lib'
 import StayServiceIcons from './StayServiceIcons.vue'
@@ -13,7 +14,7 @@ const props = defineProps<{
   showServicePrices: boolean
 }>()
 const emit = defineEmits<{ 'update:open': [value: boolean]; edit: [stay: Stay]; saved: [] }>()
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const adultCount = ref(1)
 const childCount = ref(0)
 const savingGuests = ref(false)
@@ -86,7 +87,7 @@ async function saveGuests() {
           <h3>{{ t('calendar.extraServices') }}</h3>
           <div class="stay-details__services">
             <div v-for="service in stay.services" :key="service.id" class="stay-details__service">
-              <span class="flex min-w-0 items-center gap-2"><StayServiceIcons :services="[service]" /><span class="truncate">{{ service.nameSnapshot }}</span></span>
+              <span class="flex min-w-0 items-center gap-2"><StayServiceIcons :services="[service]" /><span class="truncate">{{ localizedName(service.nameSnapshot, service.nameTranslationsSnapshot, locale) }}</span></span>
               <strong v-if="showServicePrices">{{ formatEuro(service.priceEurSnapshot) }}</strong>
             </div>
           </div>

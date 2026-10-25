@@ -1,5 +1,5 @@
 <script setup lang="ts" generic="TValue extends string | string[] = string">
-import type { Apartment } from "#fsd/entities/apartment";
+import type { Apartment } from "../model/apartment";
 import { apartmentSearchText } from "../model/apartment-search";
 import { useI18n } from "vue-i18n";
 

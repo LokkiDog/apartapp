@@ -1,6 +1,7 @@
 import { beforeAll, afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { readFileSync } from 'node:fs'
-import { createError, createEvent } from 'h3'
+import { createError, createEvent, getResponseHeader } from 'h3'
+import { authenticator } from './helpers/passkey'
 import { IncomingMessage, ServerResponse } from 'node:http'
 import { Socket } from 'node:net'
 import { eq, sql as querySql } from 'drizzle-orm'
@@ -19,6 +20,7 @@ let platform: typeof import('../server/modules/platform/platform.service')
 let auth: typeof import('../server/infrastructure/auth/platform')
 let actors: typeof import('../server/infrastructure/auth/actor')
 let accounts: typeof import('../server/modules/auth/account.service')
+let passkeyService: typeof import('../server/modules/auth/passkey.service')
 let sessionUser: Record<string, unknown> | undefined
 
 // This suite intentionally refuses every DB name except the disposable test DB.
@@ -38,6 +40,7 @@ describe.skipIf(!url)('platform PostgreSQL integration', () => {
     auth = await import('../server/infrastructure/auth/platform')
     actors = await import('../server/infrastructure/auth/actor')
     accounts = await import('../server/modules/auth/account.service')
+    passkeyService = await import('../server/modules/auth/passkey.service')
   }, 30000)
   afterAll(async () => { vi.unstubAllGlobals(); await connection?.end() })
   beforeEach(async () => {
@@ -47,11 +50,12 @@ describe.skipIf(!url)('platform PostgreSQL integration', () => {
     vi.mocked(sendRegistrationLink).mockResolvedValue(undefined)
     vi.stubGlobal('createError', createError)
     vi.stubGlobal('hashPassword', async (password: string) => `hashed:${password}`)
+    vi.stubGlobal('verifyPassword', async (hash: string, password: string) => hash === `hashed:${password}`)
     vi.stubGlobal('requireUserSession', async () => ({ user: sessionUser }))
     vi.stubGlobal('getUserSession', async () => ({ user: sessionUser }))
     // Renewal transport is separately covered by auth-session.spec.ts.
     vi.stubGlobal('setUserSession', async () => undefined)
-    vi.stubGlobal('useRuntimeConfig', () => ({ session: { password: 'platform-test-password-more-than-32-chars' }, public: {} }))
+    vi.stubGlobal('useRuntimeConfig', () => ({ session: { password: 'platform-test-password-more-than-32-chars' }, public: { appUrl: 'https://aparts.example' } }))
     await db.execute(querySql`SET client_min_messages TO WARNING`)
     await db.execute(querySql`TRUNCATE organizations, pending_registrations, registration_attempts, platform_audit_logs CASCADE`)
     await db.update(tables.systemSettings).set({ registrationMode: 'superuser_only' })
@@ -71,15 +75,104 @@ describe.skipIf(!url)('platform PostgreSQL integration', () => {
     if (context) request.headers['x-client-context'] = context
     return createEvent(request, new ServerResponse(request))
   }
+  function passkeyEvent(cookie?: string, origin = 'https://aparts.example') {
+    const request = event()
+    request.node.req.headers.origin = origin
+    if (cookie) request.node.req.headers.cookie = cookie
+    return request
+  }
+  function challengeCookie(request: ReturnType<typeof event>) {
+    const headers = getResponseHeader(request, 'set-cookie')
+    const cookie = (Array.isArray(headers) ? headers : [String(headers)]).find(value => value.startsWith('aparts-passkey-'))!
+    return cookie.split(';')[0]!
+  }
+  async function enrolledPasskey() {
+    const account = await fixture()
+    const device = authenticator()
+    const request = passkeyEvent()
+    const registration = await passkeyService.passkeyRegistrationOptions(request, 'password123')
+    await passkeyService.registerPasskey(passkeyEvent(challengeCookie(request)), registration.attemptId, device.registration(registration.options.challenge), 'Phone')
+    return { ...account, device }
+  }
+
+  it('requires an active session and password to enroll a key and scopes key management to its owner', async () => {
+    await expect(passkeyService.passkeyRegistrationOptions(passkeyEvent(), 'password123')).rejects.toMatchObject({ statusCode: 401 })
+    const { user, other } = await enrolledPasskey()
+    await expect(passkeyService.passkeyRegistrationOptions(passkeyEvent(), 'wrong')).rejects.toMatchObject({ statusCode: 401 })
+    expect(await passkeyService.listPasskeys(passkeyEvent())).toMatchObject([{ name: 'Phone' }])
+    const [foreign] = await db.insert(tables.users).values({ organizationId: other.id, name: 'Other', email: 'other@example.com', passwordHash: 'hash', status: 'active' }).returning()
+    await db.insert(tables.passkeys).values({ id: 'foreign', userId: foreign!.id, publicKey: 'key', name: 'Other phone' })
+    await expect(passkeyService.deletePasskey(passkeyEvent(), 'foreign')).rejects.toMatchObject({ statusCode: 404 })
+    const [own] = await passkeyService.listPasskeys(passkeyEvent())
+    await passkeyService.deletePasskey(passkeyEvent(), own!.id)
+    expect(await passkeyService.listPasskeys(passkeyEvent())).toEqual([])
+    expect((await db.query.passkeys.findFirst())!.userId).not.toBe(user.id)
+  })
+  it('authenticates a real signed assertion, replaces the session and consumes the challenge once', async () => {
+    const { user, session, device } = await enrolledPasskey()
+    const request = passkeyEvent()
+    const attempt = await passkeyService.passkeyAuthenticationOptions(request)
+    const cookie = challengeCookie(request)
+    const response = device.assertion(attempt.options.challenge, user.id)
+    vi.stubGlobal('setUserSession', async (_event: unknown, data: { user: Record<string, unknown> }) => { sessionUser = data.user })
+    const result = await passkeyService.authenticatePasskey(passkeyEvent(cookie), attempt.attemptId, response)
+    expect(result.user.id).toBe(user.id)
+    expect(result.user.platformSessionId).not.toBe(session.id)
+    expect(await db.query.platformSessions.findFirst({ where: eq(tables.platformSessions.id, session.id) })).toBeUndefined()
+    expect((await db.query.passkeys.findFirst())!.counter).toBe(1)
+    await expect(passkeyService.authenticatePasskey(passkeyEvent(cookie), attempt.attemptId, response)).rejects.toMatchObject({ statusCode: 400 })
+    // The deleted key cannot be used again, even with a fresh valid assertion.
+    await passkeyService.deletePasskey(passkeyEvent(), device.id)
+    const next = passkeyEvent(); const options = await passkeyService.passkeyAuthenticationOptions(next)
+    await expect(passkeyService.authenticatePasskey(passkeyEvent(challengeCookie(next)), options.attemptId, device.assertion(options.options.challenge, user.id, { counter: 2 }))).rejects.toMatchObject({ statusCode: 400 })
+  })
+  it('rejects foreign origins, RP IDs, missing verification, wrong challenges and invalid signatures', async () => {
+    const { user, device } = await enrolledPasskey()
+    await expect(passkeyService.passkeyAuthenticationOptions(passkeyEvent(undefined, 'https://evil.example'))).rejects.toMatchObject({ statusCode: 403 })
+    for (const alteration of [{ origin: 'https://evil.example' }, { rpID: 'evil.example' }, { flags: 1 }, { challenge: 'wrong-challenge' }, { signature: true }, { userHandle: true }]) {
+      const request = passkeyEvent(); const attempt = await passkeyService.passkeyAuthenticationOptions(request)
+      const response = device.assertion('challenge' in alteration ? alteration.challenge! : attempt.options.challenge, user.id, alteration)
+      if ('signature' in alteration) response.response.signature = Buffer.alloc(64).toString('base64url')
+      if ('userHandle' in alteration) response.response.userHandle = Buffer.from('foreign-user').toString('base64url')
+      await expect(passkeyService.authenticatePasskey(passkeyEvent(challengeCookie(request)), attempt.attemptId, response)).rejects.toMatchObject({ statusCode: 400 })
+    }
+    expect((await db.query.passkeys.findFirst())!.counter).toBe(0)
+  })
+  it('binds challenges to the initiating browser and account, expires them and rejects a blocked client', async () => {
+    const { user, client, device } = await enrolledPasskey()
+    const request = passkeyEvent(); const attempt = await passkeyService.passkeyAuthenticationOptions(request)
+    const response = device.assertion(attempt.options.challenge, user.id)
+    await expect(passkeyService.authenticatePasskey(passkeyEvent(), attempt.attemptId, response)).rejects.toMatchObject({ statusCode: 400 })
+    await expect(passkeyService.consumePasskeyChallenge(passkeyEvent(challengeCookie(request)), 'register', attempt.attemptId, user.id)).rejects.toMatchObject({ statusCode: 400 })
+    const enrollment = passkeyEvent()
+    const registration = await passkeyService.passkeyRegistrationOptions(enrollment, 'password123')
+    await expect(passkeyService.consumePasskeyChallenge(passkeyEvent(challengeCookie(enrollment)), 'register', registration.attemptId, client.id)).rejects.toMatchObject({ statusCode: 400 })
+    await db.update(tables.passkeyChallenges).set({ expiresAt: new Date(0) }).where(eq(tables.passkeyChallenges.id, attempt.attemptId))
+    await expect(passkeyService.authenticatePasskey(passkeyEvent(challengeCookie(request)), attempt.attemptId, response)).rejects.toMatchObject({ statusCode: 400 })
+    const next = passkeyEvent(); const options = await passkeyService.passkeyAuthenticationOptions(next)
+    await db.update(tables.organizations).set({ status: 'blocked' }).where(eq(tables.organizations.id, client.id))
+    await expect(passkeyService.authenticatePasskey(passkeyEvent(challengeCookie(next)), options.attemptId, device.assertion(options.options.challenge, user.id))).rejects.toMatchObject({ statusCode: 401 })
+    await db.update(tables.organizations).set({ status: 'active' }).where(eq(tables.organizations.id, client.id))
+    for (const status of ['blocked', 'archived', 'invited'] as const) {
+      const request = passkeyEvent(); const attempt = await passkeyService.passkeyAuthenticationOptions(request)
+      await db.update(tables.users).set({ status }).where(eq(tables.users.id, user.id))
+      await expect(passkeyService.authenticatePasskey(passkeyEvent(challengeCookie(request)), attempt.attemptId, device.assertion(attempt.options.challenge, user.id, { counter: 2 + ['blocked', 'archived', 'invited'].indexOf(status) }))).rejects.toMatchObject({ statusCode: 401 })
+    }
+  })
   const registrationInput = { companyName: 'New Company', name: 'New Admin', email: 'new@example.com', password: 'password123' }
   async function openRegistration() { await db.update(tables.systemSettings).set({ registrationMode: 'self_service' }) }
   function lastToken() { return vi.mocked(sendRegistrationLink).mock.calls.at(-1)![0].token }
 
-  it('defaults to closed registration, including confirmation and resend', async () => {
+  it('closes existing self-service registration after migration, including pending confirmation and resend', async () => {
+    expect(await registration.registrationMode()).toBe('superuser_only')
+    await openRegistration()
+    await registration.registerCompany(registrationInput)
+    const token = lastToken()
+    await db.execute(querySql.raw(readFileSync('server/infrastructure/database/migrations/0047_invitation_only_registration.sql', 'utf8')))
     expect(await registration.registrationMode()).toBe('superuser_only')
     await expect(registration.registerCompany(registrationInput)).rejects.toMatchObject({ statusCode: 403 })
     await expect(registration.resendRegistration('new@example.com')).rejects.toMatchObject({ statusCode: 403 })
-    await expect(registration.confirmRegistration('not-a-valid-token')).rejects.toMatchObject({ statusCode: 403 })
+    await expect(registration.confirmRegistration(token)).rejects.toMatchObject({ statusCode: 403 })
     expect(await db.query.organizations.findMany()).toHaveLength(0)
   })
   it('creates the client only on email confirmation and consumes the token once', async () => {

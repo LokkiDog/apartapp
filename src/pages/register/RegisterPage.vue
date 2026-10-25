@@ -30,7 +30,7 @@ async function confirm() {
     <UAlert v-if="notice" color="success" :description="notice" />
     <p v-if="status === 'pending'">Загрузка…</p>
     <template v-else-if="confirmed"><UButton to="/login" class="min-h-11 cursor-pointer">Войти</UButton></template>
-    <p v-else-if="settings?.registrationMode !== 'self_service'">Регистрация закрыта. Обратитесь к администратору системы.</p>
+    <p v-else-if="settings?.registrationMode !== 'self_service'">Доступ только по приглашению. Обратитесь к администратору.</p>
     <UButton v-else-if="token" :loading="pending" class="min-h-11 cursor-pointer" @click="confirm">Подтвердить и создать компанию</UButton>
     <form v-else class="space-y-4" @submit.prevent="submit">
       <template v-if="!submitted">

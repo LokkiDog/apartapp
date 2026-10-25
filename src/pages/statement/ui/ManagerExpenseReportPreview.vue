@@ -4,10 +4,9 @@ import { formatDate, formatEuro } from '#fsd/shared/lib'
 import { createManagerExpenseCategoryVisibility, managerExpenseCategoryLines, visibleManagerExpenseCategories, type ManagerExpenseCategory as Category, type ManagerExpenseCategoryVisibility, type ManagerExpenseLine as Line } from '../model/manager-expense-report'
 import { useI18n } from 'vue-i18n'
 
-const props = withDefaults(defineProps<{ lines: Line[], totalEur: number, categoryVisibility?: ManagerExpenseCategoryVisibility, editable?: boolean, editingLineId?: string | null, embedded?: boolean, inventoryExpanded?: boolean }>(), { categoryVisibility: createManagerExpenseCategoryVisibility, editable: false, editingLineId: null, embedded: false, inventoryExpanded: false })
+const props = withDefaults(defineProps<{ lines: Line[], totalEur: number, categoryVisibility?: ManagerExpenseCategoryVisibility, editable?: boolean, editingLineId?: string | null, embedded?: boolean }>(), { categoryVisibility: createManagerExpenseCategoryVisibility, editable: false, editingLineId: null, embedded: false })
 const emit = defineEmits<{
   select: [id: string]
-  toggleInventory: []
   updateCategoryVisibility: [category: Category, enabled: boolean]
   updateIncluded: [id: string, included: boolean]
   close: []
@@ -20,7 +19,17 @@ const categories = computed(() => visibleManagerExpenseCategories(props.category
 const managerPresentation = computed(() => !props.editable && !props.embedded)
 function categoryLines(category: Category) { return managerExpenseCategoryLines(props.lines, category) }
 function categoryTotal(category: Category) { return Number(categoryLines(category).reduce((sum, line) => sum.plus(line.amountEur), new Decimal(0)).toDecimalPlaces(2)) }
-function showCategoryLines(category: Category) { return category !== 'inventory' || (props.editable && props.inventoryExpanded) }
+const expandedCategories = ref<Record<Category, boolean>>({ cleaning: true, inventory: false, task: true, other: true })
+const categoryId = useId()
+function showCategoryLines(category: Category) { return expandedCategories.value[category] }
+function toggleCategory(category: Category) {
+  expandedCategories.value[category] = !expandedCategories.value[category]
+  if (!expandedCategories.value[category] && props.lines.find(line => line.id === props.editingLineId)?.category === category) emit('close')
+}
+watch(() => props.editingLineId, id => {
+  const line = props.lines.find(line => line.id === id)
+  if (line) expandedCategories.value[line.category] = true
+})
 function clearZeroAmount(event: FocusEvent) {
   const input = event.target
   if (input instanceof HTMLInputElement && Number(input.value) === 0) input.value = ''
@@ -44,30 +53,47 @@ function clearZeroAmount(event: FocusEvent) {
             @update:model-value="value => emit('updateCategoryVisibility', category, value === true)"
           />
           <button
-            v-if="category === 'inventory' && editable"
             type="button"
-            class="manager-expense-inventory-toggle grid min-h-14 min-w-0 flex-1 items-center gap-3 text-left transition-[background-color,scale] duration-150 hover:bg-[var(--color-surface-muted)] active:scale-[0.96]"
-            :aria-expanded="inventoryExpanded"
-            @click="emit('toggleInventory')"
+            class="manager-expense-category-toggle flex min-h-14 min-w-0 flex-1 items-center justify-between gap-3 text-left"
+            :aria-expanded="showCategoryLines(category)"
+            :aria-controls="`${categoryId}-${category}`"
+            @click="toggleCategory(category)"
           >
-            <h2 class="font-semibold">{{ labels[category] }}</h2>
+            <h2 class="min-w-0 font-semibold">{{ labels[category] }}</h2>
             <strong class="tabular-nums">{{ formatEuro(categoryTotal(category)) }}</strong>
-            <UIcon name="i-lucide-chevron-down" class="size-4 text-[var(--color-muted)] transition-transform duration-150" :class="{ 'rotate-180': inventoryExpanded }" />
           </button>
-          <template v-else>
-            <h2 class="min-w-0 flex-1 font-semibold">{{ labels[category] }}</h2>
-            <strong class="tabular-nums">{{ formatEuro(categoryTotal(category)) }}</strong>
-          </template>
         </div>
-        <div v-if="showCategoryLines(category) && categoryLines(category).length" class="manager-expense-lines">
+        <div v-show="showCategoryLines(category)" :id="`${categoryId}-${category}`" class="manager-expense-lines">
           <template v-for="line in categoryLines(category)" :key="line.id">
-            <form v-if="editable && editingLineId === line.id" class="manager-expense-editor grid gap-2 py-3" :class="{ 'manager-expense-editor--cleaning': category === 'cleaning' }" @submit.prevent="emit('close')">
-              <UInput v-if="category !== 'cleaning'" :model-value="line.description" :placeholder="t('hotels.name')" autofocus @update:model-value="value => emit('update', line.id, { description: value })" />
-              <UInput :model-value="line.occurredOn ?? ''" type="date" @update:model-value="value => emit('update', line.id, { occurredOn: value || null })" />
-              <UInput :model-value="line.amountEur" type="number" step="0.01" @focus="clearZeroAmount" @update:model-value="value => emit('update', line.id, { amountEur: Number(value) || 0 })" />
-              <div class="flex gap-1"><UButton type="submit" color="neutral" variant="ghost" icon="i-lucide-check" :aria-label="t('common.save')" class="min-h-11 min-w-11" /><UButton type="button" color="error" variant="ghost" icon="i-lucide-trash-2" :aria-label="t('common.delete')" class="min-h-11 min-w-11" @click="emit('remove', line.id)" /></div>
+            <form v-if="editable && editingLineId === line.id" class="manager-expense-editor" :class="{ 'manager-expense-editor--cleaning': category === 'cleaning' }" @submit.prevent="emit('close')">
+              <UInput v-if="category !== 'cleaning'" class="manager-expense-editor__description w-full" :model-value="line.description" :placeholder="t('hotels.name')" autofocus @update:model-value="value => emit('update', line.id, { description: value })" />
+              <UInput class="w-full" :model-value="line.occurredOn ?? ''" type="date" @update:model-value="value => emit('update', line.id, { occurredOn: value || null })" />
+              <UInput class="w-full" :model-value="line.amountEur" type="number" step="0.01" @focus="clearZeroAmount" @update:model-value="value => emit('update', line.id, { amountEur: Number(value) || 0 })" />
+              <div class="manager-expense-editor__actions flex gap-1"><UButton type="submit" color="neutral" variant="ghost" icon="i-lucide-check" :aria-label="t('common.save')" class="min-h-11 min-w-11" /><UButton type="button" color="error" variant="ghost" icon="i-lucide-trash-2" :aria-label="t('common.delete')" class="min-h-11 min-w-11" @click="emit('remove', line.id)" /></div>
             </form>
-            <div v-else class="manager-expense-row grid min-h-14 items-center gap-3 py-3 text-left transition-[background-color] duration-150 sm:gap-4" :class="{ 'manager-expense-row--cleaning': category === 'cleaning', 'opacity-55': !line.included }"><UCheckbox v-if="editable && line.problemId" :model-value="line.included" :aria-label="line.included ? t('common.hide') : t('common.show')" class="min-h-11 min-w-11 items-center justify-center" @update:model-value="value => emit('updateIncluded', line.id, value === true)" /><button type="button" class="min-h-11 min-w-0 text-left hover:bg-[var(--color-surface-muted)]" :class="line.problemId && editable ? '' : 'col-span-2'" :disabled="!editable" @click="emit('select', line.id)"><span class="block min-w-0 truncate text-left font-medium">{{ category === 'cleaning' ? (line.occurredOn ? formatDate(line.occurredOn) : '') : line.description }}</span><span v-if="category !== 'cleaning'" class="whitespace-nowrap text-xs text-[var(--color-muted)] sm:text-sm">{{ line.occurredOn ? formatDate(line.occurredOn) : '' }}<template v-if="line.problemId && !line.included"> · {{ t('problems.open') }}</template></span></button><strong class="shrink-0 whitespace-nowrap text-right tabular-nums">{{ formatEuro(line.amountEur) }}</strong></div>
+            <div
+              v-else
+              class="manager-expense-row"
+              :class="{ 'manager-expense-row--selectable': editable && line.problemId, 'opacity-55': !line.included }"
+            >
+              <UCheckbox
+                v-if="editable && line.problemId"
+                :model-value="line.included"
+                :aria-label="line.included ? t('common.hide') : t('common.show')"
+                class="min-h-11 min-w-11 items-center justify-center"
+                @update:model-value="value => emit('updateIncluded', line.id, value === true)"
+              />
+              <button type="button" class="manager-expense-row__detail" :disabled="!editable" @click="emit('select', line.id)">
+                <span class="manager-expense-row__content">
+                  <span class="manager-expense-row__title">{{ category === 'cleaning' ? (line.occurredOn ? formatDate(line.occurredOn) : '') : line.description }}</span>
+                  <span v-if="category !== 'cleaning' && (line.occurredOn || (line.problemId && !line.included))" class="manager-expense-row__meta">
+                    <span v-if="line.occurredOn">{{ formatDate(line.occurredOn) }}</span>
+                    <span v-if="line.problemId && !line.included">{{ t('problems.open') }}</span>
+                  </span>
+                </span>
+                <span class="manager-expense-row__amount tabular-nums">{{ formatEuro(line.amountEur) }}</span>
+              </button>
+            </div>
           </template>
         </div>
       </section>
@@ -78,9 +104,28 @@ function clearZeroAmount(event: FocusEvent) {
 </template>
 
 <style scoped>
-.manager-expense-inventory-toggle {
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  justify-items: stretch;
+.manager-expense-category-toggle {
+  cursor: pointer;
+  transition: background-color 150ms;
+}
+
+.manager-expense-category-toggle:hover {
+  background-color: var(--color-surface-muted);
+}
+
+.manager-expense-category-toggle:active {
+  background-color: var(--color-primary-soft);
+}
+
+.manager-expense-category-toggle:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .manager-expense-category-toggle {
+    transition: none;
+  }
 }
 
 .manager-expense-category-header,
@@ -88,31 +133,103 @@ function clearZeroAmount(event: FocusEvent) {
   text-align: left;
 }
 
-.manager-expense-row {
-  grid-template-columns: minmax(0, 1fr) 6.75rem auto;
-  justify-items: stretch;
-  text-align: left;
-}
-
-.manager-expense-row--cleaning {
-  grid-template-columns: minmax(0, 1fr) auto;
-}
-
-.manager-expense-row > :first-child {
-  justify-self: start;
-  text-align: left;
+.manager-expense-lines {
+  padding-inline: 2.5rem 1.25rem;
 }
 
 .manager-expense-lines > :not(:last-child) {
   border-bottom: 1px solid color-mix(in srgb, var(--color-line) 32%, transparent);
 }
 
-.manager-expense-lines {
-  padding-inline: 2.5rem 1.25rem;
+.manager-expense-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: center;
+  color: var(--color-muted);
+  font-size: .875rem;
+  line-height: 1.4;
 }
 
-.manager-expense-lines .manager-expense-row {
-  color: var(--color-muted);
+.manager-expense-row--selectable {
+  grid-template-columns: 2.75rem minmax(0, 1fr);
+}
+
+.manager-expense-row__detail {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(6rem, max-content);
+  align-items: center;
+  gap: .75rem;
+  min-width: 0;
+  min-height: 2.75rem;
+  padding-block: .375rem;
+  text-align: start;
+  transition: background-color 150ms;
+}
+
+.manager-expense-row__detail:enabled {
+  cursor: pointer;
+}
+
+.manager-expense-row__detail:enabled:hover {
+  background-color: var(--color-surface-muted);
+}
+
+.manager-expense-row__detail:enabled:active {
+  background-color: var(--color-primary-soft);
+}
+
+.manager-expense-row__detail:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+}
+
+.manager-expense-row__content {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: .125rem;
+}
+
+.manager-expense-row__title {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.manager-expense-row__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .25rem .5rem;
+  font-size: .75rem;
+}
+
+.manager-expense-row__amount {
+  justify-self: end;
+  white-space: nowrap;
+  font-weight: 500;
+  text-align: end;
+}
+
+.manager-expense-editor {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: center;
+  gap: .5rem;
+  padding-block: .5rem;
+}
+
+.manager-expense-editor__description,
+.manager-expense-editor__actions {
+  grid-column: 1 / -1;
+}
+
+.manager-expense-editor__actions {
+  justify-self: end;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .manager-expense-row__detail {
+    transition: none;
+  }
 }
 
 .manager-expense-preview--manager .manager-expense-category-header {
@@ -129,32 +246,13 @@ function clearZeroAmount(event: FocusEvent) {
   text-wrap: balance;
 }
 
-.manager-expense-preview--manager .manager-expense-category-header strong,
-.manager-expense-preview--manager .manager-expense-row strong {
+.manager-expense-preview--manager .manager-expense-category-header strong {
   justify-self: end;
   text-align: right;
 }
 
 .manager-expense-preview--manager .manager-expense-lines {
   padding-inline: 2rem 1.25rem;
-}
-
-.manager-expense-preview--manager .manager-expense-row {
-  grid-template-columns: minmax(4.5rem, 1fr) minmax(6rem, 7rem) max-content;
-  gap: .5rem;
-  padding-block: .875rem;
-}
-
-.manager-expense-preview--manager .manager-expense-row--cleaning {
-  grid-template-columns: minmax(0, 1fr) max-content;
-}
-
-.manager-expense-preview--manager .manager-expense-row > :first-child {
-  overflow: visible;
-  line-height: 1.35;
-  text-overflow: clip;
-  text-wrap: pretty;
-  white-space: normal;
 }
 
 .manager-expense-preview--manager .manager-expense-total {
@@ -178,30 +276,38 @@ function clearZeroAmount(event: FocusEvent) {
     padding-inline: 3rem 1.5rem;
   }
 
-  .manager-expense-row {
-    grid-template-columns: minmax(0, 1fr) 9rem auto;
-  }
-
-  .manager-expense-editor {
-    grid-template-columns: minmax(0, 1fr) 10rem 9rem auto;
-  }
-
-  .manager-expense-editor--cleaning {
-    grid-template-columns: 10rem 9rem auto;
-  }
-
   .manager-expense-preview--manager .manager-expense-lines {
     padding-inline: 2.5rem 1.5rem;
   }
 
-  .manager-expense-preview--manager .manager-expense-row {
-    grid-template-columns: minmax(0, 1fr) 9rem max-content;
+  .manager-expense-row__content {
+    flex-direction: row;
+    align-items: baseline;
     gap: 1rem;
   }
 
-  .manager-expense-row--cleaning,
-  .manager-expense-preview--manager .manager-expense-row--cleaning {
-    grid-template-columns: minmax(0, 1fr) max-content;
+  .manager-expense-row__title {
+    flex: 1;
+  }
+
+  .manager-expense-row__meta {
+    justify-content: flex-end;
+    flex-shrink: 0;
+  }
+}
+
+@media (min-width: 768px) {
+  .manager-expense-editor {
+    grid-template-columns: minmax(0, 1fr) minmax(8rem, 10rem) minmax(6rem, 8rem) auto;
+  }
+
+  .manager-expense-editor--cleaning {
+    grid-template-columns: minmax(8rem, 10rem) minmax(6rem, 8rem) auto;
+  }
+
+  .manager-expense-editor__description,
+  .manager-expense-editor__actions {
+    grid-column: auto;
   }
 }
 </style>

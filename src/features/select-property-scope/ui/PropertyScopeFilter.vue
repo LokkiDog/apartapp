@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { Apartment } from '#fsd/entities/apartment'
 import type { Hotel } from '#fsd/entities/hotel'
-import { ApartmentSelect } from '#fsd/features/select-apartment'
+import { ApartmentSelect } from '#fsd/entities/apartment'
 import type { PropertyScope } from '../model/property-scope'
 import { useI18n } from 'vue-i18n'
 

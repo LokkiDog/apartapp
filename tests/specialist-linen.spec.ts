@@ -39,7 +39,7 @@ describe('specialist and linen collection', () => {
 
   it('keeps automated linen collection on the first actual cleaning start', () => {
     const service = readFileSync('server/modules/cleaning/cleaning.service.ts', 'utf8')
-    const realtime = readFileSync('src/shared/realtime/model/cleaning-realtime.ts', 'utf8')
+    const realtime = readFileSync('src/shared/realtime/cleaning-realtime.ts', 'utf8')
     expect(service).toContain('automaticLinenCollection')
     expect(service).toContain("linenCollected: cleaning.apartment.automaticLinenCollection ? true : cleaning.linenCollected")
     expect(service).toContain("publishCleaningChangeForId(actor, cleaningId, 'linen')")
@@ -49,7 +49,7 @@ describe('specialist and linen collection', () => {
   it('keeps specialist data operational and renders linen controls by role', () => {
     const service = readFileSync('server/modules/cleaning/cleaning.service.ts', 'utf8')
     const work = readFileSync('src/pages/work/WorkPage.vue', 'utf8')
-    const detail = readFileSync('src/features/work-detail/ui/WorkDetailPage.vue', 'utf8')
+    const detail = readFileSync('src/pages/work-detail/ui/WorkDetailPage.vue', 'utf8')
     const progress = readFileSync('src/features/work-progress/ui/WorkProgressForm.vue', 'utf8')
     const taskService = readFileSync('server/modules/task/task.service.ts', 'utf8')
     const linenControl = readFileSync('src/entities/cleaning/ui/LinenStatusControl.vue', 'utf8')
@@ -126,7 +126,7 @@ describe('specialist and linen collection', () => {
 
   it('separates specialist cleanings and tasks into standalone sections', () => {
     const work = readFileSync('src/pages/work/WorkPage.vue', 'utf8')
-    const detail = readFileSync('src/features/work-detail/ui/WorkDetailPage.vue', 'utf8')
+    const detail = readFileSync('src/pages/work-detail/ui/WorkDetailPage.vue', 'utf8')
     expect(work).toContain('route.path === "/tasks" || route.query.tab === "tasks"')
     expect(work).toContain('<div v-if="!isSpecialist" class="work-tab-controls">')
     expect(work).toContain(":title=\"tab === 'tasks' ? t('work.tasks') : t('work.cleanings')\"")

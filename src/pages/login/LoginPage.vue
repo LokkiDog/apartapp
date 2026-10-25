@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { usePasskeys } from '#fsd/shared/lib'
+const passkeys = usePasskeys()
+const passkeyPending = ref(false)
 const { data: registration } = await useAsyncData('registration-mode', () => $fetch('/api/auth/registration-mode'), { server: false })
 const email = ref(''); const password = ref(''); const error = ref(''); const pending = ref(false)
 const { t, setLocale } = useI18n()
@@ -9,8 +12,32 @@ const archivedNotice = computed(() => route.query.reason === 'blocked' ? t('auth
 const loginForm = ref<HTMLFormElement | null>(null)
 const resetOpen = ref(false); const resetEmail = ref(''); const resetNotice = ref(''); const resetPending = ref(false)
 onMounted(() => { hydrated.value = true; const requested = route.query.lang; if (requested === 'ru' || requested === 'en' || requested === 'he') void setLocale(requested) })
-async function login() { pending.value = true; error.value = ''; try { await $fetch('/api/auth/login', { method: 'POST', body: { email: email.value, password: password.value } }); await useUserSession().fetch(); await navigateTo((useUserSession().user.value as { isSuperuser?: boolean } | null)?.isSuperuser ? '/system/clients' : '/') } catch (cause: any) { error.value = cause?.data?.statusMessage ?? t('auth.loginError') } finally { pending.value = false } }
-function submitLoginOnEnter(event: KeyboardEvent) { if (event.isComposing || pending.value || !hydrated.value) return; event.preventDefault(); loginForm.value?.requestSubmit() }
+async function login() {
+  if (pending.value || passkeyPending.value) return
+  pending.value = true; error.value = ''
+  try {
+    await $fetch('/api/auth/login', { method: 'POST', body: { email: email.value, password: password.value } })
+    await useUserSession().fetch()
+    const offerReady = passkeys.offerAfterLogin(password.value)
+    password.value = ''
+    await navigateTo((useUserSession().user.value as { isSuperuser?: boolean } | null)?.isSuperuser ? '/system/clients' : '/')
+    await offerReady
+  } catch (cause: any) { error.value = cause?.data?.statusMessage ?? t('auth.loginError') }
+  finally { pending.value = false }
+}
+async function loginWithPasskey() {
+  if (pending.value || passkeyPending.value) return
+  passkeyPending.value = true; error.value = ''
+  try {
+    passkeys.offer.value = null
+    await passkeys.authenticate()
+    await useUserSession().fetch()
+    await navigateTo((useUserSession().user.value as { isSuperuser?: boolean } | null)?.isSuperuser ? '/system/clients' : '/')
+  } catch (cause: any) {
+    error.value = t(cause?.name === 'NotAllowedError' || cause?.name === 'AbortError' ? 'passkeys.cancelled' : 'passkeys.loginError')
+  } finally { passkeyPending.value = false }
+}
+function submitLoginOnEnter(event: KeyboardEvent) { if (event.isComposing || pending.value || passkeyPending.value || !hydrated.value) return; event.preventDefault(); loginForm.value?.requestSubmit() }
 async function resetPassword() { resetPending.value = true; resetNotice.value = ''; try { await $fetch('/api/auth/request-password-reset', { method: 'POST', body: { email: resetEmail.value } }); resetNotice.value = t('auth.resetSent') } finally { resetPending.value = false } }
 </script>
 <template>
@@ -34,8 +61,9 @@ async function resetPassword() { resetPending.value = true; resetNotice.value = 
           </UInput>
         </UFormField>
         <UAlert v-if="error" color="error" variant="soft" icon="i-lucide-circle-alert" :description="error" />
-        <UButton type="submit" block size="lg" class="auth-submit" :loading="pending" :disabled="!hydrated || pending">{{ t('auth.login') }}</UButton>
+        <UButton type="submit" block size="lg" class="auth-submit" :loading="pending" :disabled="!hydrated || pending || passkeyPending">{{ t('auth.login') }}</UButton>
       </form>
+      <UButton v-if="passkeys.supported.value" type="button" block size="lg" color="neutral" variant="outline" icon="i-lucide-fingerprint" class="mt-4 min-h-11 cursor-pointer" :loading="passkeyPending" :disabled="pending || passkeyPending" @click="loginWithPasskey">{{ t('passkeys.login') }}</UButton>
       <UButton v-if="registration?.registrationMode === 'self_service'" to="/register" variant="link" class="mt-4 min-h-11 cursor-pointer">Регистрация</UButton>
       <p class="auth-card__access">{{ t('auth.accessNote') }}</p>
     </div>

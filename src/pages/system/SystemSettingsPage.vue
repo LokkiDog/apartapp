@@ -14,7 +14,7 @@ const pending = ref(false)
 const error = ref('')
 const notice = ref('')
 const options: Array<{ value: RegistrationMode; title: string; description: string; icon: string }> = [
-  { value: 'superuser_only', title: 'Через суперпользователя', description: 'Вы создаёте клиента и приглашаете администратора.', icon: 'i-lucide-user-round-cog' },
+  { value: 'superuser_only', title: 'Только по приглашению', description: 'Вы создаёте клиента и приглашаете администратора.', icon: 'i-lucide-user-round-cog' },
   { value: 'self_service', title: 'Самостоятельно', description: 'Клиент создаёт компанию после подтверждения email.', icon: 'i-lucide-user-round-plus' }
 ]
 const canSave = computed(() => Boolean(data.value) && status.value !== 'pending' && !pending.value && mode.value !== data.value?.registrationMode)

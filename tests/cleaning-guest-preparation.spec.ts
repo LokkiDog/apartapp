@@ -6,7 +6,7 @@ describe('cleaning guest preparation', () => {
   const migration = readFileSync('server/infrastructure/database/migrations/0036_cleaning_guest_preparation.sql', 'utf8')
   const service = readFileSync('server/modules/cleaning/guest-preparation.ts', 'utf8')
   const stays = readFileSync('server/modules/stay/stay.service.ts', 'utf8')
-  const detail = readFileSync('src/features/work-detail/ui/WorkDetailPage.vue', 'utf8')
+  const detail = readFileSync('src/pages/work-detail/ui/WorkDetailPage.vue', 'utf8')
 
   it('ships an additive snapshot migration and default linen count', () => {
     expect(migration).toContain('ADD COLUMN "default_linen_guest_count" integer DEFAULT 2 NOT NULL')

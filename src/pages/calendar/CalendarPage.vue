@@ -1,7 +1,8 @@
 <script setup lang="ts">
+import { localizedName, type NameTranslations } from '#shared/utils/localized-name'
 import type { DropdownMenuItem } from '@nuxt/ui'
 import type { Apartment } from '#fsd/entities/apartment'
-import { ApartmentSelect } from '#fsd/features/select-apartment'
+import { ApartmentSelect } from '#fsd/entities/apartment'
 import type { Stay } from '#fsd/entities/stay'
 import type { Hotel } from '#fsd/entities/hotel'
 import type { DateValue } from '@internationalized/date'
@@ -39,7 +40,7 @@ type StayForm = {
   serviceIds: string[]
   cashAmountEur: number | null
 }
-type SpecialServiceOption = { id: string; name: string; iconName: string; priceEur: number; managerSharePercent: number; active: boolean }
+type SpecialServiceOption = { id: string; name: string; nameTranslations?: NameTranslations; iconName: string; priceEur: number; managerSharePercent: number; active: boolean }
 
 function emptyStayForm(): StayForm {
   return { apartmentId: '', checkInOn: '', checkOutOn: '', adultCount: 1, childCount: 0, specialRequests: '', guestName: '', guestPhone: '', guestComment: '', serviceIds: [], cashAmountEur: null }
@@ -140,6 +141,7 @@ const formServices = computed<SpecialServiceOption[]>(() => {
     available.set(selected.specialServiceId, {
       id: selected.specialServiceId,
       name: selected.nameSnapshot,
+      nameTranslations: selected.nameTranslationsSnapshot,
       iconName: selected.iconNameSnapshot,
       priceEur: selected.priceEurSnapshot,
       managerSharePercent: selected.managerSharePercentSnapshot,
@@ -690,7 +692,7 @@ async function saveStay() {
             <label v-for="service in formServices" :key="service.id" class="mt-1 flex min-h-11 items-center justify-between gap-3 text-sm">
               <span class="flex items-center gap-3">
                 <UCheckbox :model-value="form.serviceIds.includes(service.id)" :value="service.id" @update:model-value="setServiceSelected(service.id, $event)" />
-                <span>{{ service.name }} <span v-if="!service.active" class="text-[var(--color-muted)]">({{ t('calendar.unavailable') }})</span></span>
+                <span>{{ localizedName(service.name, service.nameTranslations, locale) }} <span v-if="!service.active" class="text-[var(--color-muted)]">({{ t('calendar.unavailable') }})</span></span>
               </span>
               <span v-if="showFinancialDetails" class="font-semibold tabular-nums">{{ formatEuro(service.priceEur) }}</span>
             </label>

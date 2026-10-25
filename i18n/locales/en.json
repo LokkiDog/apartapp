@@ -183,6 +183,10 @@
     "locationHint": "Click the map or drag the marker to set the location."
   },
   "statementExtra": {
+    "sortByOwner": "By owner",
+    "sortByHotel": "By hotel",
+    "sortAlphabetically": "Alphabetically",
+    "sortByAmount": "Amount ↓",
     "reports": "Reports",
     "myExpenses": "My expenses",
     "downloadPdf": "Download PDF",
@@ -561,7 +565,18 @@
     "cancel": "Cancel",
     "toggleOn": "Enable",
     "toggleOff": "Disable",
-    "delete": "Delete"
+    "delete": "Delete",
+    "translations": "Translations",
+    "viewTranslations": "View translations",
+    "translationsDescription": "Review and edit the names. They will be saved with the service.",
+    "translating": "Translating…",
+    "translateAgain": "Translate again",
+    "applyTranslations": "Apply",
+    "translationNotConfigured": "Google Translation is not configured yet. You can enter names manually.",
+    "translationRateLimit": "Too many requests. Try again in a minute.",
+    "translationFailed": "Could not translate. Try again or enter the names manually.",
+    "translationMonthlyLimit": "The monthly translation limit has been reached. Enter translations manually or try again next month.",
+    "translationLimitInvalid": "Automatic translation is disabled because of the limit configuration. You can enter translations manually."
   },
   "users": {
     "title": "Users",
@@ -982,5 +997,31 @@
     "period": "Period",
     "events": "Event type",
     "retry": "Retry"
+  },
+  "passkeys": {
+    "title": "Passkeys",
+    "description": "Sign in with Face ID, Touch ID or your device PIN. Add a passkey first by confirming your current password.",
+    "login": "Sign in with a passkey",
+    "loginError": "Could not sign in with a passkey. Try again or use your password.",
+    "cancelled": "Cancelled or timed out. You can try again.",
+    "name": "Passkey name",
+    "defaultName": "My passkey",
+    "passwordHelp": "Confirm your password to add a passkey.",
+    "add": "Add passkey",
+    "added": "Passkey added. You can now use it to sign in to Aparts.",
+    "addError": "Could not add the passkey. Try again.",
+    "empty": "No passkeys yet",
+    "unsupported": "Passkeys are unavailable in this browser. Open Aparts over HTTPS in a supported browser.",
+    "deleteKey": "Delete passkey “{name}”",
+    "deleteTitle": "Delete passkey?",
+    "deleteDescription": "“{name}” will no longer be usable to sign in. Password sign-in will remain available.",
+    "deleteError": "Could not delete the passkey",
+    "loadError": "Could not load passkeys",
+    "retry": "Retry",
+    "loading": "Loading…",
+    "offerTitle": "Sign in without a password",
+    "offerDescription": "Create a passkey to sign in with Face ID, Touch ID or your device PIN. You do not need to enter your password again.",
+    "later": "Later",
+    "create": "Create passkey"
   }
 }

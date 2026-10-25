@@ -3,7 +3,7 @@ import type { DropdownMenuItem } from "@nuxt/ui";
 import { LinenStatusControl, type Cleaning } from "#fsd/entities/cleaning";
 import type { Task } from "#fsd/entities/task";
 import type { Apartment } from "#fsd/entities/apartment";
-import { ApartmentSelect } from "#fsd/features/select-apartment";
+import { ApartmentSelect } from "#fsd/entities/apartment";
 import {
   createFormValidator,
   formatDate,

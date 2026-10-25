@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { Apartment } from "#fsd/entities/apartment";
-import { ApartmentSelect } from "#fsd/features/select-apartment";
+import { ApartmentSelect } from "#fsd/entities/apartment";
 import type { Cleaning } from "#fsd/entities/cleaning";
 import type { Stay } from "#fsd/entities/stay";
 import {

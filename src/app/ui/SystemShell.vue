@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useCurrentUser } from '#fsd/shared/auth'
+import PasskeySettings from './PasskeySettings.vue'
 const user = useCurrentUser()
 const error = ref('')
 async function logout() {
@@ -12,6 +13,7 @@ async function logout() {
     <header class="mb-8 flex flex-wrap items-center justify-between gap-4 border-b border-[var(--color-line)] pb-4">
       <div><strong class="text-xl">Aparts · Система</strong><p class="text-sm text-[var(--color-muted)]">{{ user?.name }}</p></div>
       <nav class="flex flex-wrap gap-2">
+        <PasskeySettings />
         <UButton to="/system/clients" color="neutral" variant="soft" class="min-h-11 cursor-pointer">Клиенты</UButton>
         <UButton to="/system/settings" color="neutral" variant="soft" class="min-h-11 cursor-pointer">Настройки</UButton>
         <UButton color="neutral" variant="ghost" class="min-h-11 cursor-pointer" @click="logout">Выйти</UButton>

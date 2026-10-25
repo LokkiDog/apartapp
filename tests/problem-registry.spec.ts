@@ -91,7 +91,7 @@ describe('problem registry contracts', () => {
 
   it('keeps solution-task linkage out of the description and preserves it after cancellation', () => {
     const page = readFileSync('src/pages/problems/ProblemsPage.vue', 'utf8')
-    const detail = readFileSync('src/features/work-detail/ui/WorkDetailPage.vue', 'utf8')
+    const detail = readFileSync('src/pages/work-detail/ui/WorkDetailPage.vue', 'utf8')
     const problemService = readFileSync('server/modules/problem/problem.service.ts', 'utf8')
     const taskService = readFileSync('server/modules/task/task.service.ts', 'utf8')
     const guestPreparation = readFileSync('server/modules/cleaning/guest-preparation.ts', 'utf8')

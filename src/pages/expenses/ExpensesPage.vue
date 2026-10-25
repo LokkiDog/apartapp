@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { DropdownMenuItem } from '@nuxt/ui'
 import type { Apartment } from '#fsd/entities/apartment'
-import { ApartmentSelect } from '#fsd/features/select-apartment'
+import { ApartmentSelect } from '#fsd/entities/apartment'
 import { useCurrentUser } from '#fsd/shared/auth'
 import { createFormValidator, formatDate, formatEuro, useSubmitFormValidation } from '#fsd/shared/lib'
 import { DateInput, DateRangeInput, DeleteConfirmModal, EmptyState, MoneyInput, PageHeader } from '#fsd/shared/ui'

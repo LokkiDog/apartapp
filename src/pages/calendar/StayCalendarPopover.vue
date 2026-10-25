@@ -5,6 +5,7 @@ const activeOwner = shallowRef<symbol | null>(null)
 </script>
 
 <script setup lang="ts">
+import { localizedName } from '#shared/utils/localized-name'
 import type { Stay } from '#fsd/entities/stay'
 import { formatDate, formatEuro } from '#fsd/shared/lib'
 import { stayCleaningPresentation } from './model/stay-cleaning'
@@ -40,7 +41,7 @@ const props = withDefaults(defineProps<{
   showServiceIcons: true
 })
 const emit = defineEmits<{ edit: [stay: Stay] }>()
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 const owner = Symbol('stay-calendar-popover')
 const isOpen = computed({
@@ -54,7 +55,7 @@ const cleaningPresentation = computed(() => stayCleaningPresentation(props.stay,
 const nights = computed(() => Math.max(0, Math.round((Date.parse(`${props.stay.checkOutOn}T12:00:00Z`) - Date.parse(`${props.stay.checkInOn}T12:00:00Z`)) / 86400000)))
 const guestCount = computed(() => props.stay.adultCount === null || props.stay.childCount === null ? null : props.stay.adultCount + props.stay.childCount)
 const guestBreakdown = computed(() => guestCount.value === null ? t('icalImport.guestsEnteredSeparately') : `${guestCount.value} · ${props.stay.adultCount}${props.stay.childCount ? `, ${props.stay.childCount} ${t('calendar.children').toLocaleLowerCase()}` : ''}`)
-const servicesLabel = computed(() => props.stay.services?.map(service => service.nameSnapshot).join(', ') ?? '')
+const servicesLabel = computed(() => props.stay.services?.map(service => localizedName(service.nameSnapshot, service.nameTranslationsSnapshot, locale.value)).join(', ') ?? '')
 
 function editStay() {
   isOpen.value = false
@@ -117,7 +118,7 @@ function editStay() {
           </div>
 
           <div v-if="showFinancialDetails && (stay.services?.length || stay.cashAmountEur !== null && stay.cashAmountEur !== undefined)" class="stay-calendar-popover__notes">
-            <p v-if="stay.services?.length"><strong>{{ t('calendar.extraServices') }}:</strong> {{ stay.services.map(service => service.nameSnapshot).join(', ') }}</p>
+            <p v-if="stay.services?.length"><strong>{{ t('calendar.extraServices') }}:</strong> {{ stay.services.map(service => localizedName(service.nameSnapshot, service.nameTranslationsSnapshot, locale)).join(', ') }}</p>
             <p v-if="stay.cashAmountEur !== null && stay.cashAmountEur !== undefined"><strong>{{ t('calendar.cash') }}:</strong> {{ formatEuro(stay.cashAmountEur) }}</p>
           </div>
 

@@ -316,6 +316,34 @@
       "when": 1790985600001,
       "tag": "0044_client_reference_guards",
       "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1792951905899,
+      "tag": "0045_service_name_translations",
+      "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1792953018266,
+      "tag": "0046_translation_monthly_usage",
+      "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1792960000000,
+      "tag": "0047_invitation_only_registration",
+      "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1792960000001,
+      "tag": "0048_passkeys",
+      "breakpoints": true
     }
   ]
 }

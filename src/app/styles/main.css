@@ -3994,11 +3994,13 @@ img {
 }
 .auth-shell__footer {
   grid-column: 1 / -1;
+  text-align: center;
   padding-top: 32px;
   color: #526a5d;
   font-size: 12px;
 }
 @media (min-width: 768px) {
+  .auth-shell__footer { text-align: start; }
   .auth-shell {
     grid-template-columns: minmax(0, 0.48fr) minmax(0, 0.52fr);
     grid-template-rows: auto 1fr auto;

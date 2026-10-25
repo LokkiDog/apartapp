@@ -1,3 +1,4 @@
+import type { NameTranslations } from '../../../shared/utils/localized-name'
 import { relations, sql } from 'drizzle-orm'
 import {
   boolean,
@@ -65,6 +66,26 @@ export const users = pgTable('users', {
   uniqueIndex('users_one_vika_per_organization_unique').on(table.organizationId).where(sql`${table.isVika}`)
 ])
 
+export const passkeys = pgTable('passkeys', {
+  id: text('id').primaryKey(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  publicKey: text('public_key').notNull(),
+  counter: numeric('counter', { precision: 20, scale: 0, mode: 'number' }).notNull().default(0),
+  transports: jsonb('transports').$type<string[]>().notNull().default(sql`'[]'::jsonb`),
+  name: text('name').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  lastUsedAt: timestamp('last_used_at', { withTimezone: true })
+}, table => [index('passkeys_user_idx').on(table.userId)])
+
+export const passkeyChallenges = pgTable('passkey_challenges', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  purpose: text('purpose').$type<'register' | 'authenticate'>().notNull(),
+  userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }),
+  browserHash: text('browser_hash').notNull(),
+  challenge: text('challenge').notNull(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull()
+}, table => [index('passkey_challenges_expiry_idx').on(table.expiresAt)])
+
 export const hotels = pgTable('hotels', {
   id: uuid('id').primaryKey().defaultRandom(),
   organizationId: uuid('organization_id').notNull().references(() => organizations.id),
@@ -127,7 +148,17 @@ export const apartmentManagers = pgTable('apartment_managers', {
   index('apartment_managers_organization_apartment_idx').on(table.organizationId, table.apartmentId)
 ])
 
+// Shared platform billing usage: no tenant content or organization-specific data.
+export const translationMonthlyUsage = pgTable('translation_monthly_usage', {
+  month: text('month').primaryKey(),
+  characters: integer('characters').notNull().default(0)
+}, table => [
+  check('translation_monthly_usage_month_format', sql`${table.month} ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'`),
+  check('translation_monthly_usage_nonnegative', sql`${table.characters} >= 0`)
+])
+
 export const specialServices = pgTable('special_services', {
+  nameTranslations: jsonb('name_translations').$type<NameTranslations>().notNull().default({}),
   id: uuid('id').primaryKey().defaultRandom(),
   organizationId: uuid('organization_id').notNull().references(() => organizations.id),
   name: text('name').notNull(),
@@ -203,6 +234,7 @@ export const stayServices = pgTable('stay_services', {
   stayId: uuid('stay_id').notNull().references(() => stays.id, { onDelete: 'cascade' }),
   specialServiceId: uuid('special_service_id').notNull().references(() => specialServices.id),
   nameSnapshot: text('name_snapshot').notNull(),
+  nameTranslationsSnapshot: jsonb('name_translations_snapshot').$type<NameTranslations>().notNull().default({}),
   iconNameSnapshot: text('icon_name_snapshot').notNull().default('i-lucide-concierge-bell'),
   priceEurSnapshot: numeric('price_eur_snapshot', { precision: 12, scale: 2, mode: 'number' }).notNull(),
   managerSharePercentSnapshot: integer('manager_share_percent_snapshot').notNull(),

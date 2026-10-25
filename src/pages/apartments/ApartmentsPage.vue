@@ -2,7 +2,7 @@
 import { clientResourceUrl } from "#fsd/shared/auth"
 import { useCurrentUser } from '#fsd/shared/auth'
 import { EmptyState, PageHeader, StatusBadge } from '#fsd/shared/ui'
-import { matchesApartmentSearch } from '#fsd/features/select-apartment'
+import { matchesApartmentSearch } from '#fsd/entities/apartment'
 import { apartmentSortStorageKey, apartmentViewStorageKey, parseApartmentSort, parseApartmentView, type ApartmentSort, type ApartmentView } from './model/apartment-view'
 import ApartmentPhotoCarousel from './ApartmentPhotoCarousel.vue'
 import { useI18n } from 'vue-i18n'

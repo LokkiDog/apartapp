@@ -267,8 +267,11 @@ describe('CRM contracts', () => {
     expect(compactStayServices([], 3)).toEqual({ visible: [], hiddenCount: 0 })
   })
 
-  it('keeps the selected service icon in the stay snapshot', () => {
-    const snapshot = buildStayServiceSnapshot('stay-1', { id: 'service-1', name: 'Трансфер', iconName: 'i-lucide-car', priceEur: 20, managerSharePercent: 10 })
+  it('keeps the selected service icon and an independent copy of translations in the stay snapshot', () => {
+    const nameTranslations = { en: 'Transfer' }
+    const snapshot = buildStayServiceSnapshot('stay-1', { id: 'service-1', name: 'Трансфер', nameTranslations, iconName: 'i-lucide-car', priceEur: 20, managerSharePercent: 10 })
+    nameTranslations.en = 'New catalogue name'
+    expect(snapshot.nameTranslationsSnapshot).toEqual({ en: 'Transfer' })
     expect(snapshot.iconNameSnapshot).toBe('i-lucide-car')
     expect(snapshot.specialServiceId).toBe('service-1')
   })

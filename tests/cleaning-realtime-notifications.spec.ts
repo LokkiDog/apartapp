@@ -105,10 +105,10 @@ describe('cleaning realtime notifications', () => {
 
   it('invalidates all cleaning data surfaces and reconciles after reconnect', () => {
     const state = readFileSync('src/features/manage-notifications/model/notifications.ts', 'utf8')
-    const cleaningRealtime = readFileSync('src/shared/realtime/model/cleaning-realtime.ts', 'utf8')
+    const cleaningRealtime = readFileSync('src/shared/realtime/cleaning-realtime.ts', 'utf8')
     const plugin = readFileSync('app/plugins/notifications-realtime.client.ts', 'utf8')
     const work = readFileSync('src/pages/work/WorkPage.vue', 'utf8')
-    const detail = readFileSync('src/features/work-detail/ui/WorkDetailPage.vue', 'utf8')
+    const detail = readFileSync('src/pages/work-detail/ui/WorkDetailPage.vue', 'utf8')
     const calendar = readFileSync('src/pages/calendar/CalendarPage.vue', 'utf8')
     const dashboard = readFileSync('src/pages/dashboard/DashboardPage.vue', 'utf8')
 

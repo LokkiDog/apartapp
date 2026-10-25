@@ -76,6 +76,8 @@ export default defineNuxtConfig({
     }
   },
   runtimeConfig: {
+    googleTranslationApiKey: '',
+    googleTranslationMonthlyCharacterLimit: '450000',
     session: {
       password: process.env.NUXT_SESSION_PASSWORD || '',
       maxAge: AUTH_SESSION_IDLE_MAX_AGE_SECONDS

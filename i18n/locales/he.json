@@ -183,6 +183,10 @@
     "locationHint": "לחצו על המפה או גררו את הסמן כדי לבחור מיקום."
   },
   "statementExtra": {
+    "sortByOwner": "לפי בעלים",
+    "sortByHotel": "לפי מלון",
+    "sortAlphabetically": "לפי האלפבית",
+    "sortByAmount": "לפי סכום ↓",
     "reports": "דוחות",
     "myExpenses": "ההוצאות שלי",
     "downloadPdf": "הורדת PDF",
@@ -561,7 +565,18 @@
     "cancel": "ביטול",
     "toggleOn": "הפעלה",
     "toggleOff": "השבתה",
-    "delete": "מחיקה"
+    "delete": "מחיקה",
+    "translations": "תרגומים",
+    "viewTranslations": "הצגת תרגומים",
+    "translationsDescription": "בדקו וערכו את השמות. הם יישמרו יחד עם השירות.",
+    "translating": "מתרגם…",
+    "translateAgain": "תרגום מחדש",
+    "applyTranslations": "החלה",
+    "translationNotConfigured": "Google Translation עדיין לא הוגדר. ניתן להזין שמות ידנית.",
+    "translationRateLimit": "יותר מדי בקשות. נסו שוב בעוד דקה.",
+    "translationFailed": "התרגום נכשל. נסו שוב או הזינו את השמות ידנית.",
+    "translationMonthlyLimit": "מכסת התרגום החודשית נוצלה. ניתן להזין תרגומים ידנית או לנסות שוב בחודש הבא.",
+    "translationLimitInvalid": "התרגום האוטומטי מושבת עקב הגדרת המכסה. ניתן להזין תרגומים ידנית."
   },
   "users": {
     "title": "משתמשים",
@@ -982,5 +997,31 @@
     "period": "תקופה",
     "events": "סוג אירוע",
     "retry": "נסה שוב"
+  },
+  "passkeys": {
+    "title": "מפתחות גישה",
+    "description": "כניסה עם Face ID, Touch ID או קוד המכשיר. הוסיפו מפתח לאחר אישור הסיסמה הנוכחית.",
+    "login": "כניסה עם מפתח גישה",
+    "loginError": "הכניסה עם מפתח הגישה נכשלה. נסו שוב או היכנסו עם סיסמה.",
+    "cancelled": "הפעולה בוטלה או שפג הזמן. אפשר לנסות שוב.",
+    "name": "שם המפתח",
+    "defaultName": "המפתח שלי",
+    "passwordHelp": "אשרו את הסיסמה כדי להוסיף מפתח.",
+    "add": "הוספת מפתח",
+    "added": "המפתח נוסף. כעת ניתן להיכנס איתו ל־Aparts.",
+    "addError": "לא ניתן להוסיף את המפתח. נסו שוב.",
+    "empty": "אין עדיין מפתחות גישה",
+    "unsupported": "מפתחות גישה אינם זמינים בדפדפן זה. פתחו את Aparts ב־HTTPS בדפדפן נתמך.",
+    "deleteKey": "מחיקת המפתח ״{name}״",
+    "deleteTitle": "למחוק את המפתח?",
+    "deleteDescription": "לא ניתן יהיה להיכנס עם המפתח ״{name}״. כניסה עם סיסמה תישאר זמינה.",
+    "deleteError": "לא ניתן למחוק את המפתח",
+    "loadError": "לא ניתן לטעון את המפתחות",
+    "retry": "ניסיון חוזר",
+    "loading": "טעינה…",
+    "offerTitle": "כניסה ללא סיסמה",
+    "offerDescription": "צרו מפתח גישה כדי להיכנס עם Face ID, Touch ID או קוד המכשיר. אין צורך להזין שוב את הסיסמה.",
+    "later": "מאוחר יותר",
+    "create": "יצירת מפתח"
   }
 }

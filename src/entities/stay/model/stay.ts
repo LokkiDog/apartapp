@@ -1,3 +1,5 @@
+import type { NameTranslations } from '#shared/utils/localized-name'
+
 export interface Stay {
   id: string
   checkInOn: string
@@ -21,6 +23,7 @@ export interface Stay {
     id: string
     specialServiceId: string
     nameSnapshot: string
+    nameTranslationsSnapshot?: NameTranslations
     iconNameSnapshot: string
     priceEurSnapshot: number
     managerSharePercentSnapshot: number

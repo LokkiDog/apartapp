@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 
 const pageFiles = [
   'src/pages/work/WorkPage.vue',
-  'src/features/work-detail/ui/WorkDetailPage.vue',
+  'src/pages/work-detail/ui/WorkDetailPage.vue',
   'src/features/work-progress/ui/WorkProgressForm.vue'
 ]
 
@@ -128,7 +128,7 @@ describe('work page UI contracts', () => {
   })
 
   it('keeps the cash task summary and correction controls compact', () => {
-    const detail = readFileSync('src/features/work-detail/ui/WorkDetailPage.vue', 'utf8')
+    const detail = readFileSync('src/pages/work-detail/ui/WorkDetailPage.vue', 'utf8')
     const styles = readFileSync('src/app/styles/main.css', 'utf8')
     expect(detail).toContain('class="cash-task-card surface"')
     expect(detail).toContain('class="cash-task-card__summary"')
@@ -148,7 +148,7 @@ describe('work page UI contracts', () => {
   })
 
   it('requires acceptance in the cleaning detail before a worker can operate', () => {
-    const detail = readFileSync('src/features/work-detail/ui/WorkDetailPage.vue', 'utf8')
+    const detail = readFileSync('src/pages/work-detail/ui/WorkDetailPage.vue', 'utf8')
     const styles = readFileSync('src/app/styles/main.css', 'utf8')
     expect(detail).toContain('currentCleaningAssignment')
     expect(detail).toContain('canAcceptCleaning')
@@ -178,7 +178,7 @@ describe('work page UI contracts', () => {
   })
 
   it('shows hotel directions and copyable coordinates in cleaning details', () => {
-    const detail = readFileSync('src/features/work-detail/ui/WorkDetailPage.vue', 'utf8')
+    const detail = readFileSync('src/pages/work-detail/ui/WorkDetailPage.vue', 'utf8')
     const styles = readFileSync('src/app/styles/main.css', 'utf8')
     const hotelMap = readFileSync('src/entities/hotel/ui/HotelLocationMap.vue', 'utf8')
     const hotelApi = readFileSync('src/entities/hotel/index.ts', 'utf8')
@@ -307,7 +307,7 @@ describe('work page UI contracts', () => {
 
   it('provides the task detail endpoint used by task cards', () => {
     const taskPage = readFileSync('app/pages/tasks/[id].vue', 'utf8')
-    const taskDetail = readFileSync('src/features/work-detail/ui/WorkDetailPage.vue', 'utf8')
+    const taskDetail = readFileSync('src/pages/work-detail/ui/WorkDetailPage.vue', 'utf8')
     const taskEndpoint = readFileSync('server/api/tasks/[id].get.ts', 'utf8')
 
     expect(taskPage).toContain('<WorkDetailPage kind="task" />')
@@ -318,7 +318,7 @@ describe('work page UI contracts', () => {
   })
 
   it('returns task details to the tasks tab after navigation and mutations', () => {
-    const detail = readFileSync('src/features/work-detail/ui/WorkDetailPage.vue', 'utf8')
+    const detail = readFileSync('src/pages/work-detail/ui/WorkDetailPage.vue', 'utf8')
     expect(detail).toContain("const taskListHref = computed(() => isSpecialist.value ? '/tasks' : '/work?tab=tasks')")
     expect(detail).toContain("? taskListHref.value\n    : '/work')")
     expect(detail).toContain("router.push(props.kind === 'task' ? taskListHref.value : '/work')")
@@ -327,7 +327,7 @@ describe('work page UI contracts', () => {
 
   it('shows a success toast only after a task save without photo errors', () => {
     const app = readFileSync('app/app.vue', 'utf8')
-    const detail = readFileSync('src/features/work-detail/ui/WorkDetailPage.vue', 'utf8')
+    const detail = readFileSync('src/pages/work-detail/ui/WorkDetailPage.vue', 'utf8')
     const styles = readFileSync('src/app/styles/main.css', 'utf8')
     const locales = ['ru', 'en', 'he'].map(locale => JSON.parse(readFileSync(`i18n/locales/${locale}.json`, 'utf8')) as { taskNotice: Record<string, string> })
     expect(app).toContain("position: 'top-center'")
@@ -351,7 +351,7 @@ describe('work page UI contracts', () => {
   })
 
   it('keeps work detail cards inside the mobile viewport', () => {
-    const detail = readFileSync('src/features/work-detail/ui/WorkDetailPage.vue', 'utf8')
+    const detail = readFileSync('src/pages/work-detail/ui/WorkDetailPage.vue', 'utf8')
     const progress = readFileSync('src/features/work-progress/ui/WorkProgressForm.vue', 'utf8')
     const styles = readFileSync('src/app/styles/main.css', 'utf8')
     expect(styles).toContain('.work-progress-form {\n  display: grid;\n  width: 100%;\n  max-width: 100%;\n  min-width: 0;\n  grid-template-columns: minmax(0, 1fr);')

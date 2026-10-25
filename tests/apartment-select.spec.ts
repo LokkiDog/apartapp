@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { apartmentSearchText, matchesApartmentSearch } from '../src/features/select-apartment/model/apartment-search'
+import { apartmentSearchText, matchesApartmentSearch } from '../src/entities/apartment/model/apartment-search'
 
 const apartment = { name: 'Апартамент 12', hotelName: 'Bansko Heights' }
 
@@ -13,7 +13,7 @@ describe('apartment selection', () => {
   })
 
   it('uses a shared searchable menu for every single-apartment control', () => {
-    const component = readFileSync('src/features/select-apartment/ui/ApartmentSelect.vue', 'utf8')
+    const component = readFileSync('src/entities/apartment/ui/ApartmentSelect.vue', 'utf8')
     expect(component).toContain('<USelectMenu')
     expect(component).toMatch(/:filter-fields="\[['"]label['"], ['"]search['"]\]"/)
     expect(component).toMatch(/t\(['"]common\.searchApartment['"]\)/)
@@ -40,7 +40,7 @@ describe('apartment selection', () => {
   })
 
   it('keeps special options and filters the administrator report list without resetting the selection', () => {
-    const component = readFileSync('src/features/select-apartment/ui/ApartmentSelect.vue', 'utf8')
+    const component = readFileSync('src/entities/apartment/ui/ApartmentSelect.vue', 'utf8')
     const statement = readFileSync('src/pages/statement/StatementPage.vue', 'utf8')
     expect(component).toContain('prependItems?: ExtraItem[]')
     expect(statement).toContain('const filteredReports = computed')

@@ -9,6 +9,7 @@ import { useNetworkStatus } from "#fsd/shared/lib";
 import { useNotificationState } from "#fsd/features/manage-notifications";
 import { unregisterPushSubscription } from "#fsd/features/manage-push-subscription";
 import LanguageSwitcher from "./LanguageSwitcher.vue";
+import PasskeySettings from "./PasskeySettings.vue";
 const { t } = useI18n();
 
 type NavItem = { to: string; label: string; icon: string };
@@ -258,6 +259,7 @@ async function logout() {
           @click="logout"
         />
         <div class="app-topbar__actions">
+          <PasskeySettings />
           <LanguageSwitcher />
           <UButton
             v-if="isSpecialistNavigation"

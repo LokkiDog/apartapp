@@ -53,7 +53,7 @@ describe('apartment catalog view', () => {
     const page = readFileSync('src/pages/apartments/ApartmentsPage.vue', 'utf8')
     const styles = readFileSync('src/app/styles/main.css', 'utf8')
 
-    expect(page).toContain("import { matchesApartmentSearch } from '#fsd/features/select-apartment'")
+    expect(page).toContain("import { matchesApartmentSearch } from '#fsd/entities/apartment'")
     expect(page).toContain("const search = ref('')")
     expect(page).toContain('const filteredApartments = computed')
     expect(page).toContain('matchesApartmentSearch({ name: apartment.name, hotelName: apartment.hotel.name }, search.value)')

@@ -26,7 +26,7 @@ describe('task resolution review workflow', () => {
   })
 
   it('keeps resolved tasks reviewable and visually distinct only for administrators', () => {
-    const detail = readFileSync('src/features/work-detail/ui/WorkDetailPage.vue', 'utf8')
+    const detail = readFileSync('src/pages/work-detail/ui/WorkDetailPage.vue', 'utf8')
     const page = readFileSync('src/pages/work/WorkPage.vue', 'utf8')
     const problemService = readFileSync('server/modules/problem/problem.service.ts', 'utf8')
     expect(detail).toContain("task.value?.status === 'resolved' && isAdministrator.value")

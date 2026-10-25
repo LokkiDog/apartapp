@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { Apartment } from '#fsd/entities/apartment'
-import { ApartmentSelect } from '#fsd/features/select-apartment'
+import { ApartmentSelect } from '#fsd/entities/apartment'
 import { useCurrentUser } from '#fsd/shared/auth'
 import { ConfirmActionModal, DeleteConfirmModal, EmptyState, MoneyInput, PageHeader, StatusBadge } from '#fsd/shared/ui'
 import { createFormValidator, useSubmitFormValidation } from '#fsd/shared/lib'
