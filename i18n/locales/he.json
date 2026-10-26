@@ -486,7 +486,15 @@
     "notAssigned": "לא הוקצה",
     "edit": "עריכה",
     "emptyTitle": "אין דירות עדיין",
-    "emptyDescription": "הוסיפו תחילה נכס וסוג דירה, ואז צרו את הדירה הראשונה."
+    "emptyDescription": "הוסיפו תחילה נכס וסוג דירה, ואז צרו את הדירה הראשונה.",
+    "filters": "מסננים",
+    "onlyMine": "רק שלי",
+    "filterAll": "הכול",
+    "filterHotel": "מלון",
+    "filterType": "סוג",
+    "filterStatus": "סטטוס",
+    "resetFilters": "איפוס",
+    "showFiltered": "הצגה ({count})"
   },
   "hotels": {
     "title": "נכסים",
@@ -1238,5 +1246,42 @@
         "preparation": "בדיקת ההכנה להגעה"
       }
     }
+  },
+  "publication": {
+    "title": "פרסום",
+    "live": "באתר",
+    "draft": "טיוטה",
+    "visible": "הצגה באתר",
+    "name": "שם לאורחים",
+    "slug": "כתובת העמוד",
+    "summary": "תיאור קצר",
+    "description": "תיאור",
+    "location": "מיקום לאורחים",
+    "order": "סדר בקטלוג",
+    "amenities": "מתקנים",
+    "photos": "תמונות לאתר",
+    "photoHint": "בחרו תמונות. התמונה הראשונה תשמש כתמונת שער.",
+    "noPhotos": "תחילה העלו תמונות של הדירה.",
+    "cover": "תמונת שער",
+    "missingPhoto": "התמונה נמחקה — הסירו אותה מהרשימה",
+    "up": "למעלה",
+    "down": "למטה",
+    "openSite": "פתיחה באתר",
+    "save": "שמירה",
+    "saved": "הגדרות הפרסום נשמרו",
+    "loadError": "לא ניתן לטעון את הפרסום",
+    "retry": "נסו שוב",
+    "amenity": {
+      "wifi": "Wi-Fi",
+      "kitchen": "מטבח",
+      "parking": "חניה",
+      "balcony": "מרפסת",
+      "washing_machine": "מכונת כביסה",
+      "air_conditioning": "מיזוג אוויר",
+      "ski_storage": "אחסון ציוד סקי",
+      "pool": "בריכה",
+      "lift": "מעלית"
+    },
+    "validationError": "בדקו את כתובת העמוד. לפרסום נדרשים שם, תיאור קצר, תיאור מלא ולפחות תמונה אחת."
   }
 }

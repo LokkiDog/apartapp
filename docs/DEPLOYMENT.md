@@ -274,31 +274,47 @@ systemctl status certbot.timer --no-pager
 Полный Nginx-конфиг устанавливает HTTPS-редирект, стандартные proxy-заголовки
 и лимит запроса 10 МБ для фотографий размером до 8 МБ.
 
-## Статическая заглушка основного домена
+## Гостевой сайт основного домена
 
-Основной домен `aparts-bansko.com` обслуживается отдельным virtual host и не
-проксируется в CRM. После создания DNS A-записи на IP VPS установите пустую
-HTML-страницу и временную HTTP-конфигурацию:
+`aparts-bansko.com` обслуживает отдельное Nuxt-приложение `guest/` на порту
+`127.0.0.1:3001`. CRM остаётся на `crm.aparts-bansko.com:443` и локальном порту 3000.
+Сервисы используют одну базу через публичный API CRM; у гостевого приложения нет
+доступа к БД или закрытым API. Старый `deploy/site/` больше не используется.
 
-```sh
-sudo mkdir -p /var/www/aparts-bansko
-sudo cp deploy/site/index.html deploy/site/bansko-hero.jpg /var/www/aparts-bansko/
-sudo cp deploy/nginx/aparts-site-http.conf /etc/nginx/sites-available/aparts-site
-sudo ln -s /etc/nginx/sites-available/aparts-site /etc/nginx/sites-enabled/aparts-site
-sudo nginx -t
-sudo systemctl reload nginx
-```
+Перед запуском заполните в `.env.production`:
 
-После проверки `http://aparts-bansko.com` выпустите отдельный сертификат и
-включите HTTPS:
+- `NUXT_CATALOGUE_ORGANIZATION_ID` — UUID организации Вики из CRM, обязательно;
+- `NUXT_PUBLIC_WHATSAPP` — реальный номер в международном формате без `+`;
+- `NUXT_PUBLIC_SITE_URL=https://aparts-bansko.com`;
+- `NUXT_PUBLIC_CATALOGUE_URL=https://aparts-bansko.com`;
+- `NUXT_PUBLIC_HOST_NAME` и `NUXT_PUBLIC_HOST_DESCRIPTION` — текст блока «Обо мне»;
+- при наличии реального портрета добавьте его в `guest/public/` и укажите локальный
+  URL в `NUXT_PUBLIC_HOST_PHOTO`. Без портрета блок остаётся текстовым.
 
-```sh
-sudo certbot certonly --nginx -d aparts-bansko.com
-sudo cp deploy/nginx/aparts-site.conf /etc/nginx/sites-available/aparts-site
-sudo nginx -t
-sudo systemctl reload nginx
-curl --fail --show-error https://aparts-bansko.com/
-```
+Миграция `0051_apartment_publications` создаёт отдельные публикации и выбор фото.
+Существующие объекты не публикуются автоматически. Администратор раскрывает
+«Публикация» в настройках апартамента, заполняет публичные поля, выбирает фотографии
+(первая становится обложкой), включает «Показывать на сайте» и сохраняет.
+Архивные/неактивные апартаменты не выдаются, удаление последнего выбранного фото
+снимает публикацию. Скрытая страница и её фотографии возвращают 404.
+
+Порядок первого запуска:
+
+1. Соберите и поднимите CRM с миграцией и гостевой сервис через `deploy/deploy.sh`.
+2. Проверьте локальные порты 3000 и 3001 и подготовьте публикации в CRM.
+3. Установите `deploy/nginx/aparts-site-http.conf`, выпустите отдельный сертификат
+   `certbot certonly --nginx -d aparts-bansko.com`, затем установите
+   `deploy/nginx/aparts-site.conf` в `/etc/nginx/sites-available/aparts-site`.
+4. Выполните `sudo nginx -t`, затем `sudo systemctl reload nginx`.
+   Конфигурацию CRM при этом менять не нужно.
+
+Для существующего сертификата достаточно заменить конфигурацию основного домена,
+проверить Nginx и выполнить reload. Для отката главного сайта верните прежний static
+virtual host; таблицы публикаций совместимы с остальной CRM.
+
+Локально: `npm run dev` и `npm run dev:guest`. Гостевой сервер обращается к CRM
+по `NUXT_CATALOGUE_API_BASE` (по умолчанию `http://127.0.0.1:3000`). В Docker это
+`http://app:3000`. Запросы гостей не передают cookies в CRM.
 
 ## Финальная проверка
 

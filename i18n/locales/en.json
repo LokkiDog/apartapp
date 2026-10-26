@@ -486,7 +486,15 @@
     "notAssigned": "Not assigned",
     "edit": "Edit",
     "emptyTitle": "No apartments yet",
-    "emptyDescription": "First add a property and apartment type, then create the first apartment."
+    "emptyDescription": "First add a property and apartment type, then create the first apartment.",
+    "filters": "Filters",
+    "onlyMine": "Only mine",
+    "filterAll": "All",
+    "filterHotel": "Hotel",
+    "filterType": "Type",
+    "filterStatus": "Status",
+    "resetFilters": "Reset",
+    "showFiltered": "Show ({count})"
   },
   "hotels": {
     "title": "Properties",
@@ -1238,5 +1246,42 @@
         "preparation": "Check arrival preparation"
       }
     }
+  },
+  "publication": {
+    "title": "Publication",
+    "live": "On website",
+    "draft": "Draft",
+    "visible": "Show on website",
+    "name": "Guest title",
+    "slug": "Page address",
+    "summary": "Short description",
+    "description": "Description",
+    "location": "Location for guests",
+    "order": "Catalogue order",
+    "amenities": "Amenities",
+    "photos": "Website photos",
+    "photoHint": "Select photos. The first photo will be the cover.",
+    "noPhotos": "Upload apartment photos first.",
+    "cover": "Cover",
+    "missingPhoto": "Deleted photo — remove it from this list",
+    "up": "Move up",
+    "down": "Move down",
+    "openSite": "Open website",
+    "save": "Save",
+    "saved": "Publication settings saved",
+    "loadError": "Could not load publication",
+    "retry": "Retry",
+    "amenity": {
+      "wifi": "Wi-Fi",
+      "kitchen": "Kitchen",
+      "parking": "Parking",
+      "balcony": "Balcony",
+      "washing_machine": "Washing machine",
+      "air_conditioning": "Air conditioning",
+      "ski_storage": "Ski storage",
+      "pool": "Pool",
+      "lift": "Lift"
+    },
+    "validationError": "Check the page address. Publishing requires a title, short and full descriptions, and at least one photo."
   }
 }

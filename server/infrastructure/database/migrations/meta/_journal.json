@@ -358,6 +358,13 @@
       "when": 1792960000003,
       "tag": "0050_release_announcements",
       "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "7",
+      "when": 1792960000004,
+      "tag": "0051_apartment_publications",
+      "breakpoints": true
     }
   ]
 }

@@ -76,6 +76,7 @@ export default defineNuxtConfig({
     }
   },
   runtimeConfig: {
+    catalogueOrganizationId: '',
     googleTranslationApiKey: '',
     googleTranslationMonthlyCharacterLimit: '450000',
     session: {
@@ -98,6 +99,7 @@ export default defineNuxtConfig({
     vapidPublicKey: process.env.NUXT_VAPID_PUBLIC_KEY || process.env.VAPID_PUBLIC_KEY,
     vapidPrivateKey: process.env.NUXT_VAPID_PRIVATE_KEY || process.env.VAPID_PRIVATE_KEY,
     public: {
+      catalogueUrl: 'https://aparts-bansko.com',
       appName: process.env.NUXT_PUBLIC_APP_NAME || 'Aparts',
       appUrl: process.env.NUXT_PUBLIC_APP_URL || 'http://localhost:3000',
       vapidPublicKey: process.env.NUXT_PUBLIC_VAPID_PUBLIC_KEY || process.env.NUXT_VAPID_PUBLIC_KEY || process.env.VAPID_PUBLIC_KEY || ''

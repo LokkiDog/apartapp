@@ -750,3 +750,22 @@ export const notificationEmailQueue = pgTable('notification_email_queue', {
   leaseToken: uuid('lease_token'),
   lastError: text('last_error')
 }, table => [uniqueIndex('notification_email_unique_idx').on(table.notificationId), index('notification_email_pending_idx').on(table.status, table.availableAt)])
+
+// Guest-facing content is deliberately separate from operational apartment data.
+export const apartmentPublications = pgTable('apartment_publications', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  organizationId: uuid('organization_id').notNull().references(() => organizations.id),
+  apartmentId: uuid('apartment_id').notNull().references(() => apartments.id, { onDelete: 'cascade' }),
+  published: boolean('published').notNull().default(false),
+  slug: text('slug').notNull(),
+  sortOrder: integer('sort_order').notNull().default(0),
+  translations: jsonb('translations').$type<import('../../../shared/contracts/publication').PublicationInput['translations']>().notNull(),
+  amenities: jsonb('amenities').$type<string[]>().notNull().default(sql`'[]'::jsonb`),
+  ...timestamps
+}, table => [uniqueIndex('apartment_publication_apartment').on(table.apartmentId), uniqueIndex('apartment_publication_slug').on(table.organizationId, table.slug)])
+
+export const apartmentPublicationPhotos = pgTable('apartment_publication_photos', {
+  publicationId: uuid('publication_id').notNull().references(() => apartmentPublications.id, { onDelete: 'cascade' }),
+  attachmentId: uuid('attachment_id').notNull().references(() => attachments.id, { onDelete: 'cascade' }),
+  position: integer('position').notNull()
+}, table => [primaryKey({ columns: [table.publicationId, table.attachmentId] })])

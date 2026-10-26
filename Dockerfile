@@ -34,3 +34,15 @@ USER node
 EXPOSE 3000
 
 CMD ["node", ".output/server/index.mjs"]
+
+FROM dependencies AS guest-build
+COPY . .
+RUN npm run build:guest
+
+FROM node:22-alpine AS guest-runtime
+WORKDIR /app
+ENV NODE_ENV=production NITRO_HOST=0.0.0.0 PORT=3001
+COPY --from=guest-build --chown=node:node /app/guest/.output ./.output
+USER node
+EXPOSE 3001
+CMD ["node", ".output/server/index.mjs"]

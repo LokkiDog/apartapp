@@ -25,11 +25,11 @@ git fetch origin main
 git merge --ff-only origin/main
 
 $compose config --quiet
-$compose build app migrate
+$compose build app migrate guest
 $compose up -d --wait postgres
 $compose stop app
 $compose run --rm migrate
-$compose up -d --wait app
+$compose up -d --wait app guest
 
 echo "Aparts CRM deployed successfully."
 $compose ps

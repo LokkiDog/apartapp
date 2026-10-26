@@ -37,6 +37,9 @@ jobs:
       - name: Run typecheck
         run: npm run typecheck
 
+      - name: Check guest website
+        run: npm run typecheck:guest && npm run build:guest
+
       - name: Build application
         run: npm run build
 

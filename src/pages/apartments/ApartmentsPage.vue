@@ -4,11 +4,12 @@ import { useCurrentUser } from '#fsd/shared/auth'
 import { EmptyState, PageHeader, StatusBadge } from '#fsd/shared/ui'
 import { matchesApartmentSearch } from '#fsd/entities/apartment'
 import { apartmentSortStorageKey, apartmentViewStorageKey, parseApartmentSort, parseApartmentView, type ApartmentSort, type ApartmentView } from './model/apartment-view'
+import { createApartmentFilters, matchesApartmentFilters } from './model/apartment-filters'
 import ApartmentPhotoCarousel from './ApartmentPhotoCarousel.vue'
 import { useI18n } from 'vue-i18n'
 
 type Attachment = { id: string; fileName: string }
-type Apartment = { id: string; name: string; building: string; status: string; capacity: number; rooms: number; locationDetails?: string; createdAt: string; hotel: { id: string; name: string }; managers: Array<{ id: string; name: string }>; type: { name: string }; photo: Attachment | null; photos: Attachment[] }
+type Apartment = { id: string; name: string; building: string; status: string; capacity: number; rooms: number; locationDetails?: string; createdAt: string; hotel: { id: string; name: string }; managers: Array<{ id: string; name: string }>; type: { id: string; name: string }; photo: Attachment | null; photos: Attachment[] }
 
 const user = useCurrentUser()
 const { t, locale } = useI18n()
@@ -19,6 +20,26 @@ const canOpenSettings = computed(() => Boolean(user.value?.roles.some(role => ['
 const view = ref<ApartmentView>('standard')
 const sort = ref<ApartmentSort>('name')
 const search = ref('')
+const filtersOpen = ref(false)
+const filters = reactive(createApartmentFilters())
+const activeFilterCount = computed(() => Number(filters.onlyMine) + Number(filters.hotelId !== 'all') + Number(filters.typeId !== 'all') + Number(filters.status !== 'all'))
+const hotelOptions = computed(() => [
+  { label: t('apartments.filterAll'), value: 'all' },
+  ...Array.from(new Map((apartments.value ?? []).map(apartment => [apartment.hotel.id, { label: apartment.hotel.name, value: apartment.hotel.id }])).values()).sort((a, b) => a.label.localeCompare(b.label, locale.value))
+])
+const typeOptions = computed(() => [
+  { label: t('apartments.filterAll'), value: 'all' },
+  ...Array.from(new Map((apartments.value ?? []).map(apartment => [apartment.type.id, { label: apartment.type.name, value: apartment.type.id }])).values()).sort((a, b) => a.label.localeCompare(b.label, locale.value))
+])
+const statusOptions = computed(() => [
+  { label: t('apartments.filterAll'), value: 'all' },
+  { label: t('apartments.active'), value: 'active' },
+  { label: t('apartments.inactive'), value: 'inactive' },
+  { label: t('apartments.archived'), value: 'archived' }
+])
+function resetFilters() { Object.assign(filters, createApartmentFilters()) }
+watch(() => user.value?.id, resetFilters)
+
 const viewOptions: Array<{ value: ApartmentView; icon: string; label: string }> = [
   { value: 'compact', icon: 'i-lucide-layout-grid', label: 'apartments.compactView' },
   { value: 'dense', icon: 'i-lucide-grid-2x2', label: 'common.apartmentDenseView' },
@@ -38,7 +59,7 @@ const sortMenuItems = computed(() => sortOptions.map(option => ({
   checked: sort.value === option.value,
   onSelect: () => { sort.value = option.value }
 })))
-const filteredApartments = computed(() => (apartments.value ?? []).filter(apartment => matchesApartmentSearch({ name: apartment.name, hotelName: apartment.hotel.name }, search.value)))
+const filteredApartments = computed(() => (apartments.value ?? []).filter(apartment => matchesApartmentSearch({ name: apartment.name, hotelName: apartment.hotel.name }, search.value) && matchesApartmentFilters(apartment, filters, user.value?.id)))
 const sortedApartments = computed(() => {
   const collator = new Intl.Collator(locale.value, { sensitivity: 'base' })
   return [...filteredApartments.value].sort((left, right) => {
@@ -77,13 +98,36 @@ function openApartment(apartmentId: string) {
 
     <div class="apartment-view-toolbar">
       <UInput v-if="status !== 'pending' && apartments?.length" v-model="search" icon="i-lucide-search" :placeholder="t('common.searchApartment')" :aria-label="t('common.searchApartment')" class="apartment-search" />
-      <UDropdownMenu :items="sortMenuItems" :content="{ align: 'start' }" :modal="false">
-        <UButton color="neutral" variant="soft" icon="i-lucide-arrow-down-a-z" class="apartment-sort-button min-h-11 min-w-11 active:scale-[0.96] transition-transform" :aria-label="t('apartments.sort')"><span class="hidden sm:inline">{{ t('apartments.sort') }}: {{ t(selectedSort.label) }}</span></UButton>
-      </UDropdownMenu>
+      <div class="flex items-center gap-2">
+        <UDropdownMenu :items="sortMenuItems" :content="{ align: 'start' }" :modal="false">
+          <UButton color="neutral" variant="soft" icon="i-lucide-arrow-down-a-z" class="apartment-sort-button min-h-11 min-w-11 active:scale-[0.96] transition-transform" :aria-label="t('apartments.sort')"><span class="hidden sm:inline">{{ t('apartments.sort') }}: {{ t(selectedSort.label) }}</span></UButton>
+        </UDropdownMenu>
+        <UButton :color="activeFilterCount ? 'primary' : 'neutral'" variant="soft" icon="i-lucide-sliders-horizontal" class="relative min-h-11 min-w-11" :aria-label="t('apartments.filters')" :aria-expanded="filtersOpen" @click="filtersOpen = true">
+          <span class="hidden sm:inline">{{ t('apartments.filters') }}</span>
+          <span v-if="activeFilterCount" class="apartment-filter-count tabular-nums">{{ activeFilterCount }}</span>
+        </UButton>
+      </div>
       <UFieldGroup class="apartment-view-switch" role="group" :aria-label="t('apartments.view')">
         <UButton v-for="option in viewOptions" :key="option.value" class="apartment-view-switch__button min-h-11 min-w-11 active:scale-[0.96] transition-transform" :color="view === option.value ? 'primary' : 'neutral'" :variant="view === option.value ? 'solid' : 'soft'" :icon="option.icon" :aria-label="t(option.label)" :aria-pressed="view === option.value" @click="view = option.value" />
       </UFieldGroup>
     </div>
+
+    <USlideover v-model:open="filtersOpen" :title="t('apartments.filters')" :modal="true" :overlay="true">
+      <template #body>
+        <div class="grid gap-5">
+          <UCheckbox v-model="filters.onlyMine" :label="t('apartments.onlyMine')" class="min-h-11 items-center" />
+          <UFormField :label="t('apartments.filterHotel')"><USelect v-model="filters.hotelId" :items="hotelOptions" class="min-h-11 w-full" /></UFormField>
+          <UFormField :label="t('apartments.filterType')"><USelect v-model="filters.typeId" :items="typeOptions" class="min-h-11 w-full" /></UFormField>
+          <UFormField :label="t('apartments.filterStatus')"><USelect v-model="filters.status" :items="statusOptions" class="min-h-11 w-full" /></UFormField>
+        </div>
+      </template>
+      <template #footer>
+        <div class="form-actions form-actions--footer w-full">
+          <UButton color="neutral" variant="outline" :disabled="!activeFilterCount" class="min-h-11" @click="resetFilters">{{ t('apartments.resetFilters') }}</UButton>
+          <UButton class="min-h-11" @click="filtersOpen = false">{{ t('apartments.showFiltered', { count: sortedApartments.length }) }}</UButton>
+        </div>
+      </template>
+    </USlideover>
 
     <div v-if="status === 'pending'" class="apartments-collection" :class="`apartments-collection--${view}`"><USkeleton v-for="item in 6" :key="item" class="apartments-collection__skeleton" /></div>
 

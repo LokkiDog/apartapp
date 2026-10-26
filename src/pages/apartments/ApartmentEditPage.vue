@@ -10,6 +10,7 @@ import {
 import { useCurrentUser } from '#fsd/shared/auth'
 import { DeleteConfirmModal, PageHeader } from '#fsd/shared/ui'
 import ApartmentPhotoPanel, { type ApartmentPhotoAttachment } from './ApartmentPhotoPanel.vue'
+import ApartmentPublicationPanel from './ApartmentPublicationPanel.vue'
 import IcalIntegrationPanel from '../calendar/IcalIntegrationPanel.vue'
 import { useI18n } from 'vue-i18n'
 
@@ -256,6 +257,8 @@ async function removeApartment() {
         :managers="users ?? []"
         :apartment-types="types ?? []"
       />
+
+      <ApartmentPublicationPanel v-if="isAdministrator" :apartment-id="apartmentId" :apartment-status="apartment.status" :photos="photos ?? []" />
 
       <IcalIntegrationPanel :apartment-id="apartmentId" :apartment-name="apartment.name" @synced="refreshApartment" />
 
