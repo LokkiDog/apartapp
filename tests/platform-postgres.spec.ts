@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import { createError, createEvent, getResponseHeader, defineEventHandler, getQuery, getRouterParam } from 'h3'
 import webpush from 'web-push'
 
+import { changelog } from '../shared/config/changelog'
 import { authenticator } from './helpers/passkey'
 import { IncomingMessage, ServerResponse } from 'node:http'
 import { Socket } from 'node:net'
@@ -336,6 +337,51 @@ describe.skipIf(!url)('platform PostgreSQL integration', () => {
     await db.update(tables.organizations).set({ status: 'active' }).where(eq(tables.organizations.id, client.id))
     expect((await auth.requirePrincipal(event(), false)).id).toBe(principal.id)
   })
+  it('does not announce unpublished releases or accept their viewing acknowledgements', async () => {
+    const { principal, user } = await fixture()
+    const announcements = await import('../server/modules/auth/release-announcement.service')
+    expect(await announcements.getReleaseAnnouncementState(principal)).toEqual({ version: null, seen: true })
+    await expect(announcements.markReleaseAnnouncementSeen(principal, { version: '2026.10.26' })).rejects.toMatchObject({ statusCode: 409 })
+    expect((await db.query.users.findFirst({ where: eq(tables.users.id, user.id) }))!.lastSeenReleaseVersion).toBeNull()
+  })
+
+  it('persists viewing per account across devices, isolates other accounts and never moves the marker backwards', async () => {
+    const { principal, user, other } = await fixture()
+    const announcements = await import('../server/modules/auth/release-announcement.service')
+    const release = changelog[0]!
+    const original = release.status
+    release.status = 'released'
+    try {
+      expect(await announcements.getReleaseAnnouncementState(principal)).toEqual({ version: release.version, seen: false })
+      await expect(announcements.markReleaseAnnouncementSeen(principal, { version: release.version, userId: 'foreign' })).rejects.toThrow()
+      await expect(announcements.markReleaseAnnouncementSeen({ ...principal, organizationId: other.id }, { version: release.version })).rejects.toMatchObject({ statusCode: 404 })
+      await announcements.markReleaseAnnouncementSeen(principal, { version: release.version })
+      const [device] = await db.insert(tables.platformSessions).values({ userId: user.id, organizationId: user.organizationId, expiresAt: auth.sessionExpiry() }).returning()
+      sessionUser = { id: user.id, platformSessionId: device!.id, sessionVersion: auth.SESSION_VERSION }
+      const secondDevice = await auth.requirePrincipal(event(), false)
+      expect(await announcements.getReleaseAnnouncementState(secondDevice)).toEqual({ version: release.version, seen: true })
+      expect((await db.query.users.findFirst({ where: eq(tables.users.id, user.id) }))!).toMatchObject({ name: user.name, email: user.email, roles: user.roles })
+      const [foreign] = await db.insert(tables.users).values({ organizationId: other.id, name: 'Other', email: 'other-release@example.com', passwordHash: 'hash', status: 'active' }).returning()
+      expect(await announcements.getReleaseAnnouncementState({ ...principal, id: foreign!.id, organizationId: other.id })).toEqual({ version: release.version, seen: false })
+      await db.update(tables.users).set({ lastSeenReleaseVersion: '2027.01.01' }).where(eq(tables.users.id, user.id))
+      await announcements.markReleaseAnnouncementSeen(principal, { version: release.version })
+      expect((await db.query.users.findFirst({ where: eq(tables.users.id, user.id) }))!.lastSeenReleaseVersion).toBe('2027.01.01')
+      await expect(announcements.markReleaseAnnouncementSeen(principal, { version: '2026.10.04' })).rejects.toMatchObject({ statusCode: 409 })
+    } finally { release.status = original }
+  })
+
+  it('keeps a superuser viewing marker with the real account while supporting another client', async () => {
+    const { principal, user, other } = await fixture(true)
+    const announcements = await import('../server/modules/auth/release-announcement.service')
+    const release = changelog[0]!
+    const original = release.status
+    release.status = 'released'
+    try {
+      await announcements.markReleaseAnnouncementSeen({ ...principal, organizationId: other.id }, { version: release.version })
+      expect((await db.query.users.findFirst({ where: eq(tables.users.id, user.id) }))!.lastSeenReleaseVersion).toBe(release.version)
+    } finally { release.status = original }
+  })
+
   it('defaults preferences, scopes updates and preserves preferences hidden by a role change', async () => {
     const { principal, other } = await fixture()
     const preferences = await import('../server/infrastructure/notification/preferences')

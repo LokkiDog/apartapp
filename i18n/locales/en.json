@@ -1109,5 +1109,22 @@
       "languages": "Russian, English and Hebrew",
       "liveUpdates": "notification updates"
     }
+  },
+  "releaseAnnouncement": {
+    "title": "What’s new in Aparts",
+    "description": "We updated your account and notification preferences. Here are the highlights:",
+    "imageAlt": "Aparts features: bookings, profile, security, notifications and reports",
+    "openImage": "Open image",
+    "imageTitle": "Aparts features",
+    "dismiss": "Got it",
+    "viewAll": "View full update",
+    "preview": "Preview announcement",
+    "unread": "You have an unread update",
+    "saveError": "Could not save that you viewed this update. It may appear again on another device.",
+    "highlights": {
+      "profile": "Edit your name and language in your profile.",
+      "security": "Manage your password and passkeys on the Security page.",
+      "notifications": "Choose CRM, Push and Email independently for each event."
+    }
   }
 }

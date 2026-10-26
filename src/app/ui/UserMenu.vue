@@ -1,13 +1,15 @@
 <script setup lang="ts">
+import { useReleaseAnnouncement } from '#fsd/features/release-announcement'
 import type { DropdownMenuItem } from '@nuxt/ui'
 
 const props = defineProps<{ mobile?: boolean; name?: string; roleLabel: string; logoutPending: boolean }>()
 const emit = defineEmits<{ logout: [] }>()
 const { t } = useI18n()
+const { unread } = useReleaseAnnouncement()
 const items = computed<DropdownMenuItem[][]>(() => [
   [
     { label: t('account.profile'), icon: 'i-lucide-user', to: '/profile' },
-    { label: t('account.whatsNew'), icon: 'i-lucide-newspaper', to: '/whats-new' },
+    { label: t('account.whatsNew'), icon: 'i-lucide-newspaper', to: '/whats-new', slot: 'whats-new' },
     { label: t('account.security'), icon: 'i-lucide-shield-check', to: '/security' }
   ],
   [{ label: t('common.logout'), icon: 'i-lucide-log-out', color: 'error', disabled: props.logoutPending, onSelect: () => emit('logout') }]
@@ -24,10 +26,18 @@ const items = computed<DropdownMenuItem[][]>(() => [
       </span>
       <UIcon name="i-lucide-chevrons-up-down" class="size-5 shrink-0 text-[var(--color-muted)]" />
     </UButton>
+    <template #whats-new-trailing><span v-if="unread" class="release-unread-dot" :aria-label="t('releaseAnnouncement.unread')" /></template>
   </UDropdownMenu>
 </template>
 
 <style scoped>
+.release-unread-dot {
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--color-primary);
+}
 .sidebar-profile {
   background: var(--color-surface-muted);
   transition: background-color 150ms ease-out;

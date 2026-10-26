@@ -1,9 +1,10 @@
 type ChangeKind = 'added' | 'improved' | 'fixed'
-type Release = {
+export type Release = {
   version: string
   date: string
   status: 'upcoming' | 'released'
   title: string
+  announcement?: { enabled: boolean; image: string; highlights: string[] }
   groups: Array<{ kind: ChangeKind; items: string[] }>
 }
 
@@ -15,6 +16,7 @@ type Release = {
 export const changelog: Release[] = [
   {
     version: '2026.10.26', date: '2026-10-26', status: 'upcoming', title: 'accountAndWork',
+    announcement: { enabled: true, image: '/images/releases/2026-10-26-features.webp', highlights: ['profile', 'security', 'notifications'] },
     groups: [
       { kind: 'added', items: ['profile', 'security', 'notifications'] },
       { kind: 'improved', items: ['calendar', 'expenseReports', 'serviceTranslations', 'navigation'] },
@@ -26,3 +28,10 @@ export const changelog: Release[] = [
     groups: [{ kind: 'improved', items: ['consistentDesign', 'languages', 'liveUpdates'] }]
   }
 ]
+
+export function latestReleaseAnnouncement(releases: readonly Release[] = changelog) {
+  return [...releases].filter(release => release.status === 'released' && release.announcement?.enabled)
+    .sort((left, right) => right.version.localeCompare(left.version))[0] ?? null
+}
+export function releaseAnchor(version: string) { return `release-${version.replaceAll('.', '-')}` }
+export function hasSeenRelease(lastSeen: string | null, version: string) { return lastSeen !== null && lastSeen >= version }

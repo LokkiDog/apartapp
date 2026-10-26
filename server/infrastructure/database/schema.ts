@@ -49,6 +49,7 @@ export const organizations = pgTable('organizations', {
 })
 
 export const users = pgTable('users', {
+  lastSeenReleaseVersion: text('last_seen_release_version'),
   id: uuid('id').primaryKey().defaultRandom(),
   organizationId: uuid('organization_id').notNull().references(() => organizations.id),
   email: text('email').notNull(),

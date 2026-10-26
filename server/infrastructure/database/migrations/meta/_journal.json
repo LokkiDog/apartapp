@@ -351,6 +351,13 @@
       "when": 1792960000002,
       "tag": "0049_notification_preferences",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1792960000003,
+      "tag": "0050_release_announcements",
+      "breakpoints": true
     }
   ]
 }

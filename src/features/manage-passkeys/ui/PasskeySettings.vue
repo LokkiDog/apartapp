@@ -3,7 +3,7 @@ import { useCurrentUser } from '#fsd/shared/auth'
 import { usePasskeys } from '#fsd/shared/lib'
 import PasskeyManager from './PasskeyManager.vue'
 
-withDefaults(defineProps<{ showTrigger?: boolean }>(), { showTrigger: true })
+const props = withDefaults(defineProps<{ showTrigger?: boolean; suppressOffer?: boolean }>(), { showTrigger: true, suppressOffer: false })
 const { t } = useI18n()
 const toast = useToast()
 const user = useCurrentUser()
@@ -13,7 +13,7 @@ const busy = ref(false)
 const offerPending = ref(false)
 const offerError = ref('')
 const offerOpen = computed({
-  get: () => Boolean(passkeys.supported.value && passkeys.offer.value?.userId === user.value?.id && passkeys.offer.value && !open.value),
+  get: () => Boolean(!props.suppressOffer && passkeys.supported.value && passkeys.offer.value?.userId === user.value?.id && passkeys.offer.value && !open.value),
   set: value => { if (!value && !offerPending.value) passkeys.postponeOffer() }
 })
 async function acceptOffer() {

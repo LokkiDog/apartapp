@@ -11,6 +11,8 @@ import { unregisterPushSubscription } from "#fsd/features/manage-push-subscripti
 import LanguageSwitcher from "./LanguageSwitcher.vue";
 import { PasskeySettings } from "#fsd/features/manage-passkeys";
 import UserMenu from "./UserMenu.vue";
+import { ReleaseAnnouncement, useReleaseAnnouncement } from "#fsd/features/release-announcement";
+const releaseAnnouncements = useReleaseAnnouncement();
 const { t } = useI18n();
 
 type NavItem = { to: string; label: string; icon: string };
@@ -315,7 +317,8 @@ async function logout() {
       </button>
     </nav>
 
-    <PasskeySettings :show-trigger="false" />
+    <PasskeySettings :show-trigger="false" :suppress-offer="releaseAnnouncements.open.value" />
+    <ReleaseAnnouncement :home-href="homeHref" :blocked="moreOpen" />
     <UDrawer v-model:open="moreOpen" :title="$t('common.menu')">
       <template #body>
         <nav v-if="groups.length" class="grid gap-6">
