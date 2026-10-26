@@ -57,7 +57,7 @@ describe('page loading performance contracts', () => {
   })
 
   it('serves the dashboard from a compact endpoint and adds list indexes', () => {
-    const dashboard = readFileSync('src/pages/dashboard/DashboardPage.vue', 'utf8')
+    const dashboard = readFileSync('src/pages/dashboard/ui/LegacyDashboard.vue', 'utf8')
     const schema = readFileSync('server/infrastructure/database/schema.ts', 'utf8')
     const migration = readFileSync('server/infrastructure/database/migrations/0038_list_performance_indexes.sql', 'utf8')
 

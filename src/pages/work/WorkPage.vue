@@ -25,7 +25,6 @@ import type { CleaningDraft } from "#fsd/features/manage-cleaning";
 import {
   apartmentsForCleanings,
   buildCleaningPlan,
-  localDate,
   routesForDay,
   sortRoute,
   unacceptedCleaningsForCleaner,
@@ -38,6 +37,7 @@ import {
   type TaskStatusFilter,
 } from "./model/task-list";
 import { useI18n } from "vue-i18n";
+import { readDashboardWorkFilter, matchesDashboardCleaning, matchesDashboardTask } from "./model/dashboard-filter";
 import { taskCreateInputSchema, type PaginatedWorkList } from "@contracts/crm";
 
 const LazyCleaningFormSlideover = defineAsyncComponent(() =>
@@ -53,6 +53,15 @@ const currentUser = useCurrentUser();
 const notificationState = useNotificationState();
 const { t, locale } = useI18n();
 const route = useRoute();
+const dashboardFilter = computed(() => readDashboardWorkFilter(route.query));
+const dashboardFiltered = computed(() => Boolean(dashboardFilter.value.apartmentId || dashboardFilter.value.date || dashboardFilter.value.cleanerId || dashboardFilter.value.filter));
+const dashboardFilterDescription = computed(() => [
+  dashboardFilter.value.apartmentId ? (apartments.value ?? []).find(apartment => apartment.id === dashboardFilter.value.apartmentId)?.name : null,
+  dashboardFilter.value.date ? formatDate(dashboardFilter.value.date) : null,
+  dashboardFilter.value.cleanerId ? (team.value ?? []).find(person => person.id === dashboardFilter.value.cleanerId)?.name : null,
+  dashboardFilter.value.filter ? t(`operations.workFilters.${dashboardFilter.value.filter}`) : null,
+].filter(Boolean).join(" · "));
+watch(() => route.query.tab, value => { tab.value = route.path === "/tasks" || value === "tasks" ? "tasks" : "cleanings"; });
 const tab = ref<"cleanings" | "tasks">(
   route.path === "/tasks" || route.query.tab === "tasks" ? "tasks" : "cleanings",
 );
@@ -271,7 +280,7 @@ watch([stays, staysPending, isAdministrator], () => {
   if (!cleaningOpen.value) void openCleaningFromQuery();
 }, { deep: true });
 
-const today = localDate();
+const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Sofia', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 
 function taskDueState(task: Task) {
   if (!task.dueOn || ["resolved", "completed", "canceled"].includes(task.status))
@@ -280,10 +289,10 @@ function taskDueState(task: Task) {
   if (task.dueOn === today) return "today";
   return "default";
 }
-const displayedCleanings = computed(() => isSpecialist.value && linenQueueOnly.value
-  ? allCleanings.value.filter(canCollectLinen)
-  : allCleanings.value
-);
+const displayedCleanings = computed(() => {
+  const items = isSpecialist.value && linenQueueOnly.value ? allCleanings.value.filter(canCollectLinen) : allCleanings.value;
+  return dashboardFiltered.value ? items.filter(c => matchesDashboardCleaning(c, dashboardFilter.value, today)) : items;
+});
 const cleaningPlan = computed(() =>
   buildCleaningPlan(
     displayedCleanings.value,
@@ -437,15 +446,15 @@ const taskSortMenuItems = computed<DropdownMenuItem[]>(() =>
     },
   })),
 );
-const activeTasks = computed(() => currentTasks(allTasks.value));
+const activeTasks = computed(() => currentTasks(allTasks.value).filter(task => !dashboardFiltered.value || matchesDashboardTask(task, dashboardFilter.value)));
 const filteredTasks = computed(() =>
   filterAndSortCurrentTasks(
     allTasks.value,
     taskStatusFilter.value,
     taskSort.value,
-  ).filter(task => !cashOnly.value || task.category === 'cash'),
+  ).filter(task => (!cashOnly.value || task.category === 'cash') && (!dashboardFiltered.value || matchesDashboardTask(task, dashboardFilter.value))),
 );
-const taskHistory = computed(() => historyTasks(allTasks.value));
+const taskHistory = computed(() => historyTasks(allTasks.value).filter(task => !dashboardFiltered.value || matchesDashboardTask(task, dashboardFilter.value)));
 
 function cleaningAmount(cleaning: Cleaning) {
   return (
@@ -922,6 +931,10 @@ function taskMenuItems(task: Task): DropdownMenuItem[] {
 
 <template>
   <section class="page-wrap space-y-6">
+    <div v-if="dashboardFiltered" class="surface flex flex-wrap items-center justify-between gap-3 p-4">
+      <div><p class="text-sm font-semibold">{{ t('operations.filteredWork') }}</p><p class="mt-1 text-sm text-[var(--color-muted)]">{{ dashboardFilterDescription }}</p></div>
+      <UButton class="min-h-11" color="neutral" variant="soft" :to="{ path: route.path, query: tab === 'tasks' ? { tab: 'tasks' } : {} }">{{ t('operations.clearFilter') }}</UButton>
+    </div>
     <PageHeader :title="tab === 'tasks' ? t('work.tasks') : t('work.cleanings')" />
     <UAlert
       v-if="
@@ -942,7 +955,7 @@ function taskMenuItems(task: Task): DropdownMenuItem[] {
           @click="tab = 'cleanings'"
           >{{ t("work.cleanings") }}
           <UBadge color="neutral" variant="soft">{{
-            cleanings?.length ?? 0
+            dashboardFiltered ? displayedCleanings.length : (cleanings?.length ?? 0)
           }}</UBadge></UButton
         ><UButton
           :variant="tab === 'tasks' ? 'solid' : 'soft'"
@@ -1694,7 +1707,7 @@ function taskMenuItems(task: Task): DropdownMenuItem[] {
           </div>
         </section>
         <EmptyState
-          v-if="!cleanings?.length"
+          v-if="!displayedCleanings.length"
           icon="i-lucide-broom"
           :title="t('workExtra.noCleanings')"
           :description="t('workExtra.noCleaningsDescription')"

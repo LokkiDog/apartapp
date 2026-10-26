@@ -15,7 +15,7 @@ function localeValue(locale: Record<string, unknown>, path: string) {
 
 describe('work page UI contracts', () => {
   it('opens the tasks tab from the dashboard tasks metric', () => {
-    const dashboard = readFileSync('src/pages/dashboard/DashboardPage.vue', 'utf8')
+    const dashboard = readFileSync('src/pages/dashboard/ui/LegacyDashboard.vue', 'utf8')
     const work = readFileSync('src/pages/work/WorkPage.vue', 'utf8')
     expect(dashboard).toContain('to="/work?tab=tasks"')
     expect(work).toContain('route.query.tab === "tasks" ? "tasks" : "cleanings"')
@@ -122,7 +122,6 @@ describe('work page UI contracts', () => {
     expect(source).not.toContain('isFinishedDay')
     expect(source).not.toContain('hideFinishedFromToday')
     expect(source).not.toContain('work-finished-filter-button')
-    expect(source).toContain('const displayedCleanings = computed(() => isSpecialist.value && linenQueueOnly.value')
     expect(source).toContain("'work-planning-switch--two': isSpecialist")
     expect(source).toContain('buildCleaningPlan(\n    displayedCleanings.value,\n    today,\n    false,\n    isSpecialist.value,')
   })

@@ -233,14 +233,65 @@ img {
 }
 
 .app-shell {
+  --app-top-banner-height: 0px;
   min-height: 100dvh;
 }
+.app-shell:has(> .app-top-banner > .dashboard-design-banner) {
+  --app-top-banner-height: 40px;
+}
+.app-top-banner {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+}
+.dashboard-design-banner {
+  position: relative;
+  height: 40px;
+  width: 100%;
+  background: var(--color-primary);
+  color: var(--color-surface);
+}
+.dashboard-design-banner button {
+  display: flex;
+  height: 40px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 150ms;
+}
+.dashboard-design-banner button:hover {
+  background: rgb(255 255 255 / 0.1);
+}
+.dashboard-design-banner button:active {
+  background: var(--color-primary-strong);
+}
+.dashboard-design-banner button:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: -4px;
+}
+.dashboard-design-banner__switch {
+  width: 100%;
+  padding-inline: 44px;
+}
+.dashboard-design-banner__close {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-end: 0;
+  width: 40px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-design-banner button { transition: none; }
+}
 .app-content {
-  min-height: 100dvh;
+  min-height: calc(100dvh - var(--app-top-banner-height));
 }
 .app-topbar {
   position: sticky;
-  top: 0;
+  top: var(--app-top-banner-height);
   z-index: 15;
   display: flex;
   min-height: 64px;
@@ -281,7 +332,7 @@ img {
 }
 .page-loading-overlay {
   position: fixed;
-  inset: 64px 0 calc(5rem + env(safe-area-inset-bottom));
+  inset: calc(64px + var(--app-top-banner-height)) 0 calc(5rem + env(safe-area-inset-bottom));
   z-index: 14;
   display: grid;
   place-items: center;
@@ -347,6 +398,7 @@ img {
 .desktop-sidebar {
   position: fixed;
   inset-block: 0;
+  inset-block-start: var(--app-top-banner-height);
   left: 0;
   z-index: 20;
   display: none;
@@ -434,7 +486,7 @@ img {
 .offline-banner {
   position: fixed;
   inset-inline: 0;
-  top: 0;
+  top: var(--app-top-banner-height);
   z-index: 50;
   background: #fef3c7;
   padding: 0.55rem 1rem;

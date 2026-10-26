@@ -27,7 +27,7 @@ async function save() {
   error.value = ''
   notice.value = ''
   try {
-    data.value = await $fetch('/api/system/settings', { method: 'PATCH', body: { registrationMode: mode.value } })
+    data.value = await $fetch<RegistrationSettings>('/api/system/settings', { method: 'PATCH', body: { registrationMode: mode.value } })
     notice.value = 'Настройки сохранены'
   } catch (cause: any) {
     error.value = cause?.data?.statusMessage ?? 'Не удалось сохранить'

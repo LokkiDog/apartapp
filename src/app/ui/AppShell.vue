@@ -204,6 +204,7 @@ async function logout() {
 
 <template>
   <div class="app-shell">
+    <div id="app-top-banner" class="app-top-banner" />
     <p v-if="!online" class="offline-banner">{{ $t("common.offline") }}</p>
 
     <aside class="desktop-sidebar">

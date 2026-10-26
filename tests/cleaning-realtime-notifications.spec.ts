@@ -110,7 +110,7 @@ describe('cleaning realtime notifications', () => {
     const work = readFileSync('src/pages/work/WorkPage.vue', 'utf8')
     const detail = readFileSync('src/pages/work-detail/ui/WorkDetailPage.vue', 'utf8')
     const calendar = readFileSync('src/pages/calendar/CalendarPage.vue', 'utf8')
-    const dashboard = readFileSync('src/pages/dashboard/DashboardPage.vue', 'utf8')
+    const dashboard = readFileSync('src/pages/dashboard/ui/LegacyDashboard.vue', 'utf8')
 
     expect(state).toContain("message.type === 'cleaning.changed'")
     expect(state).toContain('scheduleCleaningRevision(message)')

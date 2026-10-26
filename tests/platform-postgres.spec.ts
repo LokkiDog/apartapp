@@ -536,6 +536,38 @@ describe.skipIf(!url)('platform PostgreSQL integration', () => {
     const [apartment] = await db.insert(tables.apartments).values({ organizationId, hotelId: hotel!.id, apartmentTypeId: type!.id, name: 'A1', capacity: 2, rooms: 1, checkInTime: '14:00', checkOutTime: '11:00' }).returning()
     return { hotel: hotel!, apartment: apartment! }
   }
+  it('isolates operational dashboard data between organizations', async () => {
+    const { client, other, principal, user } = await fixture()
+    const own = await apartmentFixture(client.id)
+    const foreign = await apartmentFixture(other.id)
+    const { dashboardOperations } = await import('../server/modules/dashboard/operations.service')
+    const now = new Date('2026-10-26T09:00:00Z')
+    const [worker] = await db.insert(tables.users).values({ organizationId: client.id, name: 'Worker', email: 'worker@example.com', passwordHash: 'hash', status: 'active', roles: ['cleaner'] }).returning()
+    for (const [organizationId, apartmentId] of [[client.id, own.apartment.id], [other.id, foreign.apartment.id]]) {
+      const [stay] = await db.insert(tables.stays).values({ organizationId, apartmentId, checkInOn: '2026-10-26', checkOutOn: '2026-10-29', source: 'ical', adultCount: null, childCount: null }).returning()
+      const [cleaning] = await db.insert(tables.cleanings).values({ organizationId, apartmentId, scheduledOn: '2026-10-26', status: 'completed', tariffSnapshot: {}, completedAt: now }).returning()
+      await db.insert(tables.cleaningGuestPreparations).values({ organizationId, cleaningId: cleaning!.id, source: 'booking', stayId: stay!.id, checkInOn: '2026-10-26', guestCount: 2, capturedAt: now })
+      // Prepare the foreign organization first-class data without relying on labels to distinguish it.
+      await db.insert(tables.cleaningProblems).values({ organizationId, apartmentId, cleaningId: cleaning!.id, description: organizationId === client.id ? 'Own problem' : 'Foreign problem' })
+    }
+    const [foreignAdmin] = await db.insert(tables.users).values({ organizationId: other.id, name: 'Foreign Admin', email: 'foreign-dashboard@example.com', passwordHash: 'hash', status: 'active', roles: ['administrator'] }).returning()
+    const [foreignTask] = await db.insert(tables.tasks).values({ organizationId: other.id, apartmentId: foreign.apartment.id, createdById: foreignAdmin!.id, assigneeId: foreignAdmin!.id, title: 'Foreign review', status: 'resolved', dueOn: '2026-10-26' }).returning()
+    const [assigned] = await db.insert(tables.cleanings).values({ organizationId: client.id, apartmentId: own.apartment.id, scheduledOn: '2026-10-26', status: 'assigned', tariffSnapshot: {} }).returning()
+    await db.insert(tables.cleaningAssignments).values({ cleaningId: assigned!.id, cleanerId: worker!.id })
+    await db.insert(tables.tasks).values({ organizationId: client.id, apartmentId: own.apartment.id, createdById: user.id, assigneeId: worker!.id, title: 'Own task', dueOn: '2026-10-26' })
+    const [withoutArrivals] = await db.insert(tables.apartments).values({ organizationId: client.id, hotelId: own.hotel.id, apartmentTypeId: own.apartment.apartmentTypeId, name: 'A2', capacity: 2, rooms: 1, checkInTime: '14:00', checkOutTime: '11:00' }).returning()
+    await db.insert(tables.cleaningProblems).values([
+      { organizationId: client.id, apartmentId: withoutArrivals!.id, description: 'No upcoming arrivals' },
+      { organizationId: client.id, apartmentId: withoutArrivals!.id, description: 'Already resolved', resolvedAt: now }
+    ])
+    const result = await dashboardOperations(principal, now)
+    expect(result.summary).toMatchObject({ total: 2, completed: 1, notStarted: 1, arrivals: 1 })
+    expect(result.problems.openCount).toBe(2)
+    expect(result.attention.some(item => item.id === `task:${foreignTask!.id}`)).toBe(false)
+    expect(result.arrivals).toHaveLength(1)
+    expect(result.arrivals[0]?.problems.map(p => p.description)).toEqual(['Own problem'])
+    expect(result.team).toEqual([{ id: worker!.id, name: 'Worker', completed: 0, remaining: 1, urgent: 0, unaccepted: 1, tasks: 1 }])
+  })
   it('isolates lists, lookup, edits and deletion when two clients have identically named hotels', async () => {
     const { client, other, principal } = await fixture()
     const own = await apartmentFixture(client.id); const foreign = await apartmentFixture(other.id)

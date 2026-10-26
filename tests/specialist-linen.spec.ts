@@ -103,7 +103,7 @@ describe('specialist and linen collection', () => {
 
   it('labels a specialist correctly and excludes bookings from their interface and API', () => {
     const shell = readFileSync('src/app/ui/AppShell.vue', 'utf8')
-    const dashboard = readFileSync('src/pages/dashboard/DashboardPage.vue', 'utf8')
+    const dashboard = readFileSync('src/pages/dashboard/ui/LegacyDashboard.vue', 'utf8')
     const specialistTasksPage = readFileSync('app/pages/tasks/index.vue', 'utf8')
     const specialistHome = readFileSync('app/middleware/manager-home.ts', 'utf8')
     const stays = readFileSync('server/modules/stay/stay.service.ts', 'utf8')

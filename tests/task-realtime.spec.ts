@@ -21,7 +21,7 @@ describe('task realtime updates', () => {
   it('refreshes task lists, dashboards and opened task cards from task events', () => {
     const state = readFileSync('src/features/manage-notifications/model/notifications.ts', 'utf8')
     const work = readFileSync('src/pages/work/WorkPage.vue', 'utf8')
-    const dashboard = readFileSync('src/pages/dashboard/DashboardPage.vue', 'utf8')
+    const dashboard = readFileSync('src/pages/dashboard/ui/LegacyDashboard.vue', 'utf8')
     const detail = readFileSync('src/pages/work-detail/ui/WorkDetailPage.vue', 'utf8')
 
     expect(state).toContain("message.type === 'task.changed'")
