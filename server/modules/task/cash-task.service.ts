@@ -54,7 +54,7 @@ export async function syncCashTaskForCleaning(actor: Actor, cleaningId: string, 
   await db.insert(cashTaskDetails).values({ taskId: task.id, organizationId: actor.organizationId, stayId: cleaning.stayId, cleaningId, expectedAmountEur, reportOccurredOn: cleaning.stay!.checkOutOn, reportIncluded: true })
   await writeAuditLog({ organizationId: actor.organizationId, actorId: actor.id, action: 'cash_task.created', entityType: 'task', entityId: task.id, payload: { cleaningId, stayId: cleaning.stayId } })
   await publishTaskChange({ actor, taskId: task.id, assigneeIds: [effectiveAssigneeId!], reason: 'created' })
-  await notifyUsers({ organizationId: actor.organizationId, userIds: [effectiveAssigneeId!], type: 'work_assigned', title: 'Назначено получение наличных', body: cashTaskTitle, href: `/tasks/${task.id}` })
+  await notifyUsers({ organizationId: actor.organizationId, userIds: [effectiveAssigneeId!], type: 'work_assigned', eventKey: 'task_assigned', title: 'Назначено получение наличных', body: cashTaskTitle, href: `/tasks/${task.id}` })
 }
 
 export async function syncCashTasksForStay(actor: Actor, stayId: string) {
@@ -76,7 +76,7 @@ export async function collectCashTask(actor: Actor, taskId: string, input: unkno
   })
   await writeAuditLog({ organizationId: actor.organizationId, actorId: actor.id, action: 'cash_task.collected', entityType: 'task', entityId: taskId, payload: { amountEur: data.amountEur } })
   await publishTaskChange({ actor, taskId, assigneeIds: [task.assigneeId], reason: 'resolved' })
-  await notifyUsers({ organizationId: actor.organizationId, userIds: (await administratorsForOrganization(actor.organizationId)).filter(id => id !== actor.id), type: 'task_resolved', title: 'Наличные ожидают передачи', body: task.title, href: `/tasks/${taskId}` })
+  await notifyUsers({ organizationId: actor.organizationId, userIds: (await administratorsForOrganization(actor.organizationId)).filter(id => id !== actor.id), type: 'task_resolved', eventKey: 'task_resolved', title: 'Наличные ожидают передачи', body: task.title, href: `/tasks/${taskId}` })
   return cashTaskForActor(actor, taskId)
 }
 

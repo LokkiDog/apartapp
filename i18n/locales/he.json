@@ -356,7 +356,7 @@
     "noRecipients": "יש לבחור נמענים.",
     "confirmTitle": "אישור שליחה",
     "confirmDescription": "נמענים: {count}. לשלוח את ההתראה?",
-    "sent": "ההתראה נשלחה. נמענים: {count}.",
+    "sent": "נמענים: {count}. המשלוח לפי ההעדפות שלהם.",
     "new": "חדש",
     "all": "הכול ({count})",
     "unread": "לא נקראו ({count})",
@@ -1023,5 +1023,91 @@
     "offerDescription": "צרו מפתח גישה כדי להיכנס עם Face ID, Touch ID או קוד המכשיר. אין צורך להזין שוב את הסיסמה.",
     "later": "מאוחר יותר",
     "create": "יצירת מפתח"
+  },
+  "account": {
+    "menu": "תפריט משתמש",
+    "profile": "פרופיל",
+    "whatsNew": "מה חדש",
+    "security": "אבטחה",
+    "inDevelopment": "המדור בפיתוח",
+    "managePasskeys": "ניהול מפתחות גישה",
+    "changePassword": "שינוי סיסמה",
+    "soon": "בקרוב",
+    "currentPassword": "סיסמה נוכחית",
+    "newPassword": "סיסמה חדשה",
+    "confirmPassword": "אימות סיסמה",
+    "passwordRequirements": "8 עד 200 תווים",
+    "passwordMismatch": "הסיסמאות אינן תואמות",
+    "passwordChanged": "הסיסמה שונתה. החיבורים האחרים נותקו",
+    "incorrectPassword": "הסיסמה הנוכחית שגויה",
+    "passwordChangeError": "לא ניתן לשנות את הסיסמה. יש לנסות שוב",
+    "tooManyAttempts": "יותר מדי ניסיונות. יש לנסות שוב מאוחר יותר",
+    "personalDetails": "פרטים אישיים",
+    "name": "שם",
+    "email": "דוא״ל",
+    "role": "תפקיד",
+    "nameSaved": "השם נשמר",
+    "profileSaveError": "לא ניתן לשמור את השם. יש לנסות שוב"
+  },
+  "notificationSettings": {
+    "title": "התראות",
+    "description": "בחרו ערוצי משלוח לכל אירוע. השינויים חלים על התראות חדשות.",
+    "event": "אירוע",
+    "saved": "העדפות ההתראות נשמרו",
+    "saveError": "לא ניתן לשמור את ההעדפות. יש לנסות שוב",
+    "loadError": "לא ניתן לטעון את העדפות ההתראות",
+    "pushUnsupported": "התראות Push אינן נתמכות בדפדפן זה",
+    "categories": {
+      "bookings": "הזמנות",
+      "cleanings": "ניקיונות",
+      "tasks": "משימות",
+      "problems": "בעיות",
+      "reports": "דוחות",
+      "messages": "הודעות"
+    }
+  },
+  "changelog": {
+    "description": "העדכונים ב־Aparts, לפי גרסאות.",
+    "version": "גרסה {version}",
+    "prepared": "הוכן בתאריך",
+    "status": {
+      "upcoming": "בקרוב",
+      "released": "פורסם"
+    },
+    "titles": {
+      "accountAndWork": "פרופיל, אבטחה וכלי עבודה",
+      "unifiedInterface": "ממשק אחיד ב־Aparts"
+    },
+    "groups": {
+      "added": "נוסף",
+      "improved": "שופר",
+      "fixed": "תוקן"
+    },
+    "items": {
+      "profile": "{highlight}: שינוי השם ושפת הממשק, וצפייה בכתובת הדוא״ל ובתפקיד.",
+      "security": "{highlight}: שינוי סיסמה והוספה או הסרה של מפתחות גישה לכניסה עם Face ID,‏ Touch ID או קוד המכשיר.",
+      "notifications": "העדפות התראות לפי אירוע: בחירה נפרדת של {highlight}. CRM ו־Push פעילים כברירת מחדל; אפשר להפעיל דוא״ל בנפרד.",
+      "calendar": "עודכן {highlight}: רשימות ויומן, רשת וציר זמן, ותצוגות יום, שבוע וחודש. התצוגה שנבחרה נשמרת.",
+      "expenseReports": "שופרו בחירת הדירה והתצוגה המקדימה של {highlight}. נוספה אפשרות מיון לפי שם, סכום, בעלים ומלון.",
+      "serviceTranslations": "אפשר לתרגם אוטומטית או לערוך ידנית {highlight} ברוסית, באנגלית ובעברית. התרגומים מוצגים בהזמנות וביומן.",
+      "navigation": "{highlight} נפתח בלחיצה על השם, או על סמל המשתמש בנייד. התפריט כולל פרופיל, אבטחה, עדכונים ויציאה.",
+      "reload": "תוקנו שגיאות תצוגה בפרופיל, במפתחות הגישה ובהתראות לאחר {highlight}.",
+      "consistentDesign": "{highlight} עוצבו באופן אחיד, גם במכשירים ניידים.",
+      "languages": "הורחבה התמיכה {highlight}, כולל תצוגה מימין לשמאל.",
+      "liveUpdates": "שופר {highlight} ללא טעינה מחדש של העמוד."
+    },
+    "highlights": {
+      "profile": "פרופיל אישי",
+      "security": "עמוד אבטחה",
+      "notifications": "CRM,‏ Push ודוא״ל",
+      "calendar": "אזור ההזמנות",
+      "expenseReports": "דוחות ההוצאות",
+      "serviceTranslations": "שמות של שירותים נוספים",
+      "navigation": "תפריט המשתמש",
+      "reload": "טעינה מחדש של העמוד",
+      "consistentDesign": "הכרטיסים, הטפסים, הסטטוסים והפעולות",
+      "languages": "ברוסית, באנגלית ובעברית",
+      "liveUpdates": "עדכון ההתראות"
+    }
   }
 }

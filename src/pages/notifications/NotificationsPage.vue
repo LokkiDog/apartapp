@@ -235,7 +235,7 @@ watch(notificationState.revision, () => {
 
     <div class="mx-auto max-w-4xl space-y-4">
       <UAlert v-if="sendNotice" color="success" variant="soft" :description="sendNotice" />
-      <div v-if="status === 'pending'" class="space-y-5" aria-busy="true">
+      <div v-if="status === 'idle' || status === 'pending'" class="space-y-5" aria-busy="true">
         <div class="flex items-center justify-between gap-3"><USkeleton class="h-11 w-44 rounded-xl" /><USkeleton class="h-11 w-36 rounded-xl" /></div>
         <section v-for="group in 2" :key="group" class="space-y-2">
           <USkeleton class="h-5 w-24 rounded" />

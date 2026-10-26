@@ -476,6 +476,8 @@ export const notifications = pgTable('notifications', {
   organizationId: uuid('organization_id').notNull().references(() => organizations.id),
   userId: uuid('user_id').notNull().references(() => users.id),
   type: notificationTypeEnum('type').notNull(),
+  eventKey: text('event_key'),
+  crmVisible: boolean('crm_visible').notNull().default(true),
   title: text('title').notNull(),
   body: text('body').notNull(),
   href: text('href'),
@@ -727,3 +729,23 @@ export const registrationAttempts = pgTable('registration_attempts', {
   count: integer('count').notNull(),
   resetsAt: timestamp('resets_at', { withTimezone: true }).notNull()
 })
+
+export const notificationPreferences = pgTable('notification_preferences', {
+  organizationId: uuid('organization_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  eventKey: text('event_key').notNull(),
+  crm: boolean('crm').notNull().default(true),
+  push: boolean('push').notNull().default(true),
+  email: boolean('email').notNull().default(false)
+}, table => [primaryKey({ columns: [table.organizationId, table.userId, table.eventKey] })])
+
+export const notificationEmailQueue = pgTable('notification_email_queue', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  notificationId: uuid('notification_id').notNull().references(() => notifications.id, { onDelete: 'cascade' }),
+  status: text('status').notNull().default('pending'),
+  attempts: integer('attempts').notNull().default(0),
+  availableAt: timestamp('available_at', { withTimezone: true }).notNull().defaultNow(),
+  leaseUntil: timestamp('lease_until', { withTimezone: true }),
+  leaseToken: uuid('lease_token'),
+  lastError: text('last_error')
+}, table => [uniqueIndex('notification_email_unique_idx').on(table.notificationId), index('notification_email_pending_idx').on(table.status, table.availableAt)])

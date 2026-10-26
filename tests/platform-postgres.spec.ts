@@ -1,6 +1,8 @@
 import { beforeAll, afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { readFileSync } from 'node:fs'
-import { createError, createEvent, getResponseHeader } from 'h3'
+import { createError, createEvent, getResponseHeader, defineEventHandler, getQuery, getRouterParam } from 'h3'
+import webpush from 'web-push'
+
 import { authenticator } from './helpers/passkey'
 import { IncomingMessage, ServerResponse } from 'node:http'
 import { Socket } from 'node:net'
@@ -8,10 +10,11 @@ import { eq, sql as querySql } from 'drizzle-orm'
 import { fetchIcal } from '../server/modules/calendar-import/ical'
 import { migrate } from 'drizzle-orm/postgres-js/migrator'
 import * as tables from '../server/infrastructure/database/schema'
-import { sendAccountLink, sendRegistrationLink } from '../server/infrastructure/mail/send'
+import { sendAccountLink, sendRegistrationLink, sendNotificationEmail } from '../server/infrastructure/mail/send'
 
 vi.mock('../server/modules/calendar-import/ical', () => ({ fetchIcal: vi.fn() }))
-vi.mock('../server/infrastructure/mail/send', () => ({ sendAccountLink: vi.fn(), sendRegistrationLink: vi.fn() }))
+vi.mock('../server/infrastructure/mail/send', () => ({ sendAccountLink: vi.fn(), sendRegistrationLink: vi.fn(), sendNotificationEmail: vi.fn() }))
+vi.mock('web-push', () => ({ default: { setVapidDetails: vi.fn(), sendNotification: vi.fn() } }))
 const url = process.env.PLATFORM_TEST_DATABASE_URL
 let db: typeof import('../server/infrastructure/database/client').db
 let connection: typeof import('../server/infrastructure/database/client').sql
@@ -21,6 +24,8 @@ let auth: typeof import('../server/infrastructure/auth/platform')
 let actors: typeof import('../server/infrastructure/auth/actor')
 let accounts: typeof import('../server/modules/auth/account.service')
 let passkeyService: typeof import('../server/modules/auth/passkey.service')
+let passwords: typeof import('../server/modules/auth/password.service')
+let profiles: typeof import('../server/modules/auth/profile.service')
 let sessionUser: Record<string, unknown> | undefined
 
 // This suite intentionally refuses every DB name except the disposable test DB.
@@ -41,6 +46,8 @@ describe.skipIf(!url)('platform PostgreSQL integration', () => {
     actors = await import('../server/infrastructure/auth/actor')
     accounts = await import('../server/modules/auth/account.service')
     passkeyService = await import('../server/modules/auth/passkey.service')
+    passwords = await import('../server/modules/auth/password.service')
+    profiles = await import('../server/modules/auth/profile.service')
   }, 30000)
   afterAll(async () => { vi.unstubAllGlobals(); await connection?.end() })
   beforeEach(async () => {
@@ -48,6 +55,11 @@ describe.skipIf(!url)('platform PostgreSQL integration', () => {
     vi.mocked(fetchIcal).mockResolvedValue([])
     vi.mocked(sendAccountLink).mockResolvedValue(undefined)
     vi.mocked(sendRegistrationLink).mockResolvedValue(undefined)
+    vi.mocked(sendNotificationEmail).mockReset().mockResolvedValue(undefined)
+    vi.mocked(webpush.sendNotification).mockReset().mockResolvedValue({} as any)
+    vi.stubGlobal('defineEventHandler', defineEventHandler)
+    vi.stubGlobal('getQuery', getQuery)
+    vi.stubGlobal('getRouterParam', getRouterParam)
     vi.stubGlobal('createError', createError)
     vi.stubGlobal('hashPassword', async (password: string) => `hashed:${password}`)
     vi.stubGlobal('verifyPassword', async (hash: string, password: string) => hash === `hashed:${password}`)
@@ -94,6 +106,62 @@ describe.skipIf(!url)('platform PostgreSQL integration', () => {
     await passkeyService.registerPasskey(passkeyEvent(challengeCookie(request)), registration.attemptId, device.registration(registration.options.challenge), 'Phone')
     return { ...account, device }
   }
+
+  it.each(['administrator', 'manager', 'cleaner', 'specialist'] as const)('updates only the %s own name and refreshes the session principal', async role => {
+    const { user, principal, other } = await fixture()
+    await db.update(tables.users).set({ roles: [role] }).where(eq(tables.users.id, user.id))
+    const [foreign] = await db.insert(tables.users).values({ organizationId: other.id, name: 'Foreign', email: 'foreign@example.com', passwordHash: 'foreign-hash', status: 'active' }).returning()
+    await expect(profiles.updateOwnProfile({ ...principal, organizationId: other.id }, { name: 'Changed' })).rejects.toMatchObject({ statusCode: 404 })
+    await expect(profiles.updateOwnProfile(principal, { name: 'Changed', userId: foreign!.id })).rejects.toThrow()
+    expect(await profiles.updateOwnProfile(principal, { name: '  New Name  ' })).toEqual({ name: 'New Name' })
+    expect(await db.query.users.findFirst({ where: eq(tables.users.id, user.id) })).toMatchObject({ name: 'New Name', email: user.email, roles: [role], passwordHash: user.passwordHash, organizationId: user.organizationId })
+    expect((await db.query.users.findFirst({ where: eq(tables.users.id, foreign!.id) }))!.name).toBe('Foreign')
+    expect(await auth.requirePrincipal(event(), false)).toMatchObject({ name: 'New Name', roles: [role], platformSessionId: principal.platformSessionId })
+  })
+  it('edits the superuser profile independently of client context', async () => {
+    const { user, principal, other } = await fixture(true)
+    await profiles.updateOwnProfile({ ...principal, organizationId: other.id }, { name: 'Support Admin' })
+    expect((await db.query.users.findFirst({ where: eq(tables.users.id, user.id) }))!.name).toBe('Support Admin')
+  })
+
+  it('changes only the account password, preserves its current session and keys, and revokes other sessions and old reset/enrollment attempts', async () => {
+    const { user, other, session, principal } = await enrolledPasskey()
+    const [otherSession] = await db.insert(tables.platformSessions).values({ userId: user.id, organizationId: user.organizationId, expiresAt: auth.sessionExpiry() }).returning()
+    const [foreign] = await db.insert(tables.users).values({ organizationId: other.id, name: 'Other', email: 'other@example.com', passwordHash: 'hashed:foreign-password', status: 'active' }).returning()
+    const [foreignSession] = await db.insert(tables.platformSessions).values({ userId: foreign!.id, organizationId: other.id, expiresAt: auth.sessionExpiry() }).returning()
+    await db.insert(tables.authTokens).values({ userId: user.id, type: 'password_reset', tokenHash: 'old-reset', expiresAt: auth.sessionExpiry() })
+    const enrollment = await passkeyService.passkeyRegistrationOptions(passkeyEvent(), 'password123')
+
+    await expect(passwords.changeOwnPassword(principal, 'wrong-password', 'new-password')).rejects.toMatchObject({ statusCode: 400, data: { code: 'INCORRECT_PASSWORD' } })
+    expect((await db.query.users.findFirst({ where: eq(tables.users.id, user.id) }))!.passwordHash).toBe('hashed:password123')
+    expect(await db.query.platformSessions.findFirst({ where: eq(tables.platformSessions.id, otherSession!.id) })).toBeDefined()
+    expect(await db.query.authTokens.findFirst({ where: eq(tables.authTokens.userId, user.id) })).toBeDefined()
+
+    await passwords.changeOwnPassword(principal, 'password123', 'new-password')
+    expect((await db.query.users.findFirst({ where: eq(tables.users.id, user.id) }))!.passwordHash).toBe('hashed:new-password')
+    expect((await db.query.users.findFirst({ where: eq(tables.users.id, foreign!.id) }))!.passwordHash).toBe('hashed:foreign-password')
+    expect(await db.query.platformSessions.findFirst({ where: eq(tables.platformSessions.id, session.id) })).toBeDefined()
+    expect(await db.query.platformSessions.findFirst({ where: eq(tables.platformSessions.id, otherSession!.id) })).toBeUndefined()
+    expect(await db.query.platformSessions.findFirst({ where: eq(tables.platformSessions.id, foreignSession!.id) })).toBeDefined()
+    expect(await db.query.authTokens.findFirst({ where: eq(tables.authTokens.userId, user.id) })).toBeUndefined()
+    expect(await db.query.passkeyChallenges.findFirst({ where: eq(tables.passkeyChallenges.id, enrollment.attemptId) })).toBeUndefined()
+    expect(await passkeyService.listPasskeys(passkeyEvent())).toMatchObject([{ name: 'Phone' }])
+    await expect(passwords.changeOwnPassword(principal, 'password123', 'another-password')).rejects.toMatchObject({ statusCode: 400 })
+  })
+
+  it.each(['administrator', 'manager', 'cleaner', 'specialist'] as const)('allows an active %s to change their own password and rejects a foreign organization', async role => {
+    const { user, principal, other } = await fixture()
+    await db.update(tables.users).set({ roles: [role] }).where(eq(tables.users.id, user.id))
+    await expect(passwords.changeOwnPassword({ ...principal, roles: [role], organizationId: other.id }, 'password123', 'new-password')).rejects.toMatchObject({ statusCode: 400 })
+    await passwords.changeOwnPassword({ ...principal, roles: [role] }, 'password123', 'new-password')
+    expect((await db.query.users.findFirst({ where: eq(tables.users.id, user.id) }))!.passwordHash).toBe('hashed:new-password')
+  })
+
+  it('keeps password ownership with a superuser while supporting a different client', async () => {
+    const { user, principal, other } = await fixture(true)
+    await passwords.changeOwnPassword({ ...principal, organizationId: other.id }, 'password123', 'new-password')
+    expect((await db.query.users.findFirst({ where: eq(tables.users.id, user.id) }))!.passwordHash).toBe('hashed:new-password')
+  })
 
   it('requires an active session and password to enroll a key and scopes key management to its owner', async () => {
     await expect(passkeyService.passkeyRegistrationOptions(passkeyEvent(), 'password123')).rejects.toMatchObject({ statusCode: 401 })
@@ -268,11 +336,130 @@ describe.skipIf(!url)('platform PostgreSQL integration', () => {
     await db.update(tables.organizations).set({ status: 'active' }).where(eq(tables.organizations.id, client.id))
     expect((await auth.requirePrincipal(event(), false)).id).toBe(principal.id)
   })
+  it('defaults preferences, scopes updates and preserves preferences hidden by a role change', async () => {
+    const { principal, other } = await fixture()
+    const preferences = await import('../server/infrastructure/notification/preferences')
+    const initial = await preferences.getNotificationPreferences(principal)
+    expect(initial.find(row => row.event === 'booking_created')).toEqual({ event: 'booking_created', crm: true, push: true, email: false })
+    await preferences.updateNotificationPreferences(principal, { changes: [{ event: 'manual', crm: false, push: false, email: true }] })
+    expect((await preferences.getNotificationPreferences(principal)).find(row => row.event === 'manual')!.email).toBe(true)
+    expect((await preferences.getNotificationPreferences({ ...principal, organizationId: other.id })).find(row => row.event === 'manual')!.email).toBe(false)
+    const cleaner = { ...principal, roles: ['cleaner'] as typeof principal.roles }
+    await expect(preferences.updateNotificationPreferences(cleaner, { changes: [{ event: 'booking_created', crm: false, push: false, email: false }] })).rejects.toMatchObject({ statusCode: 403 })
+    await preferences.updateNotificationPreferences(principal, { changes: [{ event: 'booking_created', crm: false, push: false, email: true }] })
+    await preferences.updateNotificationPreferences(cleaner, { changes: [{ event: 'manual', crm: true, push: false, email: false }] })
+    expect((await preferences.getNotificationPreferences(principal)).find(row => row.event === 'booking_created')!.email).toBe(true)
+  })
+
+  it.each(Array.from({ length: 8 }, (_, mask) => ({ crm: !!(mask & 1), push: !!(mask & 2), email: !!(mask & 4) })))('delivers channels independently: %j', async channels => {
+    const { principal, user, client } = await fixture()
+    const preferences = await import('../server/infrastructure/notification/preferences')
+    const publisher = await import('../server/infrastructure/notification/publish')
+    const realtime = await import('../server/infrastructure/notification/realtime')
+    const queue = await import('../server/infrastructure/notification/email-queue')
+    await preferences.updateNotificationPreferences(principal, { changes: [{ event: 'manual', ...channels }] })
+    await db.update(tables.users).set({ locale: 'en' }).where(eq(tables.users.id, user.id))
+    await db.insert(tables.pushSubscriptions).values({ userId: user.id, endpoint: 'https://push.example/endpoint', p256dh: 'key', auth: 'auth' })
+    vi.stubGlobal('useRuntimeConfig', () => ({ session: { password: 'platform-test-password-more-than-32-chars' }, public: { appUrl: 'https://aparts.example' }, vapidPublicKey: 'public', vapidPrivateKey: 'private', vapidSubject: 'mailto:push@example.com' }))
+    const received = vi.fn()
+    realtime.registerNotificationPeer(user.id, { id: 'channel-test', send: received })
+    try {
+      expect(await publisher.notifyUsers({ organizationId: client.id, userIds: [user.id], type: 'manual', eventKey: 'manual', title: { ru: 'Сообщение', en: 'Message', he: 'הודעה' }, body: { ru: 'Текст', en: 'Body', he: 'תוכן' }, href: null })).toBe(1)
+      expect(received).toHaveBeenCalledTimes(channels.crm ? 1 : 0)
+      expect(webpush.sendNotification).toHaveBeenCalledTimes(channels.push ? 1 : 0)
+      const list = (await import('../server/api/notifications/index.get')).default
+      const count = (await import('../server/api/notifications/unread-count.get')).default
+      const markAll = (await import('../server/api/notifications/read-all.post')).default
+      expect(await list(event())).toHaveLength(channels.crm ? 1 : 0)
+      expect(await count(event())).toEqual({ count: channels.crm ? 1 : 0 })
+      const markOne = (await import('../server/api/notifications/[id]/read.post')).default
+      const one = event(); one.context.params = { id: (await db.query.notifications.findFirst())!.id }
+      await markOne(one)
+      await markAll(event())
+      expect((await db.query.notifications.findFirst())!.readAt !== null).toBe(channels.crm)
+      await queue.processNotificationEmails()
+      expect(sendNotificationEmail).toHaveBeenCalledTimes(channels.email ? 1 : 0)
+      if (channels.email) {
+        expect(sendNotificationEmail).toHaveBeenCalledWith(expect.objectContaining({ to: user.email, subject: 'Message', text: expect.stringContaining('Body') }))
+        const text = vi.mocked(sendNotificationEmail).mock.calls[0]![0].text
+        expect(text.includes('/notifications')).toBe(channels.crm)
+      }
+    } finally { realtime.unregisterNotificationPeer(user.id, { id: 'channel-test', send: received }) }
+  })
+
+  it('retries failed email delivery, limits attempts, prevents parallel sends and rechecks opt-outs', async () => {
+    const { principal, user, client } = await fixture()
+    const preferences = await import('../server/infrastructure/notification/preferences')
+    const publisher = await import('../server/infrastructure/notification/publish')
+    const queue = await import('../server/infrastructure/notification/email-queue')
+    const input = { organizationId: client.id, userIds: [user.id], type: 'manual' as const, eventKey: 'manual' as const, title: 'Title', body: 'Body', href: '/work' }
+    await preferences.updateNotificationPreferences(principal, { changes: [{ event: 'manual', crm: false, push: false, email: true }] })
+    await publisher.notifyUsers(input)
+    vi.mocked(sendNotificationEmail).mockRejectedValueOnce(new Error('transport unavailable'))
+    await queue.processNotificationEmails()
+    let job = (await db.query.notificationEmailQueue.findFirst())!
+    expect(job).toMatchObject({ status: 'pending', attempts: 1, leaseToken: null, lastError: 'delivery_failed' })
+    expect(job.availableAt.getTime()).toBeGreaterThan(Date.now())
+    await queue.processNotificationEmails()
+    expect(sendNotificationEmail).toHaveBeenCalledTimes(1)
+    await db.update(tables.notificationEmailQueue).set({ availableAt: new Date(0) })
+    await Promise.all([queue.processNotificationEmails(), queue.processNotificationEmails()])
+    expect(sendNotificationEmail).toHaveBeenCalledTimes(2)
+    expect((await db.query.notificationEmailQueue.findFirst())!.status).toBe('sent')
+
+    await publisher.notifyUsers(input)
+    await preferences.updateNotificationPreferences(principal, { changes: [{ event: 'manual', crm: false, push: false, email: false }] })
+    await queue.processNotificationEmails()
+    expect(sendNotificationEmail).toHaveBeenCalledTimes(2)
+    expect((await db.query.notificationEmailQueue.findMany()).some(row => row.status === 'skipped')).toBe(true)
+
+    await preferences.updateNotificationPreferences(principal, { changes: [{ event: 'manual', crm: false, push: false, email: true }] })
+    await publisher.notifyUsers(input)
+    await db.update(tables.notificationEmailQueue).set({ attempts: 4 }).where(eq(tables.notificationEmailQueue.status, 'pending'))
+    vi.mocked(sendNotificationEmail).mockRejectedValueOnce(new Error('unavailable'))
+    await queue.processNotificationEmails()
+    expect((await db.query.notificationEmailQueue.findMany()).some(row => row.status === 'failed' && row.attempts === 5)).toBe(true)
+  })
+
+  it('recovers expired email leases and keeps pre-preference notifications in the inbox', async () => {
+    const { principal, user, client } = await fixture()
+    const preferences = await import('../server/infrastructure/notification/preferences')
+    const publisher = await import('../server/infrastructure/notification/publish')
+    const queue = await import('../server/infrastructure/notification/email-queue')
+    await db.insert(tables.notifications).values({ organizationId: client.id, userId: user.id, type: 'manual', title: 'Earlier message', body: 'History' })
+    await preferences.updateNotificationPreferences(principal, { changes: [{ event: 'manual', crm: false, push: false, email: true }] })
+    await publisher.notifyUsers({ organizationId: client.id, userIds: [user.id], type: 'manual', eventKey: 'manual', title: 'New message', body: 'Body', href: null })
+    const list = (await import('../server/api/notifications/index.get')).default
+    expect(await list(event())).toMatchObject([{ title: 'Earlier message' }])
+    const job = (await db.query.notificationEmailQueue.findFirst())!
+    await expect(db.insert(tables.notificationEmailQueue).values({ notificationId: job.notificationId })).rejects.toThrow()
+    await db.update(tables.notificationEmailQueue).set({ leaseUntil: new Date(Date.now() + 60_000), leaseToken: '00000000-0000-4000-8000-000000000001' })
+    expect(await queue.processNotificationEmails()).toBe(0)
+    await db.update(tables.notificationEmailQueue).set({ leaseUntil: new Date(0) })
+    expect(await queue.processNotificationEmails()).toBe(1)
+    expect(sendNotificationEmail).toHaveBeenCalledTimes(1)
+    expect((await db.query.notificationEmailQueue.findFirst())!.status).toBe('sent')
+  })
+
+  it.each(['user', 'organization'] as const)('suppresses queued email after blocking the %s', async target => {
+    const { principal, user, client } = await fixture()
+    const preferences = await import('../server/infrastructure/notification/preferences')
+    const publisher = await import('../server/infrastructure/notification/publish')
+    const queue = await import('../server/infrastructure/notification/email-queue')
+    await preferences.updateNotificationPreferences(principal, { changes: [{ event: 'manual', crm: true, push: true, email: true }] })
+    await publisher.notifyUsers({ organizationId: client.id, userIds: [user.id], type: 'manual', eventKey: 'manual', title: 'Title', body: 'Body', href: null })
+    if (target === 'user') await db.update(tables.users).set({ status: 'archived' }).where(eq(tables.users.id, user.id))
+    else await db.update(tables.organizations).set({ status: 'blocked' }).where(eq(tables.organizations.id, client.id))
+    await queue.processNotificationEmails()
+    expect(sendNotificationEmail).not.toHaveBeenCalled()
+    expect((await db.query.notificationEmailQueue.findFirst())!.status).toBe('skipped')
+  })
+
   it('scopes notification recipients and suppresses delivery for blocked clients', async () => {
     const { client, other, user } = await fixture()
     const [foreign] = await db.insert(tables.users).values({ organizationId: other.id, name: 'Other Admin', email: 'foreign@example.com', passwordHash: 'hash', status: 'active', roles: ['administrator'] }).returning()
     const notifications = await import('../server/infrastructure/notification/publish')
-    const input = { organizationId: client.id, userIds: [user.id, foreign!.id], type: 'manual' as const, title: 'Title', body: 'Body', href: null }
+    const input = { organizationId: client.id, userIds: [user.id, foreign!.id], type: 'manual' as const, eventKey: 'manual' as const, title: 'Title', body: 'Body', href: null }
     expect(await notifications.notifyUsers(input)).toBe(1)
     expect((await db.query.notifications.findMany()).map(row => row.userId)).toEqual([user.id])
     await db.update(tables.organizations).set({ status: 'blocked' }).where(eq(tables.organizations.id, client.id))

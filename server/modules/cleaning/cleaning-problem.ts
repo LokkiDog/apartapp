@@ -47,7 +47,7 @@ export async function syncCleaningProblems(tx: any, actor: Actor, cleaningId: st
     const requested = existing.filter((problem: { id: string, description: string }) => dependentIds.has(problem.id))
     await tx.update(cleaningProblems).set({ deletionRequestedAt: new Date(), deletionRequestedById: actor.id, updatedAt: new Date() }).where(inArray(cleaningProblems.id, [...dependentIds]))
     const administrators = await administratorsForOrganization(actor.organizationId)
-    await Promise.all(requested.map((problem: { id: string, description: string }) => notifyUsers({ organizationId: actor.organizationId, userIds: administrators, type: 'problem', title: 'Запрошено удаление проблемы', body: problem.description, href: `/problems?problemId=${problem.id}` })))
+    await Promise.all(requested.map((problem: { id: string, description: string }) => notifyUsers({ organizationId: actor.organizationId, userIds: administrators, type: 'problem', eventKey: 'problem_deletion_requested', title: 'Запрошено удаление проблемы', body: problem.description, href: `/problems?problemId=${problem.id}` })))
   }
   const removableIds = removedIds.filter((id: string) => !dependentIds.has(id))
   if (!removableIds.length) return [] as string[]

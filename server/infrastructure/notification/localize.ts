@@ -1,3 +1,4 @@
+import { notificationEvents } from '@contracts/notification-preferences'
 type AppLocale = 'ru' | 'en' | 'he'
 type NotificationType = 'stay_changed' | 'stay_conflict' | 'work_assigned' | 'work_rescheduled' | 'work_canceled' | 'problem' | 'manager_expense_report_published' | 'cleaning_changed' | 'task_resolved' | 'task_returned' | 'manual'
 
@@ -13,7 +14,11 @@ const titles: Partial<Record<NotificationType, Record<AppLocale, string>>> = {
   manager_expense_report_published: { ru: 'Доступен отчёт по расходам', en: 'Expense report available', he: 'דוח הוצאות זמין' }
 }
 
-export function localizedNotificationTitle(type: NotificationType, locale: AppLocale, fallback: string) {
+export function localizedNotificationTitle(type: NotificationType, locale: AppLocale, fallback: string, eventKey?: string | null) {
+  if (eventKey && eventKey !== 'manual' && type !== 'cleaning_changed') {
+    const event = notificationEvents.find(event => event.key === eventKey)
+    if (event) return event.label[locale]
+  }
   return titles[type]?.[locale] ?? fallback
 }
 

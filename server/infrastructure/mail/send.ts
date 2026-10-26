@@ -74,3 +74,7 @@ async function sendMail(input: { to: string; name: string; subject: string; text
   })
   await transport.sendMail({ from, to: input.to, subject: input.subject, text: input.text })
 }
+
+export async function sendNotificationEmail(input: { to: string; name: string; subject: string; text: string }) {
+  await sendMail(input)
+}

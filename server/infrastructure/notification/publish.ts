@@ -1,7 +1,8 @@
+import { effectiveNotificationChannels, type NotificationEventKey } from '@contracts/notification-preferences'
 import { and, eq, inArray } from 'drizzle-orm'
 import webpush from 'web-push'
 import { db } from '../database/client'
-import { notifications, pushSubscriptions, users, organizations } from '../database/schema'
+import { notifications, pushSubscriptions, users, organizations, notificationPreferences, notificationEmailQueue } from '../database/schema'
 import { localizedNotificationBody, localizedNotificationTitle } from './localize'
 import { isClientActive } from '../auth/platform'
 import { publishNotification } from './realtime'
@@ -17,6 +18,7 @@ export async function notifyUsers(input: {
   organizationId: string
   userIds: string[]
   type: 'stay_changed' | 'stay_conflict' | 'work_assigned' | 'work_rescheduled' | 'work_canceled' | 'problem' | 'manager_expense_report_published' | 'cleaning_changed' | 'task_resolved' | 'task_returned' | 'manual'
+  eventKey: NotificationEventKey
   title: LocalizedCopy
   body: LocalizedCopy
   href: string | null
@@ -29,28 +31,36 @@ export async function notifyUsers(input: {
   ))
   if (!recipients.length) return 0
 
+  const preferences = await db.select().from(notificationPreferences).where(and(eq(notificationPreferences.organizationId, input.organizationId), eq(notificationPreferences.eventKey, input.eventKey), inArray(notificationPreferences.userId, recipients.map(recipient => recipient.id))))
+  const channels = new Map(recipients.map(recipient => [recipient.id, effectiveNotificationChannels(preferences.find(row => row.userId === recipient.id))]))
   const recipientLocales = new Map(recipients.map(recipient => [recipient.id, recipient.locale]))
   if (!(await isClientActive(input.organizationId))) return 0
   const created = await db.transaction(async tx => {
     const [client] = await tx.select().from(organizations).where(eq(organizations.id, input.organizationId)).for('share')
     if (client?.status !== 'active') return []
-    return tx.insert(notifications).values(recipients.map(recipient => ({
+    const rows = await tx.insert(notifications).values(recipients.map(recipient => ({
       organizationId: input.organizationId,
       userId: recipient.id,
       type: input.type,
+      eventKey: input.eventKey,
+      crmVisible: channels.get(recipient.id)!.crm,
       title: copyForLocale(input.title, recipient.locale),
       body: copyForLocale(input.body, recipient.locale),
       href: input.href
     }))).returning()
+    const emails = rows.filter(row => channels.get(row.userId)!.email)
+    if (emails.length) await tx.insert(notificationEmailQueue).values(emails.map(row => ({ notificationId: row.id }))).onConflictDoNothing()
+    return rows
   })
   if (!(await isClientActive(input.organizationId))) return created.length
   for (const notification of created) {
+    if (!notification.crmVisible) continue
     const locale = recipientLocales.get(notification.userId) ?? 'ru'
     publishNotification(notification.userId, {
       type: 'notification.created',
       notification: {
         ...notification,
-        title: localizedNotificationTitle(notification.type, locale, notification.title),
+        title: localizedNotificationTitle(notification.type, locale, notification.title, notification.eventKey),
         body: localizedNotificationBody(notification.type, locale, notification.body),
         readAt: notification.readAt?.toISOString() ?? null,
         createdAt: notification.createdAt.toISOString()
@@ -67,13 +77,13 @@ export async function notifyUsers(input: {
   const results = await Promise.allSettled(subscriptions.map(async ({ subscription, locale }) => {
     if (!(await isClientActive(input.organizationId))) return
     const notification = notificationByUser.get(subscription.userId)
-    if (!notification) return Promise.resolve()
+    if (!notification || !channels.get(subscription.userId)?.push) return
     return webpush.sendNotification({
     endpoint: subscription.endpoint,
     keys: { p256dh: subscription.p256dh, auth: subscription.auth }
     }, JSON.stringify({
       id: notification.id,
-      title: localizedNotificationTitle(notification.type, locale, notification.title),
+      title: localizedNotificationTitle(notification.type, locale, notification.title, notification.eventKey),
       body: localizedNotificationBody(notification.type, locale, notification.body),
       href: notification.href ?? '/notifications',
       timestamp: notification.createdAt.toISOString()

@@ -84,7 +84,7 @@ export async function createProblemTask(actor: Actor, problemId: string, input: 
   const [task] = await db.insert(tasks).values({ ...data, organizationId: actor.organizationId, apartmentId: problem.apartmentId, problemId, createdById: actor.id }).returning()
   if (!task) throw createError({ statusCode: 500, statusMessage: 'Не удалось создать задачу' })
   await publishTaskChange({ actor, taskId: task.id, assigneeIds: [task.assigneeId], reason: 'created' })
-  await notifyUsers({ organizationId: actor.organizationId, userIds: [data.assigneeId], type: 'work_assigned', title: 'Назначена задача', body: task.title, href: `/tasks/${task.id}` })
+  await notifyUsers({ organizationId: actor.organizationId, userIds: [data.assigneeId], type: 'work_assigned', eventKey: 'task_assigned', title: 'Назначена задача', body: task.title, href: `/tasks/${task.id}` })
   return getProblem(actor, problemId)
 }
 
@@ -132,7 +132,7 @@ export async function resolveProblem(actor: Actor, problemId: string, input: unk
 export async function requestProblemDeletion(actor: Actor, problemId: string) {
   const problem = await requireProblem(actor, problemId)
   await db.update(cleaningProblems).set({ deletionRequestedAt: new Date(), deletionRequestedById: actor.id, updatedAt: new Date() }).where(eq(cleaningProblems.id, problem.id))
-  await notifyUsers({ organizationId: actor.organizationId, userIds: await administratorsForOrganization(actor.organizationId), type: 'problem', title: 'Запрошено удаление проблемы', body: problem.description, href: `/problems?problemId=${problem.id}` })
+  await notifyUsers({ organizationId: actor.organizationId, userIds: await administratorsForOrganization(actor.organizationId), type: 'problem', eventKey: 'problem_deletion_requested', title: 'Запрошено удаление проблемы', body: problem.description, href: `/problems?problemId=${problem.id}` })
 }
 
 export async function decideProblemDeletion(actor: Actor, problemId: string, approved: boolean) {
@@ -142,10 +142,10 @@ export async function decideProblemDeletion(actor: Actor, problemId: string, app
   const requesterId = problem.deletionRequestedById
   if (!approved) {
     await db.update(cleaningProblems).set({ deletionRequestedAt: null, deletionRequestedById: null, updatedAt: new Date() }).where(eq(cleaningProblems.id, problemId))
-    if (requesterId) await notifyUsers({ organizationId: actor.organizationId, userIds: [requesterId], type: 'problem', title: 'Удаление проблемы отклонено', body: problem.description, href: problem.cleaningId ? `/cleanings/${problem.cleaningId}` : problem.sourceTaskId ? `/tasks/${problem.sourceTaskId}` : `/problems?problemId=${problemId}` })
+    if (requesterId) await notifyUsers({ organizationId: actor.organizationId, userIds: [requesterId], type: 'problem', eventKey: 'problem_deletion_rejected', title: 'Удаление проблемы отклонено', body: problem.description, href: problem.cleaningId ? `/cleanings/${problem.cleaningId}` : problem.sourceTaskId ? `/tasks/${problem.sourceTaskId}` : `/problems?problemId=${problemId}` })
     return getProblem(actor, problemId)
   }
-  if (requesterId) await notifyUsers({ organizationId: actor.organizationId, userIds: [requesterId], type: 'problem', title: 'Проблема удалена', body: problem.description, href: null })
+  if (requesterId) await notifyUsers({ organizationId: actor.organizationId, userIds: [requesterId], type: 'problem', eventKey: 'problem_deleted', title: 'Проблема удалена', body: problem.description, href: null })
   await deleteProblem(actor, problemId)
   return { ok: true }
 }

@@ -1,8 +1,9 @@
 <script setup lang="ts">
+import type { RegistrationSettings } from '@contracts/platform'
 import { usePasskeys } from '#fsd/shared/lib'
 const passkeys = usePasskeys()
 const passkeyPending = ref(false)
-const { data: registration } = await useAsyncData('registration-mode', () => $fetch('/api/auth/registration-mode'), { server: false })
+const { data: registration } = await useAsyncData<RegistrationSettings>('registration-mode', (): Promise<RegistrationSettings> => $fetch<RegistrationSettings>('/api/auth/registration-mode'), { server: false })
 const email = ref(''); const password = ref(''); const error = ref(''); const pending = ref(false)
 const { t, setLocale } = useI18n()
 const route = useRoute()

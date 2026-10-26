@@ -344,6 +344,13 @@
       "when": 1792960000001,
       "tag": "0048_passkeys",
       "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1792960000002,
+      "tag": "0049_notification_preferences",
+      "breakpoints": true
     }
   ]
 }

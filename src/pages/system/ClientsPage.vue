@@ -3,7 +3,7 @@ import { switchClientContext, useCurrentUser } from '#fsd/shared/auth'
 import { ConfirmActionModal, PageHeader, EmptyState, StatusBadge } from '#fsd/shared/ui'
 import type { PlatformClient } from '@contracts/platform'
 const user = useCurrentUser()
-const { data: clients, refresh, status, error: loadError } = await useAsyncData<PlatformClient[]>('system-clients', () => $fetch('/api/system/clients'), { server: false, default: () => [], watch: [user] })
+const { data: clients, refresh, status, error: loadError } = await useAsyncData<PlatformClient[]>('system-clients', (): Promise<PlatformClient[]> => $fetch<PlatformClient[]>('/api/system/clients'), { server: false, default: () => [], watch: [user] })
 const search = ref('')
 const filtered = computed(() => clients.value.filter(client => `${client.name} ${client.administrators.map(admin => admin.email).join(' ')}`.toLowerCase().includes(search.value.toLowerCase())))
 const open = ref(false); const pending = ref(false); const error = ref(''); const notice = ref('')
@@ -20,9 +20,9 @@ async function save() {
   pending.value = true; error.value = ''; notice.value = ''
   try {
     let result: { invitationSent?: boolean }
-    if (kind.value === 'create') result = await $fetch('/api/system/clients', { method: 'POST', body: form })
-    else if (kind.value === 'edit') result = await $fetch(`/api/system/clients/${selected.value!.id}`, { method: 'PATCH', body: { name: form.name, timezone: form.timezone } })
-    else result = await $fetch(`/api/system/clients/${selected.value!.id}/administrators`, { method: 'POST', body: { name: form.administratorName, email: form.email } })
+    if (kind.value === 'create') result = await $fetch<{ invitationSent?: boolean }>('/api/system/clients', { method: 'POST', body: form })
+    else if (kind.value === 'edit') result = await $fetch<{ invitationSent?: boolean }>(`/api/system/clients/${selected.value!.id}`, { method: 'PATCH', body: { name: form.name, timezone: form.timezone } })
+    else result = await $fetch<{ invitationSent?: boolean }>(`/api/system/clients/${selected.value!.id}/administrators`, { method: 'POST', body: { name: form.administratorName, email: form.email } })
     notice.value = result.invitationSent === false ? 'Клиент и администратор сохранены. Письмо не отправлено — повторите приглашение через меню клиента.' : 'Сохранено'
     open.value = false; await refresh()
   } catch (cause: any) { error.value = cause?.data?.statusMessage ?? 'Не удалось сохранить' }

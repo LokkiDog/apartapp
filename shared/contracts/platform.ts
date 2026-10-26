@@ -23,3 +23,19 @@ export interface PlatformClient {
   administrators: Array<{ id: string; name: string; email: string; status: string; isSuperuser: boolean }>;
   invitationSent?: boolean
 }
+
+export const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1).max(200),
+  newPassword: z.string().min(8).max(200)
+}).strict()
+
+export const profileUpdateSchema = z.object({ name: administratorInputSchema.shape.name }).strict()
+
+export interface AccountPasskey {
+  id: string
+  name: string
+  createdAt: string
+  lastUsedAt: string | null
+}
+
+export interface RegistrationSettings { registrationMode: RegistrationMode }

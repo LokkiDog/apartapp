@@ -138,6 +138,7 @@ export async function publishCleaningChange(input: {
       organizationId: input.actor.organizationId,
       userIds,
       type: 'cleaning_changed',
+      eventKey: `cleaning_${action}`,
       title: copy.title,
       body: copy.body,
       href: cleaningNotificationHref(context.id, action)

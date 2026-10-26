@@ -17,7 +17,7 @@ export default defineEventHandler(async event => {
   }
   const rows = await db.query.notifications.findMany({
     where: and(
-      eq(notifications.organizationId, actor.organizationId),
+      eq(notifications.organizationId, actor.organizationId), eq(notifications.crmVisible, true),
       eq(notifications.userId, actor.id),
       cursor ? or(lt(notifications.createdAt, cursor.createdAt), and(eq(notifications.createdAt, cursor.createdAt), lt(notifications.id, cursor.id))) : undefined
     ),
@@ -26,7 +26,7 @@ export default defineEventHandler(async event => {
   })
   const hasNextPage = query.paginated && rows.length > query.limit
   const page = hasNextPage ? rows.slice(0, query.limit) : rows
-  const items = page.map(item => ({ ...item, title: localizedNotificationTitle(item.type, actor.locale, item.title), body: localizedNotificationBody(item.type, actor.locale, item.body) }))
+  const items = page.map(item => ({ ...item, title: localizedNotificationTitle(item.type, actor.locale, item.title, item.eventKey), body: localizedNotificationBody(item.type, actor.locale, item.body) }))
   if (!query.paginated) return items
   const last = page.at(-1)
   return { items, nextCursor: hasNextPage && last ? `${last.createdAt.toISOString()}|${last.id}` : null }

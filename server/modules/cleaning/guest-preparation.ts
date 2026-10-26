@@ -104,7 +104,7 @@ async function cancelActiveProblemTasks(actor: Actor, problemId: string) {
   await Promise.all(active.filter(task => task.assigneeId).map(task => notifyUsers({
     organizationId: actor.organizationId,
     userIds: [task.assigneeId!],
-    type: 'work_canceled',
+    type: 'work_canceled', eventKey: 'task_canceled',
     title: 'Задача отменена',
     body: task.title,
     href: `/tasks/${task.id}`
@@ -187,7 +187,7 @@ export async function reconcileCleaningGuestPreparation(actor: Actor, apartmentI
   if (notify) await notifyUsers({
     organizationId: actor.organizationId,
     userIds: await administratorsForOrganization(actor.organizationId),
-    type: 'problem',
+    type: 'problem', eventKey: 'problem_created',
     title: 'Изменилось количество гостей после уборки',
     body: copy.description,
     href: `/problems?problemId=${problemId}`

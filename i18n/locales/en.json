@@ -356,7 +356,7 @@
     "noRecipients": "Select recipients.",
     "confirmTitle": "Confirm sending",
     "confirmDescription": "Recipients: {count}. Send notification?",
-    "sent": "Notification sent. Recipients: {count}.",
+    "sent": "Recipients: {count}. Delivery follows their preferences.",
     "new": "New",
     "all": "All ({count})",
     "unread": "Unread ({count})",
@@ -1023,5 +1023,91 @@
     "offerDescription": "Create a passkey to sign in with Face ID, Touch ID or your device PIN. You do not need to enter your password again.",
     "later": "Later",
     "create": "Create passkey"
+  },
+  "account": {
+    "menu": "User menu",
+    "profile": "Profile",
+    "whatsNew": "What’s new",
+    "security": "Security",
+    "inDevelopment": "Section in development",
+    "managePasskeys": "Manage passkeys",
+    "changePassword": "Change password",
+    "soon": "Coming soon",
+    "currentPassword": "Current password",
+    "newPassword": "New password",
+    "confirmPassword": "Confirm password",
+    "passwordRequirements": "8 to 200 characters",
+    "passwordMismatch": "Passwords do not match",
+    "passwordChanged": "Password changed. Other sessions have been signed out",
+    "incorrectPassword": "Incorrect current password",
+    "passwordChangeError": "Could not change password. Try again",
+    "tooManyAttempts": "Too many attempts. Try again later",
+    "personalDetails": "Personal details",
+    "name": "Name",
+    "email": "Email",
+    "role": "Role",
+    "nameSaved": "Name saved",
+    "profileSaveError": "Could not save name. Try again"
+  },
+  "notificationSettings": {
+    "title": "Notifications",
+    "description": "Choose delivery channels for each event. Changes apply to new notifications.",
+    "event": "Event",
+    "saved": "Notification preferences saved",
+    "saveError": "Could not save preferences. Try again",
+    "loadError": "Could not load notification preferences",
+    "pushUnsupported": "Push is not supported in this browser",
+    "categories": {
+      "bookings": "Bookings",
+      "cleanings": "Cleanings",
+      "tasks": "Tasks",
+      "problems": "Problems",
+      "reports": "Reports",
+      "messages": "Messages"
+    }
+  },
+  "changelog": {
+    "description": "Aparts updates, organized by version.",
+    "version": "Version {version}",
+    "prepared": "Prepared",
+    "status": {
+      "upcoming": "Upcoming release",
+      "released": "Released"
+    },
+    "titles": {
+      "accountAndWork": "Profile, security and work tools",
+      "unifiedInterface": "A consistent Aparts interface"
+    },
+    "groups": {
+      "added": "Added",
+      "improved": "Improved",
+      "fixed": "Fixed"
+    },
+    "items": {
+      "profile": "{highlight}: edit your name and interface language, and view your email and role.",
+      "security": "{highlight}: change your password and add or remove passkeys to sign in with Face ID, Touch ID or your device PIN.",
+      "notifications": "Notification preferences by event: choose {highlight} independently. CRM and Push are enabled by default; Email is optional.",
+      "calendar": "Updated {highlight}: lists and calendar, grid and timeline, with day, week and month views. Your selected view is remembered.",
+      "expenseReports": "Improved apartment selection and {highlight}. Sort by name, amount, owner or property.",
+      "serviceTranslations": "Automatically translate or manually edit {highlight} in Russian, English and Hebrew. Translations appear in bookings and the calendar.",
+      "navigation": "Open the {highlight} by clicking your name, or the profile icon on mobile. Find profile, security, release notes and sign out in one place.",
+      "reload": "Fixed rendering errors in profile, passkeys and notifications after a {highlight}.",
+      "consistentDesign": "{highlight} now follow a consistent design, including on mobile.",
+      "languages": "Expanded {highlight} support, including right-to-left layouts.",
+      "liveUpdates": "Improved {highlight} without reloading the page."
+    },
+    "highlights": {
+      "profile": "Personal profile",
+      "security": "Security page",
+      "notifications": "CRM, Push and Email",
+      "calendar": "booking workspace",
+      "expenseReports": "expense report previews",
+      "serviceTranslations": "additional service names",
+      "navigation": "user menu",
+      "reload": "full page reload",
+      "consistentDesign": "Cards, forms, statuses and actions",
+      "languages": "Russian, English and Hebrew",
+      "liveUpdates": "notification updates"
+    }
   }
 }

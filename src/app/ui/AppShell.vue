@@ -9,7 +9,8 @@ import { useNetworkStatus } from "#fsd/shared/lib";
 import { useNotificationState } from "#fsd/features/manage-notifications";
 import { unregisterPushSubscription } from "#fsd/features/manage-push-subscription";
 import LanguageSwitcher from "./LanguageSwitcher.vue";
-import PasskeySettings from "./PasskeySettings.vue";
+import { PasskeySettings } from "#fsd/features/manage-passkeys";
+import UserMenu from "./UserMenu.vue";
 const { t } = useI18n();
 
 type NavItem = { to: string; label: string; icon: string };
@@ -225,21 +226,7 @@ async function logout() {
           </div>
         </section>
       </nav>
-      <div class="sidebar-profile">
-        <div class="min-w-0 flex-1">
-          <p class="truncate text-sm font-semibold">{{ user?.name }}</p>
-          <p class="text-xs text-[var(--color-muted)]">{{ roleLabel }}</p>
-        </div>
-        <UButton
-          color="neutral"
-          variant="ghost"
-          icon="i-lucide-log-out"
-          :aria-label="$t('common.logout')"
-          :loading="logoutPending"
-          :disabled="logoutPending"
-          @click="logout"
-        />
-      </div>
+      <UserMenu :name="user?.name" :role-label="roleLabel" :logout-pending="logoutPending" @logout="logout" />
     </aside>
 
     <div class="app-content">
@@ -247,31 +234,8 @@ async function logout() {
         <NuxtLink :to="homeHref" class="brand-mark lg:hidden"
           >aparts<span>.</span></NuxtLink
         >
-        <UButton
-          v-if="usesManagerOnlyNavigation(user)"
-          class="topbar-action lg:hidden"
-          color="neutral"
-          variant="ghost"
-          icon="i-lucide-log-out"
-          :aria-label="$t('common.logout')"
-          :loading="logoutPending"
-          :disabled="logoutPending"
-          @click="logout"
-        />
         <div class="app-topbar__actions">
-          <PasskeySettings />
           <LanguageSwitcher />
-          <UButton
-            v-if="isSpecialistNavigation"
-            class="topbar-action"
-            color="neutral"
-            variant="ghost"
-            icon="i-lucide-log-out"
-            :aria-label="$t('common.logout')"
-            :loading="logoutPending"
-            :disabled="logoutPending"
-            @click="logout"
-          />
           <div class="relative shrink-0">
             <UButton
               to="/notifications"
@@ -288,6 +252,7 @@ async function logout() {
               >{{ unreadBadge }}</span
             >
           </div>
+          <UserMenu mobile :name="user?.name" :role-label="roleLabel" :logout-pending="logoutPending" @logout="logout" />
         </div>
       </header>
       <main class="app-main" :aria-busy="isPageLoading">
@@ -350,6 +315,7 @@ async function logout() {
       </button>
     </nav>
 
+    <PasskeySettings :show-trigger="false" />
     <UDrawer v-model:open="moreOpen" :title="$t('common.menu')">
       <template #body>
         <nav v-if="groups.length" class="grid gap-6">
@@ -369,18 +335,6 @@ async function logout() {
             </div>
           </section>
         </nav>
-        <div class="drawer-nav-footer">
-          <button
-            type="button"
-            class="drawer-nav-item drawer-nav-item--logout"
-            :disabled="logoutPending"
-            @click="logout"
-          >
-            <UIcon name="i-lucide-log-out" class="size-5" />{{
-              $t("common.logout")
-            }}
-          </button>
-        </div>
       </template>
     </UDrawer>
   </div>

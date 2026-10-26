@@ -9,7 +9,7 @@ export default defineEventHandler(async event => {
   const readAt = new Date()
   const updated = await db.update(notifications).set({ readAt }).where(and(
     eq(notifications.userId, actor.id),
-    eq(notifications.organizationId, actor.organizationId),
+    eq(notifications.organizationId, actor.organizationId), eq(notifications.crmVisible, true),
     isNull(notifications.readAt)
   )).returning({ id: notifications.id })
   if (updated.length) publishNotification(actor.id, { type: 'notifications.read-all', readAt: readAt.toISOString() })

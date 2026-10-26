@@ -91,7 +91,7 @@ export async function createStay(actor: Actor, input: unknown) {
   await writeAuditLog({ organizationId: actor.organizationId, actorId: actor.id, action: 'stay.created', entityType: 'stay', entityId: stay.id })
   await refreshAutomaticCleaningUrgency(actor.organizationId, stay.apartmentId, [stay.checkInOn, stay.checkOutOn])
   await reconcileCleaningGuestPreparation(actor, stay.apartmentId)
-  if (actor.roles.includes('manager')) await notifyUsers({ organizationId: actor.organizationId, userIds: await administratorsForOrganization(actor.organizationId), type: 'stay_changed', title: 'Новый заезд', body: 'Собственник создал новый заезд', href: `/calendar` })
+  if (actor.roles.includes('manager')) await notifyUsers({ organizationId: actor.organizationId, userIds: await administratorsForOrganization(actor.organizationId), type: 'stay_changed', eventKey: 'booking_created', title: 'Новый заезд', body: {"ru": "Собственник создал новый заезд", "en": "The owner created a new booking", "he": "בעל הנכס יצר הזמנה חדשה"}, href: `/calendar` })
   return stay
 }
 
@@ -139,7 +139,7 @@ export async function updateStay(actor: Actor, stayId: string, input: unknown) {
   await refreshAutomaticCleaningUrgency(actor.organizationId, existing.apartmentId, [existing.checkInOn, existing.checkOutOn, data.checkInOn, data.checkOutOn])
   await reconcileCleaningGuestPreparation(actor, existing.apartmentId)
   await syncCashTasksForStay(actor, stayId)
-  if (actor.roles.includes('manager')) await notifyUsers({ organizationId: actor.organizationId, userIds: await administratorsForOrganization(actor.organizationId), type: 'stay_changed', title: 'Заезд изменен', body: 'Собственник изменил заезд', href: '/calendar' })
+  if (actor.roles.includes('manager')) await notifyUsers({ organizationId: actor.organizationId, userIds: await administratorsForOrganization(actor.organizationId), type: 'stay_changed', eventKey: 'booking_updated', title: 'Заезд изменен', body: {"ru": "Собственник изменил заезд", "en": "The owner changed a booking", "he": "בעל הנכס שינה הזמנה"}, href: '/calendar' })
   return updated
 }
 

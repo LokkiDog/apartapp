@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { useCurrentUser } from '#fsd/shared/auth'
 import { PageHeader } from '#fsd/shared/ui'
-import type { RegistrationMode } from '@contracts/platform'
+import type { RegistrationMode, RegistrationSettings } from '@contracts/platform'
 
 const user = useCurrentUser()
-const { data, refresh, status, error: loadError } = await useAsyncData('system-settings', () => user.value ? $fetch('/api/system/settings') : Promise.resolve(null), {
+const { data, refresh, status, error: loadError } = await useAsyncData<RegistrationSettings | null>('system-settings', (): Promise<RegistrationSettings | null> => user.value ? $fetch<RegistrationSettings>('/api/system/settings') : Promise.resolve(null), {
   server: false,
   default: () => null,
   watch: [user]

@@ -52,7 +52,7 @@ async function reportConflict(conflictId: string, connection: typeof db | Connec
   const conflict = await connection.query.icalConflicts.findFirst({ where: eq(icalConflicts.id, conflictId), with: { apartment: { with: { managerAssignments: { columns: { userId: true } } } } } })
   if (!conflict) return
   const ids = conflict.apartment.managerAssignments.map(assignment => assignment.userId)
-  await notifyUsers({ organizationId: conflict.organizationId, userIds: ids, type: 'stay_conflict', title: 'Конфликт бронирований', body: `${conflict.apartment.name} · выберите, какое бронирование оставить`, href: `/calendar?icalConflict=${conflict.id}` })
+  await notifyUsers({ organizationId: conflict.organizationId, userIds: ids, type: 'stay_conflict', eventKey: 'booking_conflict', title: 'Конфликт бронирований', body: { ru: `${conflict.apartment.name} · выберите, какое бронирование оставить`, en: `${conflict.apartment.name} · choose which booking to keep`, he: `${conflict.apartment.name} · בחרו איזו הזמנה לשמור` }, href: `/calendar?icalConflict=${conflict.id}` })
 }
 
 async function recordConflicts(importedStayId: string, organizationId: string, apartmentId: string, connection: typeof db | Connection = db) {
@@ -129,14 +129,14 @@ async function cancelUnstartedCleaning(stayId: string, organizationId: string, c
     await tx.delete(cleaningAssignments).where(eq(cleaningAssignments.cleaningId, cleaning.id))
     await tx.update(tasks).set({ status: 'canceled', updatedAt: new Date() }).where(and(eq(tasks.organizationId, organizationId), eq(tasks.status, 'open'), inArray(tasks.id, connection.select({ taskId: cashTaskDetails.taskId }).from(cashTaskDetails).where(eq(cashTaskDetails.cleaningId, cleaning.id)))))
   })
-  await notifyUsers({ organizationId, userIds: [...assignmentRows.map(row => row.userId), ...ownerRows.map(row => row.userId), ...await administratorsForOrganization(organizationId)], type: 'stay_conflict', title: 'Уборка отменена', body: 'Бронирование больше не входит в календарь Booking.com', href: '/work' })
+  await notifyUsers({ organizationId, userIds: [...assignmentRows.map(row => row.userId), ...ownerRows.map(row => row.userId), ...await administratorsForOrganization(organizationId)], type: 'stay_conflict', eventKey: 'cleaning_canceled', title: 'Уборка отменена', body: {"ru": "Бронирование больше не входит в календарь Booking.com", "en": "The booking is no longer in the Booking.com calendar", "he": "ההזמנה אינה מופיעה עוד ביומן Booking.com"}, href: '/work' })
 }
 
 async function notifyCleaningHistoryIfStarted(stayId: string, organizationId: string, connection: typeof db | Connection = db) {
   const cleaning = await connection.query.cleanings.findFirst({ where: and(eq(cleanings.stayId, stayId), eq(cleanings.organizationId, organizationId), inArray(cleanings.status, ['in_progress', 'completed'])) })
   if (!cleaning) return
   const adminIds = await administratorsForOrganization(organizationId)
-  await notifyUsers({ organizationId, userIds: adminIds, type: 'stay_conflict', title: 'Проверьте уборку после отмены бронирования', body: 'Уборка уже начата или завершена; её история сохранена без изменений', href: '/work' })
+  await notifyUsers({ organizationId, userIds: adminIds, type: 'stay_conflict', eventKey: 'booking_conflict', title: 'Проверьте уборку после отмены бронирования', body: {"ru": "Уборка уже начата или завершена; её история сохранена без изменений", "en": "Cleaning has already started or finished; its history was preserved", "he": "הניקיון כבר התחיל או הסתיים; ההיסטוריה נשמרה ללא שינוי"}, href: '/work' })
 }
 
 export async function syncAllIcalFeeds() {
@@ -237,7 +237,7 @@ export async function resolveIcalConflict(actor: Actor, conflictId: string, inpu
   const settled = existingSettled || importedSettled
   if ((importedCleaning && existingCleaning || settled) && !actor.roles.includes('administrator')) {
     returnTo = 'needs_admin'
-    await notifyUsers({ organizationId: actor.organizationId, userIds: await administratorsForOrganization(actor.organizationId), type: 'stay_conflict', title: 'Нужно разобрать конфликт бронирований', body: 'В конфликте есть связанные уборки или завершённые финансовые операции', href: `/calendar?icalConflict=${conflict.id}` })
+    await notifyUsers({ organizationId: actor.organizationId, userIds: await administratorsForOrganization(actor.organizationId), type: 'stay_conflict', eventKey: 'booking_conflict', title: 'Нужно разобрать конфликт бронирований', body: {"ru": "В конфликте есть связанные уборки или завершённые финансовые операции", "en": "The conflict includes linked cleanings or completed financial transactions", "he": "ההתנגשות כוללת ניקיונות מקושרים או פעולות כספיות שהושלמו"}, href: `/calendar?icalConflict=${conflict.id}` })
     await db.update(icalConflicts).set({ status: 'needs_admin', updatedAt: new Date() }).where(and(eq(icalConflicts.id, conflict.id), eq(icalConflicts.status, 'resolving')))
     return { ok: true, needsAdmin: true }
   }

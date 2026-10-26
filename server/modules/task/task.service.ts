@@ -28,7 +28,7 @@ async function syncTaskProblem(actor: Actor, task: { id: string, apartmentId: st
     ])
     if (expenses.length || solutionTasks.length) {
       await db.update(cleaningProblems).set({ deletionRequestedAt: new Date(), deletionRequestedById: actor.id, updatedAt: new Date() }).where(eq(cleaningProblems.id, existing.id))
-      await notifyUsers({ organizationId: actor.organizationId, userIds: await administratorsForOrganization(actor.organizationId), type: 'problem', title: 'Запрошено удаление проблемы', body: existing.description, href: `/problems?problemId=${existing.id}` })
+      await notifyUsers({ organizationId: actor.organizationId, userIds: await administratorsForOrganization(actor.organizationId), type: 'problem', eventKey: 'problem_deletion_requested', title: 'Запрошено удаление проблемы', body: existing.description, href: `/problems?problemId=${existing.id}` })
       return existing.id
     }
     await db.delete(cleaningProblems).where(eq(cleaningProblems.id, existing.id))
@@ -83,7 +83,7 @@ export async function createTask(actor: Actor, input: unknown) {
   if (!task) throw createError({ statusCode: 500, statusMessage: 'Не удалось создать задачу' })
   if (data.category === 'cash') await db.insert(cashTaskDetails).values({ taskId: task.id, organizationId: actor.organizationId, expectedAmountEur: expectedAmountEur!, reportIncluded: reportIncluded!, reportOccurredOn: null })
   await publishTaskChange({ actor, taskId: task.id, assigneeIds: [task.assigneeId], reason: 'created' })
-  if (data.assigneeId) await notifyUsers({ organizationId: actor.organizationId, userIds: [data.assigneeId], type: 'work_assigned', title: 'Назначена задача', body: task.title, href: `/tasks/${task.id}` })
+  if (data.assigneeId) await notifyUsers({ organizationId: actor.organizationId, userIds: [data.assigneeId], type: 'work_assigned', eventKey: 'task_assigned', title: 'Назначена задача', body: task.title, href: `/tasks/${task.id}` })
   return task
 }
 
@@ -104,9 +104,9 @@ export async function completeTask(actor: Actor, taskId: string, input: unknown)
   await publishTaskChange({ actor, taskId, assigneeIds: [updated?.assigneeId], reason: 'resolved' })
   if (task.problemId) {
     const administrators = await administratorsForOrganization(actor.organizationId)
-    await notifyUsers({ organizationId: actor.organizationId, userIds: administrators.filter(id => id !== actor.id), type: 'task_resolved', title: 'Задача ожидает проверки', body: task.title, href: `/tasks/${taskId}` })
+    await notifyUsers({ organizationId: actor.organizationId, userIds: administrators.filter(id => id !== actor.id), type: 'task_resolved', eventKey: 'task_resolved', title: 'Задача ожидает проверки', body: task.title, href: `/tasks/${taskId}` })
   } else if (problemId) {
-    await notifyUsers({ organizationId: actor.organizationId, userIds: await administratorsForOrganization(actor.organizationId), type: 'problem', title: 'Проблема в задаче', body: data.problemDescription, href: `/problems?problemId=${problemId}` })
+    await notifyUsers({ organizationId: actor.organizationId, userIds: await administratorsForOrganization(actor.organizationId), type: 'problem', eventKey: 'problem_created', title: 'Проблема в задаче', body: data.problemDescription, href: `/problems?problemId=${problemId}` })
   }
   return updated
 }
@@ -140,7 +140,7 @@ export async function returnTaskToWork(actor: Actor, taskId: string) {
   const [updated] = await db.update(tasks).set({ status: 'in_progress', updatedAt: new Date() }).where(eq(tasks.id, taskId)).returning()
   await writeAuditLog({ organizationId: actor.organizationId, actorId: actor.id, action: 'task.returned_to_work', entityType: 'task', entityId: taskId })
   await publishTaskChange({ actor, taskId, assigneeIds: [updated?.assigneeId], reason: 'returned' })
-  if (task.assigneeId && task.assigneeId !== actor.id) await notifyUsers({ organizationId: actor.organizationId, userIds: [task.assigneeId], type: 'task_returned', title: 'Задача возвращена в работу', body: task.title, href: `/tasks/${taskId}` })
+  if (task.assigneeId && task.assigneeId !== actor.id) await notifyUsers({ organizationId: actor.organizationId, userIds: [task.assigneeId], type: 'task_returned', eventKey: 'task_returned', title: 'Задача возвращена в работу', body: task.title, href: `/tasks/${taskId}` })
   return updated
 }
 
@@ -181,8 +181,8 @@ export async function updateTask(actor: Actor, taskId: string, input: unknown) {
   const [updated] = await db.update(tasks).set({ ...data, updatedAt: new Date() }).where(eq(tasks.id, taskId)).returning()
   if (!updated) throw createError({ statusCode: 500, statusMessage: 'Не удалось обновить задачу' })
   await publishTaskChange({ actor, taskId, assigneeIds: [task.assigneeId, updated.assigneeId], reason: 'updated' })
-  if (data.assigneeId && data.assigneeId !== task.assigneeId) await notifyUsers({ organizationId: actor.organizationId, userIds: [data.assigneeId], type: 'work_assigned', title: 'Назначена задача', body: updated.title, href: `/tasks/${taskId}` })
-  if (data.status === 'canceled' && task.assigneeId) await notifyUsers({ organizationId: actor.organizationId, userIds: [task.assigneeId], type: 'work_canceled', title: 'Задача отменена', body: updated.title, href: `/tasks/${taskId}` })
+  if (data.assigneeId && data.assigneeId !== task.assigneeId) await notifyUsers({ organizationId: actor.organizationId, userIds: [data.assigneeId], type: 'work_assigned', eventKey: 'task_assigned', title: 'Назначена задача', body: updated.title, href: `/tasks/${taskId}` })
+  if (data.status === 'canceled' && task.assigneeId) await notifyUsers({ organizationId: actor.organizationId, userIds: [task.assigneeId], type: 'work_canceled', eventKey: 'task_canceled', title: 'Задача отменена', body: updated.title, href: `/tasks/${taskId}` })
   return updated
 }
 

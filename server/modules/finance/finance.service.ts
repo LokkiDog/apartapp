@@ -195,7 +195,7 @@ export async function publishManagerExpenseReport(actor: Actor, apartmentId: str
     const lines = await automaticLines(actor.organizationId, apartmentId, month)
     await replaceLines(actor, apartmentId, month, lines.map(({ category, description, occurredOn, amountEur, position, included, problemId }) => ({ category, description, occurredOn, amountEur, position, included, problemId })), defaultManagerExpenseCategoryVisibility, true)
   } else if (!existing.publishedAt) await db.update(managerExpenseReports).set({ publishedAt: new Date(), publishedById: actor.id, updatedAt: new Date() }).where(eq(managerExpenseReports.id, existing.id))
-  if (!existing?.publishedAt) await notifyUsers({ organizationId: actor.organizationId, userIds: apartment.managerAssignments.map(assignment => assignment.userId), type: 'manager_expense_report_published', title: 'Доступен отчёт по расходам', body: `${apartment.name} · ${month}`, href: `/statement?month=${month}&apartmentId=${apartmentId}` })
+  if (!existing?.publishedAt) await notifyUsers({ organizationId: actor.organizationId, userIds: apartment.managerAssignments.map(assignment => assignment.userId), type: 'manager_expense_report_published', eventKey: 'expense_report_published', title: 'Доступен отчёт по расходам', body: `${apartment.name} · ${month}`, href: `/statement?month=${month}&apartmentId=${apartmentId}` })
   return getManagerExpenseReport(actor, apartmentId, month)
 }
 export async function unpublishManagerExpenseReport(actor: Actor, apartmentId: string, month: string) {

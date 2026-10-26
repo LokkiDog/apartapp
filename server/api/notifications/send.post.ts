@@ -23,6 +23,7 @@ export default defineEventHandler(async event => {
     organizationId: actor.organizationId,
     userIds: recipients.map(user => user.id),
     type: 'manual',
+    eventKey: 'manual',
     title: input.title,
     body: input.body,
     href: null

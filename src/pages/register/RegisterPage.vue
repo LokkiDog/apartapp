@@ -1,7 +1,8 @@
 <script setup lang="ts">
+import type { RegistrationSettings } from '@contracts/platform'
 const route = useRoute()
 const token = computed(() => typeof route.query.token === 'string' ? route.query.token : '')
-const { data: settings, status, error: loadError } = await useAsyncData('registration-mode', () => $fetch('/api/auth/registration-mode'), { server: false })
+const { data: settings, status, error: loadError } = await useAsyncData<RegistrationSettings>('registration-mode', (): Promise<RegistrationSettings> => $fetch<RegistrationSettings>('/api/auth/registration-mode'), { server: false })
 const form = reactive({ companyName: '', name: '', email: '', password: '' })
 const error = ref(''); const notice = ref(''); const pending = ref(false); const confirmed = ref(false); const submitted = ref(false)
 async function submit() {

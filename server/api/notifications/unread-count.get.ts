@@ -6,7 +6,7 @@ import { notifications } from '../../infrastructure/database/schema'
 export default defineEventHandler(async event => {
   const actor = await requireActor(event)
   const [result] = await db.select({ count: sql<number>`count(*)::int` }).from(notifications).where(and(
-    eq(notifications.organizationId, actor.organizationId),
+    eq(notifications.organizationId, actor.organizationId), eq(notifications.crmVisible, true),
     eq(notifications.userId, actor.id),
     isNull(notifications.readAt)
   ))
