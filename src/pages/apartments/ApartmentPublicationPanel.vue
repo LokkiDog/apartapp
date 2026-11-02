@@ -11,7 +11,7 @@ const currentUser = useCurrentUser()
 const { t } = useI18n()
 const validation = useSubmitFormValidation()
 const validate = createFormValidator(publicationInputSchema, t)
-const config = useRuntimeConfig()
+const { data: siteSettings } = await useAsyncData('publication-site-settings', () => currentUser.value?.roles.includes('administrator') ? $fetch<import('@contracts/public-site').PublicSiteSettings>('/api/public-site') : Promise.resolve(null), { server: false, default: () => null, watch: [currentUser] })
 const open = defineModel<boolean>('open', { default: false })
 const draft = ref<PublicationInput | null>(null)
 const pending = ref(false)
@@ -36,7 +36,7 @@ watch(() => draft.value?.translations.ru, (value, previous) => {
     translationsOpen.value = false
   }
 }, { deep: true })
-const publicUrl = computed(() => `${config.public.catalogueUrl}/apartments/${data.value?.slug}`)
+const publicUrl = computed(() => siteSettings.value?.settings.enabled && siteSettings.value.settings.websiteUrl ? `${siteSettings.value.settings.websiteUrl}/apartments/${data.value?.slug}` : '')
 watch(open, value => {
   if (value) {
     validation.reset()
@@ -96,7 +96,7 @@ async function save() {
     <template #footer>
       <div class="form-actions form-actions--footer flex-wrap w-full">
         <UButton color="neutral" variant="ghost" class="min-h-11" :disabled="pending" @click="open = false">{{ t('common.cancel') }}</UButton>
-        <UButton v-if="data?.published" :to="publicUrl" target="_blank" color="neutral" variant="outline" class="min-h-11">{{ t('publication.openSite') }}</UButton>
+        <UButton v-if="data?.published && publicUrl" :to="publicUrl" target="_blank" color="neutral" variant="outline" class="min-h-11">{{ t('publication.openSite') }}</UButton>
         <UButton type="submit" :form="`publication-form-${apartmentId}`" :loading="pending" :disabled="pending || !draft || Boolean(error) || status !== 'success'" class="min-h-11">{{ t('publication.save') }}</UButton>
       </div>
     </template>

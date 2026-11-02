@@ -1,6 +1,9 @@
 import { catalogueRobots } from '#shared/seo'
-
-export default defineEventHandler(event => {
+import type { PublicSite } from '#shared/public-site'
+import { catalogueRead } from '../utils/catalogue'
+export default defineEventHandler(async event => {
   setHeader(event, 'content-type', 'text/plain; charset=utf-8')
-  return catalogueRobots(useRuntimeConfig(event).public.siteUrl)
+  setHeader(event, 'cache-control', 'no-store')
+  try { return catalogueRobots((await catalogueRead<PublicSite>(event, 'site')).websiteUrl) }
+  catch { return 'User-agent: *\nDisallow: /\n' }
 })

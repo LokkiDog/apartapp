@@ -1,5 +1,5 @@
 import { beforeAll, afterAll, describe, expect, it, vi } from 'vitest'
-import { createError, createEvent, defineEventHandler, getRouterParam, setHeader, getResponseHeader, readMultipartFormData } from 'h3'
+import { createError, createEvent, defineEventHandler, getRouterParam, setHeader, getResponseHeader, readMultipartFormData, getQuery } from 'h3'
 import { IncomingMessage, ServerResponse } from 'node:http'
 import { Socket } from 'node:net'
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -30,6 +30,10 @@ describe.skipIf(!url)('guest publications PostgreSQL', () => {
     storageRoot = await mkdtemp(join(tmpdir(), 'aparts-publication-'))
     process.env.FILE_STORAGE_PATH = storageRoot
     vi.stubGlobal('createError', createError)
+    vi.stubGlobal('defineEventHandler', defineEventHandler)
+    vi.stubGlobal('getRouterParam', getRouterParam)
+    vi.stubGlobal('getQuery', getQuery)
+    vi.stubGlobal('setHeader', setHeader)
     const database = await import('../server/infrastructure/database/client')
     db = database.db; connection = database.sql
     await db.execute(sql`SET client_min_messages TO WARNING`)
@@ -41,8 +45,9 @@ describe.skipIf(!url)('guest publications PostgreSQL', () => {
     const [org] = await db.insert(schema.organizations).values({ name: 'Guest test' }).returning()
     const [foreign] = await db.insert(schema.organizations).values({ name: 'Other organization' }).returning()
     foreignOrganization = foreign!.id
-    const [user] = await db.insert(schema.users).values({ organizationId: org!.id, email: 'publication@example.test', name: 'Admin', passwordHash: 'test-only', roles: ['administrator'] }).returning()
+    const [user] = await db.insert(schema.users).values({ organizationId: org!.id, email: 'publication@example.test', name: 'Admin', phone: '+359888123456', status: 'active', passwordHash: 'test-only', roles: ['administrator'] }).returning()
     const [foreignUser] = await db.insert(schema.users).values({ organizationId: foreign!.id, email: 'foreign-publication@example.test', name: 'Foreign admin', passwordHash: 'test-only', roles: ['administrator'] }).returning()
+    await db.insert(schema.publicSites).values({ organizationId: org!.id, websiteUrl: 'https://public.example.test', enabled: true, hostUserId: user!.id })
     actor = { id: user!.id, organizationId: org!.id, email: user!.email, name: user!.name, roles: ['administrator'], locale: 'ru' }
     const [hotel] = await db.insert(schema.hotels).values({ organizationId: org!.id, name: 'Hotel', address: 'Bansko', latitude: '41.84', longitude: '23.48' }).returning()
     hotelId = hotel!.id
@@ -54,6 +59,55 @@ describe.skipIf(!url)('guest publications PostgreSQL', () => {
     draft = { published: false, slug: 'studio', sortOrder: 0, translations: { ru: { title: 'Студия', summary: 'Для отдыха', description: 'Кухня и балкон.', location: '' } }, amenities: ['wifi'], photoIds: [photoId] }
   }, 30000)
   afterAll(async () => { await connection?.end(); if (storageRoot) await rm(storageRoot, { recursive: true, force: true }); vi.unstubAllGlobals() })
+  it('publishes only the selected own profile, follows edits and revokes public data and photos', async () => {
+    const sites = await import('../server/modules/publication/public-site.service')
+    const profiles = await import('../server/modules/auth/profile.service')
+    const { fileStorage } = await import('../server/infrastructure/storage/local')
+    const original = (await sites.getPublicSiteSettings(actor)).settings
+    const [foreign] = await db.select().from(schema.users).where(eq(schema.users.organizationId, foreignOrganization))
+    await expect(sites.getPublicSiteSettings({ ...actor, roles: ['manager'] })).rejects.toMatchObject({ statusCode: 403 })
+    await expect(sites.savePublicSiteSettings(actor, { ...original, hostUserId: foreign!.id })).rejects.toMatchObject({ statusCode: 400 })
+    await expect(sites.savePublicSiteSettings({ ...actor, organizationId: foreignOrganization }, { ...original, hostUserId: foreign!.id })).rejects.toMatchObject({ statusCode: 400 })
+    await expect(sites.resolvePublicSite('https://unknown.example.test')).rejects.toMatchObject({ statusCode: 404 })
+    expect((await sites.getPublicSiteSettings(actor)).profiles.map(profile => profile.id)).not.toContain(foreign!.id)
+    await db.update(schema.users).set({ status: 'active', phone: '+359888999888' }).where(eq(schema.users.id, foreign!.id))
+    await expect(sites.savePublicSiteSettings({ ...actor, organizationId: foreignOrganization }, { ...original, hostUserId: foreign!.id })).rejects.toMatchObject({ statusCode: 409 })
+    expect((await sites.getPublicSiteSettings(actor)).settings).toEqual(original)
+    try {
+      await profiles.updateOwnProfile(actor, { name: 'Victoria', phone: '+359 888 222 333', publicBio: { ru: 'На связи', en: 'Here to help', he: '', bg: '' } })
+      const info = await sites.publicSiteInfo('https://public.example.test/')
+      expect(info).toEqual({ websiteUrl: 'https://public.example.test', hostName: 'Victoria', whatsapp: '+359 888 222 333', hostPhoto: '', hostDescription: { ru: 'На связи', en: 'Here to help', he: '', bg: '' } })
+      const image = await sharp({ create: { width: 8, height: 12, channels: 3, background: '#c0ffee' } }).jpeg().withMetadata().toBuffer()
+      await expect(profiles.setOwnProfilePhoto({ ...actor, organizationId: foreignOrganization }, { data: image, type: 'image/jpeg' })).rejects.toMatchObject({ statusCode: 404 })
+      await expect(profiles.setOwnProfilePhoto(actor, { data: Buffer.from('invalid'), type: 'image/jpeg' })).rejects.toMatchObject({ statusCode: 400 })
+      const updated = await profiles.setOwnProfilePhoto(actor, { data: image, type: 'image/jpeg' })
+      expect(updated.hasPhoto).toBe(true)
+      const first = await db.query.users.findFirst({ where: eq(schema.users.id, actor.id) })
+      expect((await sites.publicSiteInfo('https://public.example.test')).hostPhoto).toMatch(/^\/api\/catalogue\/host-photo\?v=/)
+      const publicImage = await sites.publicHostPhoto('https://public.example.test')
+      expect(await sharp(publicImage).metadata()).toMatchObject({ format: 'webp', width: 8, height: 12 })
+      expect((await sharp(publicImage).metadata()).exif).toBeUndefined()
+      await profiles.setOwnProfilePhoto(actor, { data: image, type: 'image/jpeg' })
+      await expect(fileStorage.get(first!.profilePhotoKey!)).rejects.toMatchObject({ code: 'ENOENT' })
+      await sites.savePublicSiteSettings(actor, { ...original, enabled: false })
+      await expect(sites.publicSiteInfo('https://public.example.test')).rejects.toMatchObject({ statusCode: 404 })
+      await expect(sites.publicHostPhoto('https://public.example.test')).rejects.toMatchObject({ statusCode: 404 })
+      await sites.savePublicSiteSettings(actor, original)
+      await db.update(schema.organizations).set({ status: 'blocked' }).where(eq(schema.organizations.id, actor.organizationId))
+      await expect(sites.publicSiteInfo('https://public.example.test')).rejects.toMatchObject({ statusCode: 404 })
+      await db.update(schema.organizations).set({ status: 'active' }).where(eq(schema.organizations.id, actor.organizationId))
+      await db.update(schema.users).set({ status: 'archived' }).where(eq(schema.users.id, actor.id))
+      await expect(sites.publicHostPhoto('https://public.example.test')).rejects.toMatchObject({ statusCode: 404 })
+      await db.update(schema.users).set({ status: 'active' }).where(eq(schema.users.id, actor.id))
+      expect((await profiles.setOwnProfilePhoto(actor, null)).hasPhoto).toBe(false)
+      await expect(sites.publicHostPhoto('https://public.example.test')).rejects.toMatchObject({ statusCode: 404 })
+    } finally {
+      await db.update(schema.organizations).set({ status: 'active' }).where(eq(schema.organizations.id, actor.organizationId))
+      await db.update(schema.users).set({ status: 'active', name: 'Admin', phone: '+359888123456' }).where(eq(schema.users.id, actor.id))
+      await profiles.setOwnProfilePhoto(actor, null)
+      await sites.savePublicSiteSettings(actor, original)
+    }
+  })
   it('suggests Latin apartment addresses and resolves simultaneous duplicate defaults with the hotel and a suffix', async () => {
     const original = await db.query.apartments.findFirst({ where: eq(schema.apartments.id, apartmentId) })
     const [hotel] = await db.insert(schema.hotels).values({ organizationId: actor.organizationId, name: 'Снежный дом', address: 'Bansko', latitude: '41.84', longitude: '23.48' }).returning()
@@ -197,12 +251,11 @@ describe.skipIf(!url)('guest publications PostgreSQL', () => {
     vi.stubGlobal('defineEventHandler', defineEventHandler)
     vi.stubGlobal('getRouterParam', getRouterParam)
     vi.stubGlobal('setHeader', setHeader)
-    vi.stubGlobal('useRuntimeConfig', () => ({ catalogueOrganizationId: actor.organizationId }))
     const { fileStorage } = await import('../server/infrastructure/storage/local')
     await fileStorage.put('private/storage-key', await sharp({ create: { width: 4, height: 4, channels: 3, background: '#10251f' } }).jpeg().toBuffer())
     const handler = (await import('../server/api/catalogue/apartments/[slug]/photos/[photoId].get')).default
     const event = (id: string) => {
-      const req = new IncomingMessage(new Socket()); req.url = '/photo'; req.method = 'GET'
+      const req = new IncomingMessage(new Socket()); req.url = '/photo?site=https%3A%2F%2Fpublic.example.test'; req.method = 'GET'
       const request = createEvent(req, new ServerResponse(req)); request.context.params = { slug: 'studio', photoId: id }; return request
     }
     await service.savePublication(actor, apartmentId, { ...draft, published: true })

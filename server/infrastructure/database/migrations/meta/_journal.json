@@ -379,6 +379,13 @@
       "when": 1792960000006,
       "tag": "0053_publication_all_apartment_photos",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1792960000007,
+      "tag": "0054_public_site_settings",
+      "breakpoints": true
     }
   ]
 }

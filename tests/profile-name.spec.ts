@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { effectScope, nextTick, ref } from 'vue'
 import { useProfileName } from '../src/pages/account/model/profile-name'
+import { publicBioSchema } from '../shared/contracts/public-site'
 import { profileUpdateSchema } from '../shared/contracts/platform'
 
 describe('profile editing', () => {
@@ -31,6 +32,20 @@ describe('profile editing', () => {
     expect(editor.form.name).toBe('Anne')
     editor.form.name = ' Anne '
     expect(editor.changed.value).toBe(false)
+    scope.stop()
+  })
+  it('preserves unsaved phone and description while photos or account data refresh, and resets them on logout', () => {
+    const scope = effectScope()
+    const user = ref<{ id: string; name: string; phone: string; publicBio: ReturnType<typeof publicBioSchema.parse> } | null>({ id: 'a', name: 'Anna', phone: '+359888123456', publicBio: publicBioSchema.parse({ ru: 'Host' }) })
+    const editor = scope.run(() => useProfileName(user))!
+    editor.form.phone = '+359888654321'; editor.form.publicBio.en = 'Unsaved text'
+    user.value = { ...user.value!, publicBio: publicBioSchema.parse({ ru: 'Host' }) }
+    expect(editor.form.phone).toBe('+359888654321')
+    expect(editor.form.publicBio.en).toBe('Unsaved text')
+    expect(editor.changed.value).toBe(true)
+    user.value = null
+    expect(editor.form.phone).toBe('')
+    expect(editor.form.publicBio.en).toBe('')
     scope.stop()
   })
   it('normalizes names and rejects invalid lengths and protected account fields', () => {

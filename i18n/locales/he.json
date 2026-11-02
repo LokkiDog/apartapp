@@ -1075,7 +1075,7 @@
     "name": "שם",
     "email": "דוא״ל",
     "role": "תפקיד",
-    "nameSaved": "השם נשמר",
+    "nameSaved": "הפרופיל נשמר",
     "profileSaveError": "לא ניתן לשמור את השם. יש לנסות שוב"
   },
   "notificationSettings": {
@@ -1136,7 +1136,8 @@
       "dashboardPlanning": "{highlight} מציגה סך עבודות, עבודות דחופות ועבודות ללא שיבוץ, עם קישורים לרשימות מסוננות. התצוגה בנייד קומפקטית יותר ובחירת תקופת ההכנה להגעות ברורה יותר.",
       "catalogueSearch": "{highlight}: נוספו מפת אתר, robots.txt וקישורים לגרסאות השפה של העמודים עבור מנועי חיפוש.",
       "publicationValidation": "{highlight} מציגה שגיאות בשדות חובה, יוצרת כתובת קריאה ומטפלת בכתובות תפוסות. פרסום דורש תמונות; מחיקת התמונה האחרונה מסתירה את הדירה.",
-      "publicationPrivacy": "{highlight} אינן נגישות לאחר ביטול הפרסום; מטמון ציבורי מושבת. דירות בארכיון ודירות לא פעילות אינן נכללות בקטלוג."
+      "publicationPrivacy": "{highlight} אינן נגישות לאחר ביטול הפרסום; מטמון ציבורי מושבת. דירות בארכיון ודירות לא פעילות אינן נכללות בקטלוג.",
+      "publicSiteSettings": "{highlight}: כתובת האתר ופרופיל איש הקשר נבחרים בהגדרות האתר. התמונה, הטלפון והתיאורים בארבע שפות נערכים בפרופיל, ללא צורך בבנייה מחדש של האתר."
     },
     "highlights": {
       "profile": "פרופיל אישי",
@@ -1161,7 +1162,8 @@
       "dashboardPlanning": "תוכנית הניקיונות השבועית",
       "catalogueSearch": "איתור אתר האורחים",
       "publicationValidation": "בדיקת פרסום",
-      "publicationPrivacy": "מודעות ותמונות שהוסתרו"
+      "publicationPrivacy": "מודעות ותמונות שהוסתרו",
+      "publicSiteSettings": "הגדרות האתר ב-CRM"
     }
   },
   "releaseAnnouncement": {
@@ -1421,5 +1423,27 @@
     "searchAmenities": "חיפוש שירותים",
     "amenitiesSelected": "נבחרו: {count}",
     "noAmenityMatches": "לא נמצאו תוצאות. נסו חיפוש אחר."
+  },
+  "profileDetails": {
+    "phone": "טלפון / WhatsApp",
+    "photo": "תמונה",
+    "deletePhoto": "מחיקת תמונה",
+    "description": "תיאור לאתר",
+    "publicHint": "השם, הטלפון, התמונה והתיאור מוצגים באתר אם מנהל בחר בפרופיל לפרסום.",
+    "photoLimit": "גודל התמונה המרבי הוא 8 MB",
+    "photoError": "לא ניתן לעדכן את התמונה",
+    "invalidPhone": "יש להזין מספר טלפון בינלאומי"
+  },
+  "siteSettings": {
+    "title": "אתר",
+    "enabled": "האתר פעיל",
+    "address": "כתובת האתר",
+    "profile": "פרופיל איש קשר",
+    "chooseProfile": "בחירת פרופיל",
+    "publicFields": "השם, הטלפון, התמונה והתיאור של הפרופיל שנבחר יוצגו באתר.",
+    "missingPhone": "יש להוסיף טלפון לפרופיל שנבחר",
+    "editProfile": "הפרופיל שלי",
+    "saved": "הגדרות האתר נשמרו",
+    "invalidAddress": "יש להזין כתובת אתר ללא נתיב, למשל https://aparts-bansko.com"
   }
 }

@@ -117,6 +117,7 @@ const managerPrimary = computed<NavItem[]>(() => [
   ...managerFinance.value,
 ]);
 const settings = computed<NavItem[]>(() => [
+  { to: "/settings/site", label: t("siteSettings.title"), icon: "i-lucide-globe" },
   { to: "/settings/users", label: t("nav.users"), icon: "i-lucide-users" },
   {
     to: "/settings/apartment-types",

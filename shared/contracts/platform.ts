@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { contactPhoneSchema, publicBioSchema } from './public-site'
 export const emailSchema = z.string().trim().toLowerCase().email().max(254)
 export const registrationModeSchema = z.enum(['self_service', 'superuser_only'])
 export const timezoneSchema = z.string().max(100).refine(value => {
@@ -29,7 +30,7 @@ export const changePasswordSchema = z.object({
   newPassword: z.string().min(8).max(200)
 }).strict()
 
-export const profileUpdateSchema = z.object({ name: administratorInputSchema.shape.name }).strict()
+export const profileUpdateSchema = z.object({ name: administratorInputSchema.shape.name, phone: contactPhoneSchema.optional(), publicBio: publicBioSchema.optional() }).strict()
 
 export interface AccountPasskey {
   id: string

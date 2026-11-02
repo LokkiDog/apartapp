@@ -53,7 +53,10 @@ function issueMessage(issue: z.core.$ZodIssue, t: Translate) {
     'Собственники не должны повторяться': 'validation.uniqueOwners',
     'Расходники в автосписании не должны повторяться': 'validation.uniqueConsumables',
     'Опишите проблему': 'validation.problemDescriptionRequired',
-    'Заполните поле для публикации': 'validation.required'
+    'Заполните поле для публикации': 'validation.required',
+    'Неверный номер телефона': 'profileDetails.invalidPhone',
+    'Укажите адрес сайта без пути': 'siteSettings.invalidAddress',
+    'Выберите профиль': 'siteSettings.chooseProfile'
   }
   const translationKey = customMessages[issue.message]
   return translationKey ? t(translationKey) : t('validation.invalid')

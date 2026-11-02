@@ -1,5 +1,7 @@
 <script setup lang="ts">
+import type { PublicSite } from '../shared/public-site'
 import { guestLocales, localizedGuestPath } from '#shared/locale'
+await useFetch<PublicSite>('/api/catalogue/site', { key: 'public-site' })
 const { copy, url, localePath } = useSite()
 useSeoMeta({ title: () => copy.value.siteTitle, description: () => copy.value.intro, ogTitle: 'Aparts Bansko', ogDescription: () => copy.value.intro, ogImage: url('/images/bansko-panorama-reference.webp'), twitterCard: 'summary_large_image' })
 const route = useRoute()

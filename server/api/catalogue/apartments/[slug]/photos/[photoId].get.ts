@@ -1,8 +1,10 @@
+import { resolvePublicSite } from '../../../../../modules/publication/public-site.service'
 import sharp from 'sharp'
+import { getQuery } from 'h3'
 import { publicPhotos, publicPublicationRows } from '../../../../../modules/publication/publication.service'
 import { fileStorage } from '../../../../../infrastructure/storage/local'
 export default defineEventHandler(async event => {
-  const organizationId = useRuntimeConfig(event).catalogueOrganizationId
+  const organizationId = (await resolvePublicSite(getQuery(event).site)).organizationId
   const [row] = await publicPublicationRows(organizationId, getRouterParam(event, 'slug')!)
   if (!row) throw createError({ statusCode: 404, statusMessage: 'Фото не найдено' })
   const photos = await publicPhotos(organizationId, row.publication.apartmentId)

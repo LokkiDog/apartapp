@@ -202,6 +202,7 @@ export async function deleteUserPermanently(actor: Actor, userId: string, confir
   if (confirmationName.trim() !== user.name) throw createError({ statusCode: 400, statusMessage: 'Введите имя пользователя точно так, как оно указано' })
   const storageKeys = await db.transaction(async tx => {
     const files = await deleteAssignedWork(tx, userId)
+    if (user.profilePhotoKey) files.push(user.profilePhotoKey)
     const authoredStays = await tx.select({ id: stays.id }).from(stays).where(eq(stays.createdById, userId))
     const stayIds = authoredStays.map((stay: { id: string }) => stay.id)
     if (stayIds.length) {

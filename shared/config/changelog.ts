@@ -17,7 +17,7 @@ export const changelog: Release[] = [
   {
     version: '2026.11.03', date: '2026-11-03', status: 'upcoming', title: 'guestAndApartments',
     groups: [
-      { kind: 'added', items: ['guestCatalogue', 'publicationSettings', 'bookingIntegration', 'operationsDashboard'] },
+      { kind: 'added', items: ['guestCatalogue', 'publicSiteSettings', 'publicationSettings', 'bookingIntegration', 'operationsDashboard'] },
       { kind: 'improved', items: ['publicationLanguages', 'apartmentPhotos', 'savedApartmentFilters', 'compactNavigation', 'dashboardPlanning', 'catalogueSearch'] },
       { kind: 'fixed', items: ['publicationValidation', 'publicationPrivacy'] }
     ]

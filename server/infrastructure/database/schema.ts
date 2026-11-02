@@ -56,6 +56,8 @@ export const users = pgTable('users', {
   passwordHash: text('password_hash').notNull(),
   name: text('name').notNull(),
   phone: text('phone').notNull().default(''),
+  profilePhotoKey: text('profile_photo_key'),
+  publicBio: jsonb('public_bio').$type<import('../../../shared/contracts/public-site').PublicBio>().notNull().default(sql`'{"ru":"","en":"","he":"","bg":""}'::jsonb`),
   locale: appLocaleEnum('locale').notNull().default('ru'),
   roles: userRoleEnum('roles').array().notNull().default(sql`ARRAY['manager']::user_role[]`),
   status: userStatusEnum('status').notNull().default('invited'),
@@ -66,6 +68,14 @@ export const users = pgTable('users', {
   uniqueIndex('users_email_unique').on(sql`lower(trim(${table.email}))`),
   uniqueIndex('users_one_vika_per_organization_unique').on(table.organizationId).where(sql`${table.isVika}`)
 ])
+
+export const publicSites = pgTable('public_sites', {
+  organizationId: uuid('organization_id').primaryKey().references(() => organizations.id, { onDelete: 'cascade' }),
+  websiteUrl: text('website_url').notNull(),
+  enabled: boolean('enabled').notNull().default(false),
+  hostUserId: uuid('host_user_id').references(() => users.id, { onDelete: 'set null' }),
+  ...timestamps
+}, table => [uniqueIndex('public_sites_url_unique').on(table.websiteUrl)])
 
 export const passkeys = pgTable('passkeys', {
   id: text('id').primaryKey(),

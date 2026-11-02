@@ -348,7 +348,7 @@ describe.skipIf(!url)('platform PostgreSQL integration', () => {
   it('persists viewing per account across devices, isolates other accounts and never moves the marker backwards', async () => {
     const { principal, user, other } = await fixture()
     const announcements = await import('../server/modules/auth/release-announcement.service')
-    const release = changelog[0]!
+    const release = changelog.find(item => item.announcement?.enabled)!
     const original = release.status
     release.status = 'released'
     try {
@@ -373,7 +373,7 @@ describe.skipIf(!url)('platform PostgreSQL integration', () => {
   it('keeps a superuser viewing marker with the real account while supporting another client', async () => {
     const { principal, user, other } = await fixture(true)
     const announcements = await import('../server/modules/auth/release-announcement.service')
-    const release = changelog[0]!
+    const release = changelog.find(item => item.announcement?.enabled)!
     const original = release.status
     release.status = 'released'
     try {

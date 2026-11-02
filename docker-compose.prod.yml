@@ -76,11 +76,6 @@ services:
       NITRO_HOST: 0.0.0.0
       PORT: 3001
       NUXT_CATALOGUE_API_BASE: http://app:3000
-      NUXT_PUBLIC_SITE_URL: ${NUXT_PUBLIC_SITE_URL:-https://aparts-bansko.com}
-      NUXT_PUBLIC_WHATSAPP: ${NUXT_PUBLIC_WHATSAPP:-}
-      NUXT_PUBLIC_HOST_NAME: ${NUXT_PUBLIC_HOST_NAME:-Вика}
-      NUXT_PUBLIC_HOST_DESCRIPTION: ${NUXT_PUBLIC_HOST_DESCRIPTION:-Помогу выбрать апартамент и буду на связи во время вашего отдыха.}
-      NUXT_PUBLIC_HOST_PHOTO: ${NUXT_PUBLIC_HOST_PHOTO:-}
     ports:
       - "127.0.0.1:3001:3001"
     networks:

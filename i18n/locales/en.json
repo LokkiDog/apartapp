@@ -1075,7 +1075,7 @@
     "name": "Name",
     "email": "Email",
     "role": "Role",
-    "nameSaved": "Name saved",
+    "nameSaved": "Profile saved",
     "profileSaveError": "Could not save name. Try again"
   },
   "notificationSettings": {
@@ -1136,7 +1136,8 @@
       "dashboardPlanning": "{highlight} shows total, urgent and unassigned work with links to filtered lists. Mobile sections are more compact and arrival preparation has clearer period controls.",
       "catalogueSearch": "{highlight}: added a sitemap, robots.txt and links to alternate language versions for search engines.",
       "publicationValidation": "{highlight} shows required-field errors, generates readable page addresses and handles address conflicts. Publishing requires photos; deleting the last photo hides the listing.",
-      "publicationPrivacy": "{highlight} become inaccessible when unpublished; public caching is disabled. Archived and inactive apartments are excluded from the catalogue."
+      "publicationPrivacy": "{highlight} become inaccessible when unpublished; public caching is disabled. Archived and inactive apartments are excluded from the catalogue.",
+      "publicSiteSettings": "{highlight}: select the address and contact profile in Website settings. Edit the photo, phone and descriptions in four languages in your profile; changes require no website rebuild."
     },
     "highlights": {
       "profile": "Personal profile",
@@ -1161,7 +1162,8 @@
       "dashboardPlanning": "Weekly cleaning plan",
       "catalogueSearch": "Guest website discovery",
       "publicationValidation": "Publication validation",
-      "publicationPrivacy": "Hidden listings and photos"
+      "publicationPrivacy": "Hidden listings and photos",
+      "publicSiteSettings": "Website settings in the CRM"
     }
   },
   "releaseAnnouncement": {
@@ -1421,5 +1423,27 @@
     "searchAmenities": "Search amenities",
     "amenitiesSelected": "Selected: {count}",
     "noAmenityMatches": "No matches. Try another search."
+  },
+  "profileDetails": {
+    "phone": "Phone / WhatsApp",
+    "photo": "Photo",
+    "deletePhoto": "Delete photo",
+    "description": "Website description",
+    "publicHint": "Your name, phone, photo and description appear on the website if an administrator selects your profile for publication.",
+    "photoLimit": "Photo must be 8 MB or smaller",
+    "photoError": "Could not update the photo",
+    "invalidPhone": "Enter an international phone number"
+  },
+  "siteSettings": {
+    "title": "Website",
+    "enabled": "Website enabled",
+    "address": "Website address",
+    "profile": "Contact profile",
+    "chooseProfile": "Select a profile",
+    "publicFields": "The selected profile’s name, phone, photo and description are published on the website.",
+    "missingPhone": "Add a phone number to the selected profile",
+    "editProfile": "My profile",
+    "saved": "Website settings saved",
+    "invalidAddress": "Enter a website address without a path, such as https://aparts-bansko.com"
   }
 }
