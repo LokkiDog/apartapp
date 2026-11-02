@@ -4,7 +4,7 @@ import { apartmentInputSchema, apartmentOwnerSettingsSchema, apartmentTypeInputS
 import { canManageApartment, managedApartmentIds, requireRole, type Actor } from '../../infrastructure/auth/actor'
 import { writeAuditLog } from '../../infrastructure/audit/log'
 import { db } from '../../infrastructure/database/client'
-import { apartmentConsumables, apartmentManagers, apartmentTypeConsumableWriteOffs, apartmentTypes, apartments, attachments, cleaningAssignments, cleaningProblems, cleanings, consumables, financialEntries, hotels, inventoryLots, inventoryMovements, stays, tasks, users, type ChecklistItem, type CleaningTariff } from '../../infrastructure/database/schema'
+import { apartmentConsumables, apartmentManagers, apartmentTypeConsumableWriteOffs, apartmentTypes, apartments, apartmentPublications, attachments, cleaningAssignments, cleaningProblems, cleanings, consumables, financialEntries, hotels, inventoryLots, inventoryMovements, stays, tasks, users, type ChecklistItem, type CleaningTariff } from '../../infrastructure/database/schema'
 import { fileStorage } from '../../infrastructure/storage/local'
 import { serializeApartment } from './apartment-view'
 import { buildCleaningChecklist, isUntouchedChecklistTemplate, sofiaToday } from '../cleaning/checklist-template'
@@ -129,7 +129,13 @@ export async function listApartments(actor: Actor, hotelId?: string) {
       eq(attachments.entityType, 'apartment'),
       inArray(attachments.entityId, rows.map(row => row.id))
     ))
-    .orderBy(asc(attachments.createdAt), asc(attachments.id))
+    .orderBy(asc(attachments.position), asc(attachments.createdAt), asc(attachments.id))
+  const publicationRows = await db.select({ apartmentId: apartmentPublications.apartmentId }).from(apartmentPublications).where(and(
+    eq(apartmentPublications.organizationId, actor.organizationId),
+    eq(apartmentPublications.published, true),
+    inArray(apartmentPublications.apartmentId, rows.map(row => row.id))
+  ))
+  const publishedIds = new Set(publicationRows.map(row => row.apartmentId))
   const photosByApartment = new Map<string, Array<{ id: string, fileName: string }>>()
   for (const photo of photoRows) {
     const photos = photosByApartment.get(photo.entityId) ?? []
@@ -139,7 +145,7 @@ export async function listApartments(actor: Actor, hotelId?: string) {
 
   return rows.map(row => {
     const photos = photosByApartment.get(row.id) ?? []
-    return { ...serializeApartment(row), photo: photos[0] ?? null, photos }
+    return { ...serializeApartment(row), photo: photos[0] ?? null, photos, isPublished: row.status === 'active' && photos.length > 0 && publishedIds.has(row.id) }
   })
 }
 

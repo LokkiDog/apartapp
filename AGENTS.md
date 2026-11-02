@@ -39,6 +39,8 @@ Read [aparts-design](.agents/skills/aparts-design/SKILL.md) before creating or c
 
 ## Frontend conventions
 
+- Most users work on phones. Prefer compact layouts throughout the interface, especially vertically: reduce unnecessary padding, gaps and repeated text, and place related information on the same line when it remains readable. Preserve legibility and mobile interactive hit areas of at least 44px.
+
 - Keep route composition in `src/pages`; extract a feature only when the interaction is genuinely reused in multiple places.
 - Export feature/entity APIs through their `index.ts`; do not bypass slice public APIs.
 - Before adding UI or logic, look for existing components and modules to reuse; extract shared behavior instead of copying it when it is used in multiple places.

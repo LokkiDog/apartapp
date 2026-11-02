@@ -14,6 +14,7 @@ import {
   workProgressInputSchema
 } from '../shared/contracts/crm'
 import { expenseInputSchema } from '../shared/contracts/expense'
+import { publicationInputSchema } from '../shared/contracts/publication'
 
 const messages = {
   ru: { required: 'Заполните поле', selection: 'Выберите значение', checkout: 'Выезд должен быть позже заезда', problem: 'Опишите проблему' },
@@ -46,6 +47,18 @@ function translator(locale: keyof typeof messages) {
 }
 
 describe('CRUD form validation', () => {
+  it.each(['ru', 'en', 'he'] as const)('shows localized errors for all missing publication fields and clears them after correction in %s', locale => {
+    const validate = createFormValidator(publicationInputSchema, translator(locale))
+    const draft = { published: true, slug: ' ', translations: { ru: { title: ' ', summary: '', description: '', location: '' } }, amenities: [], photoIds: [], sortOrder: 0 }
+    const errors = validate(draft)
+    for (const name of ['slug', 'translations.ru.title', 'translations.ru.summary', 'translations.ru.description']) {
+      expect(errors.find(error => error.name === name)?.message).toBe(messages[locale].required)
+    }
+    const fixed = { ...draft, slug: 'pirin-studiya', translations: { ru: { title: 'Студия', summary: 'В центре', description: 'Квартира с кухней.', location: '' } } }
+    expect(validate(fixed)).toEqual([])
+    expect(validate({ ...draft, published: false, slug: 'pirin-studiya' })).toEqual([])
+  })
+
   it('returns every field and nested-array error in one pass', () => {
     const schema = z.object({
       name: z.string().trim().min(1),

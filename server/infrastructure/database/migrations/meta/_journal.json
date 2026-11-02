@@ -365,6 +365,20 @@
       "when": 1792960000004,
       "tag": "0051_apartment_publications",
       "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "7",
+      "when": 1792960000005,
+      "tag": "0052_apartment_photo_order",
+      "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1792960000006,
+      "tag": "0053_publication_all_apartment_photos",
+      "breakpoints": true
     }
   ]
 }

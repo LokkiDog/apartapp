@@ -27,7 +27,7 @@ export type OperationsAttention = {
   preparation: { prepared: number; expected: number } | null
   action: { kind: 'assign' | 'open' | 'review'; href: string }
 }
-export type OperationsDay = { date: string; assigned: number; unassigned: number; arrivals: number; turnovers: number }
+export type OperationsDay = { date: string; assigned: number; unassigned: number; urgent: number; arrivals: number; turnovers: number }
 export type OperationsEmployee = {
   id: string; name: string; completed: number; remaining: number; urgent: number; unaccepted: number; tasks: number
 }

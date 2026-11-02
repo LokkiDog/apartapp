@@ -54,7 +54,6 @@ describe('apartment catalog view', () => {
     const styles = readFileSync('src/app/styles/main.css', 'utf8')
 
     expect(page).toContain("import { matchesApartmentSearch } from '#fsd/entities/apartment'")
-    expect(page).toContain("const search = ref('')")
     expect(page).toContain('const filteredApartments = computed')
     expect(page).toContain('matchesApartmentSearch({ name: apartment.name, hotelName: apartment.hotel.name }, search.value)')
     expect(page).toContain('return [...filteredApartments.value].sort')

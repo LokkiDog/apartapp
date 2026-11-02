@@ -127,6 +127,15 @@
     "chooseBooking": "Choose a booking",
     "tariffReason": "Enter a reason for the tariff change — at least 3 characters"
   },
+  "integrations": {
+    "retry": "Retry",
+    "title": "Integrations",
+    "connected": "Connected",
+    "disconnected": "Not connected",
+    "error": "Error",
+    "loading": "Loading…",
+    "calendarUrl": "iCal URL"
+  },
   "icalImport": {
     "title": "Booking.com iCal",
     "hint": "Paste the Booking.com iCal link. Dates sync automatically; enter the guest count separately.",
@@ -253,6 +262,8 @@
     "discrepancy": "Discrepancy:"
   },
   "nav": {
+    "collapseMenu": "Collapse menu",
+    "expandMenu": "Expand menu",
     "work": "Work",
     "objects": "Properties",
     "reports": "Reports",
@@ -493,8 +504,18 @@
     "filterHotel": "Hotel",
     "filterType": "Type",
     "filterStatus": "Status",
+    "filterPublication": "Publication",
+    "filterPublished": "Published",
+    "filterUnpublished": "Unpublished",
     "resetFilters": "Reset",
-    "showFiltered": "Show ({count})"
+    "showFiltered": "Show ({count})",
+    "photoMain": "Main",
+    "photoDrag": "Drag photo",
+    "photoPrevious": "Move earlier",
+    "photoNext": "Move later",
+    "photoOrderError": "Could not save the photo order. Please try again.",
+    "photoOrderSaved": "Photo order saved",
+    "photoOrderSaving": "Saving photo order…"
   },
   "hotels": {
     "title": "Properties",
@@ -1084,7 +1105,8 @@
     },
     "titles": {
       "accountAndWork": "Profile, security and work tools",
-      "unifiedInterface": "A consistent Aparts interface"
+      "unifiedInterface": "A consistent Aparts interface",
+      "guestAndApartments": "Guest website and apartment management"
     },
     "groups": {
       "added": "Added",
@@ -1102,7 +1124,19 @@
       "reload": "Fixed rendering errors in profile, passkeys and notifications after a {highlight}.",
       "consistentDesign": "{highlight} now follow a consistent design, including on mobile.",
       "languages": "Expanded {highlight} support, including right-to-left layouts.",
-      "liveUpdates": "Improved {highlight} without reloading the page."
+      "liveUpdates": "Improved {highlight} without reloading the page.",
+      "guestCatalogue": "{highlight} with featured apartments, a catalogue, map, photo galleries and property pages. WhatsApp enquiries include the selected apartment and stay dates.",
+      "publicationSettings": "{highlight}: a dedicated dialog for the public title, description, page address, catalogue order and grouped amenities. Publication status appears in the apartment list.",
+      "bookingIntegration": "{highlight}: connect, disconnect, sync manually and view import status in apartment integrations.",
+      "operationsDashboard": "{highlight} with weekly cleanings, urgent work, staff workload and arrival preparation. You can keep using the previous dashboard layout.",
+      "publicationLanguages": "{highlight} on the guest website. Public text supports automatic translation and manual editing; language selection is remembered and Hebrew uses right-to-left layout.",
+      "apartmentPhotos": "{highlight} for the CRM and website: drag photos with an insertion preview; the first photo is the cover. All photos appear on the website in the same order.",
+      "savedApartmentFilters": "{highlight} now include publication status. Search and filters are saved separately for each user and organization.",
+      "compactNavigation": "{highlight} can collapse to icons and remembers your choice. Apartment editing sections use the available screen width.",
+      "dashboardPlanning": "{highlight} shows total, urgent and unassigned work with links to filtered lists. Mobile sections are more compact and arrival preparation has clearer period controls.",
+      "catalogueSearch": "{highlight}: added a sitemap, robots.txt and links to alternate language versions for search engines.",
+      "publicationValidation": "{highlight} shows required-field errors, generates readable page addresses and handles address conflicts. Publishing requires photos; deleting the last photo hides the listing.",
+      "publicationPrivacy": "{highlight} become inaccessible when unpublished; public caching is disabled. Archived and inactive apartments are excluded from the catalogue."
     },
     "highlights": {
       "profile": "Personal profile",
@@ -1115,7 +1149,19 @@
       "reload": "full page reload",
       "consistentDesign": "Cards, forms, statuses and actions",
       "languages": "Russian, English and Hebrew",
-      "liveUpdates": "notification updates"
+      "liveUpdates": "notification updates",
+      "guestCatalogue": "Guest website",
+      "publicationSettings": "Publish from the CRM",
+      "bookingIntegration": "Booking.com via iCal",
+      "operationsDashboard": "Operations dashboard",
+      "publicationLanguages": "Russian, English, Hebrew and Bulgarian",
+      "apartmentPhotos": "One photo gallery",
+      "savedApartmentFilters": "Apartment filters",
+      "compactNavigation": "Sidebar navigation",
+      "dashboardPlanning": "Weekly cleaning plan",
+      "catalogueSearch": "Guest website discovery",
+      "publicationValidation": "Publication validation",
+      "publicationPrivacy": "Hidden listings and photos"
     }
   },
   "releaseAnnouncement": {
@@ -1165,6 +1211,30 @@
     "noTeam": "No assignments yet",
     "noTeamDescription": "Assign staff to today’s cleanings and tasks.",
     "week": "Next 7 days",
+    "allWork": "All work",
+    "day": "Day",
+    "totalCleanings": "Total cleanings",
+    "assignCount": "Assign {count}",
+    "allAssigned": "All assigned",
+    "noCleanings": "No cleanings",
+    "weekCounts": {
+      "cleanings": {
+        "zero": "{count} cleanings",
+        "one": "{count} cleaning",
+        "two": "{count} cleanings",
+        "few": "{count} cleanings",
+        "many": "{count} cleanings",
+        "other": "{count} cleanings"
+      },
+      "urgent": {
+        "zero": "including {count} urgent",
+        "one": "including {count} urgent",
+        "two": "including {count} urgent",
+        "few": "including {count} urgent",
+        "many": "including {count} urgent",
+        "other": "including {count} urgent"
+      }
+    },
     "assigned": "Assigned",
     "unassigned": "Unassigned",
     "chartLabel": "Cleaning counts for the next seven days",
@@ -1248,6 +1318,11 @@
     }
   },
   "publication": {
+    "translationsDescription": "Review and edit the translations. They are saved with the publication.",
+    "translationFailed": "Could not translate. Try again or enter the text manually.",
+    "translationLanguage": "Language",
+    "configure": "Configure publication",
+    "allPhotosHint": "The website shows all apartment photos. The main photo is the cover.",
     "title": "Publication",
     "live": "On website",
     "draft": "Draft",
@@ -1260,7 +1335,7 @@
     "order": "Catalogue order",
     "amenities": "Amenities",
     "photos": "Website photos",
-    "photoHint": "Select photos. The first photo will be the cover.",
+    "photoHint": "Choose photos for the website. Arrange them in the property photos section.",
     "noPhotos": "Upload apartment photos first.",
     "cover": "Cover",
     "missingPhoto": "Deleted photo — remove it from this list",
@@ -1273,15 +1348,78 @@
     "retry": "Retry",
     "amenity": {
       "wifi": "Wi-Fi",
-      "kitchen": "Kitchen",
-      "parking": "Parking",
-      "balcony": "Balcony",
-      "washing_machine": "Washing machine",
       "air_conditioning": "Air conditioning",
+      "heating": "Heating",
+      "tv": "TV",
+      "smart_tv": "Smart TV",
+      "dedicated_workspace": "Workspace",
+      "soundproofing": "Soundproofing",
+      "kitchen": "Kitchen",
+      "refrigerator": "Refrigerator",
+      "stove": "Stove",
+      "oven": "Oven",
+      "microwave": "Microwave",
+      "dishwasher": "Dishwasher",
+      "electric_kettle": "Electric kettle",
+      "coffee_machine": "Coffee machine",
+      "toaster": "Toaster",
+      "cookware": "Cookware",
+      "dishes": "Dishes and cutlery",
+      "dining_table": "Dining table",
+      "washing_machine": "Washing machine",
+      "dryer": "Dryer",
+      "hair_dryer": "Hair dryer",
+      "iron": "Iron",
+      "ironing_board": "Ironing board",
+      "hot_water": "Hot water",
+      "bathtub": "Bathtub",
+      "shower": "Shower",
+      "towels": "Towels",
+      "toiletries": "Toiletries",
+      "bed_linen": "Bed linen",
+      "blackout_curtains": "Blackout curtains",
+      "wardrobe": "Wardrobe",
+      "crib": "Cot",
+      "high_chair": "High chair",
+      "balcony": "Balcony",
+      "terrace": "Terrace",
+      "mountain_view": "Mountain view",
+      "garden": "Garden",
+      "outdoor_furniture": "Outdoor furniture",
+      "barbecue": "Barbecue",
+      "parking": "Parking",
+      "lift": "Lift",
       "ski_storage": "Ski storage",
       "pool": "Pool",
-      "lift": "Lift"
+      "indoor_pool": "Indoor pool",
+      "sauna": "Sauna",
+      "hot_tub": "Hot tub",
+      "gym": "Gym",
+      "ev_charger": "EV charger",
+      "step_free_access": "Step-free entrance",
+      "self_check_in": "Self check-in",
+      "pets_allowed": "Pets allowed",
+      "luggage_storage": "Luggage storage",
+      "long_stays": "Long stays",
+      "smoke_alarm": "Smoke alarm",
+      "carbon_monoxide_alarm": "Carbon monoxide alarm",
+      "fire_extinguisher": "Fire extinguisher",
+      "first_aid_kit": "First aid kit",
+      "safe": "Safe"
     },
-    "validationError": "Check the page address. Publishing requires a title, short and full descriptions, and at least one photo."
+    "validationError": "Check the page address. Publishing requires a title, short and full descriptions, and at least one photo.",
+    "amenityGroups": {
+      "essentials": "Essentials and work",
+      "kitchen": "Kitchen and dining",
+      "bathroom": "Bathroom and laundry",
+      "bedroom": "Bedroom and children",
+      "outdoor": "Outdoors",
+      "building": "Building and grounds",
+      "services": "Stay options",
+      "safety": "Safety"
+    },
+    "searchAmenities": "Search amenities",
+    "amenitiesSelected": "Selected: {count}",
+    "noAmenityMatches": "No matches. Try another search."
   }
 }

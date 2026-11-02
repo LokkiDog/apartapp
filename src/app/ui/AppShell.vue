@@ -13,7 +13,22 @@ import { PasskeySettings } from "#fsd/features/manage-passkeys";
 import UserMenu from "./UserMenu.vue";
 import { ReleaseAnnouncement, useReleaseAnnouncement } from "#fsd/features/release-announcement";
 const releaseAnnouncements = useReleaseAnnouncement();
-const { t } = useI18n();
+const { t, localeProperties } = useI18n();
+const sidebarCollapsed = ref(false);
+const sidebarStorageKey = "aparts:sidebar-collapsed";
+const sidebarToggleLabel = computed(() =>
+  t(sidebarCollapsed.value ? "nav.expandMenu" : "nav.collapseMenu"),
+);
+const sidebarTooltipContent = computed(() => ({
+  side: localeProperties.value.dir === "rtl" ? "left" as const : "right" as const,
+  sideOffset: 8,
+}));
+function toggleSidebar() {
+  sidebarCollapsed.value = !sidebarCollapsed.value;
+  try {
+    localStorage.setItem(sidebarStorageKey, String(sidebarCollapsed.value));
+  } catch { /* The menu remains usable when storage is unavailable. */ }
+}
 
 type NavItem = { to: string; label: string; icon: string };
 const route = useRoute();
@@ -38,6 +53,9 @@ const { isLoading: isPageLoading } = useLoadingIndicator({
 });
 
 onMounted(() => {
+  try {
+    sidebarCollapsed.value = localStorage.getItem(sidebarStorageKey) === "true";
+  } catch { /* Use the expanded default when storage is unavailable. */ }
   mobileNavigationReady.value = true;
   notificationsReady.value = true;
 });
@@ -203,33 +221,55 @@ async function logout() {
 </script>
 
 <template>
-  <div class="app-shell">
+  <div class="app-shell" :class="{ 'app-shell--sidebar-collapsed': sidebarCollapsed }">
     <div id="app-top-banner" class="app-top-banner" />
     <p v-if="!online" class="offline-banner">{{ $t("common.offline") }}</p>
 
     <aside class="desktop-sidebar">
-      <NuxtLink :to="homeHref" class="brand-mark"
-        >aparts<span>.</span></NuxtLink
-      >
-      <nav class="desktop-sidebar__nav mt-8 space-y-6" :aria-label="$t('nav.work')">
-        <section v-for="group in groups" :key="group.label">
-          <p v-if="group.label" class="nav-group-label">{{ group.label }}</p>
-          <div :class="group.label ? 'mt-2 space-y-1' : 'space-y-1'">
-            <NuxtLink
+      <div class="desktop-sidebar__header">
+        <NuxtLink v-if="!sidebarCollapsed" :to="homeHref" class="brand-mark"
+          >aparts<span>.</span></NuxtLink
+        >
+        <UTooltip :text="sidebarToggleLabel" :content="sidebarTooltipContent">
+          <UButton
+            color="neutral"
+            variant="ghost"
+            icon="i-lucide-panel-left-close"
+            class="desktop-sidebar__toggle"
+            :class="{ 'desktop-sidebar__toggle--collapsed': sidebarCollapsed }"
+            :aria-label="sidebarToggleLabel"
+            :aria-expanded="!sidebarCollapsed"
+            aria-controls="desktop-navigation"
+            @click="toggleSidebar"
+          />
+        </UTooltip>
+      </div>
+      <nav id="desktop-navigation" class="desktop-sidebar__nav mt-8 space-y-6" :aria-label="$t('nav.work')">
+        <section v-for="group in groups" :key="group.label" :aria-label="group.label || undefined">
+          <p v-if="group.label && !sidebarCollapsed" class="nav-group-label">{{ group.label }}</p>
+          <div :class="group.label && !sidebarCollapsed ? 'mt-2 space-y-1' : 'space-y-1'">
+            <UTooltip
               v-for="item in group.items"
               :key="item.to"
-              :to="item.to"
-              class="nav-item"
-              :class="{ 'nav-item--active': active(item.to) }"
+              :text="item.label"
+              :disabled="!sidebarCollapsed"
+              :content="sidebarTooltipContent"
             >
-              <UIcon :name="item.icon" class="size-5" /><span>{{
-                item.label
-              }}</span>
-            </NuxtLink>
+              <NuxtLink
+                :to="item.to"
+                class="nav-item"
+                :class="{ 'nav-item--active': active(item.to) }"
+                :aria-label="item.label"
+                :aria-current="active(item.to) ? 'page' : undefined"
+              >
+                <UIcon :name="item.icon" class="size-5 shrink-0" aria-hidden="true" />
+                <span v-if="!sidebarCollapsed">{{ item.label }}</span>
+              </NuxtLink>
+            </UTooltip>
           </div>
         </section>
       </nav>
-      <UserMenu :name="user?.name" :role-label="roleLabel" :logout-pending="logoutPending" @logout="logout" />
+      <UserMenu :collapsed="sidebarCollapsed" :name="user?.name" :role-label="roleLabel" :logout-pending="logoutPending" @logout="logout" />
     </aside>
 
     <div class="app-content">

@@ -1,5 +1,6 @@
 <script setup lang="ts">
-const { copy } = useSite()
-useSeoMeta({ title: `${copy.privacy} — Aparts Bansko` })
+const { copy, pageUrl, localePath } = useSite()
+useSeoMeta({ title: () => `${copy.value.privacy} — Aparts Bansko` })
+useHead(() => ({ link: [{ rel: 'canonical', href: pageUrl('/privacy') }] }))
 </script>
-<template><main id="main" class="legal"><h1>{{ copy.privacy }}</h1><p>На сайте можно посмотреть апартаменты без регистрации. Формы заявок, рекламные трекеры и аналитические cookie не используются.</p><p>При открытии страниц сервер получает технические данные запроса, необходимые для работы сайта: IP-адрес, адрес страницы и сведения о браузере.</p><p>Кнопка связи открывает WhatsApp. Данные, которые вы отправляете в переписке, обрабатываются также по правилам этого сервиса. В сообщение подставляются только название и ссылка на выбранный апартамент.</p><NuxtLink to="/">{{ copy.home }}</NuxtLink></main></template>
+<template><main id="main" class="legal"><h1>{{ copy.privacy }}</h1><p>{{ copy.privacyBrowsing }}</p><p>{{ copy.privacyTechnical }}</p><p>{{ copy.privacyMap }}</p><p>{{ copy.privacyWhatsApp }}</p><p>{{ copy.privacyPreferences }}</p><NuxtLink :to="localePath('/')">{{ copy.home }}</NuxtLink></main></template>

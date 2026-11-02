@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { matchesDashboardCleaning, readDashboardWorkFilter } from '../src/pages/work/model/dashboard-filter'
 import { buildOperations, operationsDate, shiftOperationsDate, type OperationsInput } from '../server/modules/dashboard/operations-model'
 
 const now = new Date('2026-10-26T09:00:00Z')
@@ -38,6 +39,25 @@ describe('operations dashboard', () => {
     expect(result.attention.map(a => a.id)).toEqual(['cleaning:old', 'cleaning:unassigned', 'cleaning:joint'])
     expect(result.attention.find(a => a.id === 'cleaning:joint')).toMatchObject({ category: 'assignments', assigneeNames: ['worker-1', 'worker-2'], action: { kind: 'open', href: '/cleanings/joint' } })
     expect(result.attention.find(a => a.id === 'cleaning:old')?.category).toBe('overdue')
+  })
+
+  it('counts unfinished urgent work once per day and matches the dated work filter', () => {
+    const cleanings = [
+      cleaning('joint', { isUrgent: true, assignments: [assignment(), assignment('worker-2')] }),
+      cleaning('progress', { isUrgent: true, status: 'in_progress' }),
+      cleaning('unassigned', { isUrgent: true, status: 'unassigned', assignments: [] }),
+      cleaning('done', { isUrgent: true, status: 'completed' }),
+      cleaning('canceled', { isUrgent: true, status: 'canceled' }),
+      cleaning('regular'),
+      cleaning('tomorrow', { isUrgent: true, scheduledOn: '2026-10-27' }),
+      cleaning('outside-week', { isUrgent: true, scheduledOn: '2026-11-02' })
+    ]
+    const result = buildOperations(input({ cleanings }), now)
+    expect(result.days.map(day => day.urgent)).toEqual([3, 1, 0, 0, 0, 0, 0])
+    for (const day of result.days) {
+      const filter = readDashboardWorkFilter({ date: day.date, filter: 'urgent' })
+      expect(cleanings.filter(row => matchesDashboardCleaning(row, filter, result.today))).toHaveLength(day.urgent)
+    }
   })
 
   it('treats acceptance by any assigned employee as accepted', () => {

@@ -129,7 +129,8 @@ export function buildOperations(input: OperationsInput, now = new Date()): Omit<
     const rows = cleanings.filter(c => c.scheduledOn === date)
     const dailyArrivals = incoming.filter(s => s.checkInOn === date)
     return { date, assigned: rows.filter(c => c.status === 'completed' || c.assignments.length > 0).length,
-      unassigned: rows.filter(c => c.status !== 'completed' && !c.assignments.length).length, arrivals: dailyArrivals.length,
+      unassigned: rows.filter(c => c.status !== 'completed' && !c.assignments.length).length,
+      urgent: rows.filter(c => c.isUrgent && unfinished(c.status)).length, arrivals: dailyArrivals.length,
       turnovers: new Set(dailyArrivals.filter(s => input.stays.some(previous => previous.apartmentId === s.apartmentId && previous.id !== s.id && previous.checkOutOn === date)).map(s => s.apartmentId)).size }
   })
   return { today, generatedAt: now.toISOString(),

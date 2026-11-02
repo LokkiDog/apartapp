@@ -2,7 +2,7 @@
 import { useReleaseAnnouncement } from '#fsd/features/release-announcement'
 import type { DropdownMenuItem } from '@nuxt/ui'
 
-const props = defineProps<{ mobile?: boolean; name?: string; roleLabel: string; logoutPending: boolean }>()
+const props = defineProps<{ mobile?: boolean; collapsed?: boolean; name?: string; roleLabel: string; logoutPending: boolean }>()
 const emit = defineEmits<{ logout: [] }>()
 const { t } = useI18n()
 const { unread } = useReleaseAnnouncement()
@@ -19,13 +19,15 @@ const items = computed<DropdownMenuItem[][]>(() => [
 <template>
   <UDropdownMenu :items="items" :modal="false" :content="{ align: 'end', side: mobile ? 'bottom' : 'top', sideOffset: 8 }" :ui="{ content: 'min-w-56', item: 'min-h-11 items-center cursor-pointer active:bg-[var(--color-surface-muted)]' }" :class="mobile ? 'lg:hidden' : 'w-full'">
     <UButton v-if="mobile" color="neutral" variant="ghost" icon="i-lucide-user-round" class="topbar-action min-h-11 min-w-11 lg:hidden" :aria-label="t('account.menu')" :loading="logoutPending" :disabled="logoutPending" />
-    <UButton v-else color="neutral" variant="ghost" class="sidebar-profile w-full text-start" :aria-label="`${t('account.menu')}: ${name ?? ''}`" :disabled="logoutPending">
-      <span class="min-w-0 flex-1">
-        <span class="block truncate text-sm font-semibold">{{ name }}</span>
-        <span class="block text-xs font-normal text-[var(--color-muted)]">{{ roleLabel }}</span>
-      </span>
-      <UIcon name="i-lucide-chevrons-up-down" class="size-5 shrink-0 text-[var(--color-muted)]" />
-    </UButton>
+    <UTooltip v-else :text="`${t('account.menu')}: ${name ?? ''}`" :disabled="!collapsed">
+      <UButton color="neutral" variant="ghost" :icon="collapsed ? 'i-lucide-user-round' : undefined" class="sidebar-profile w-full text-start" :class="{ 'sidebar-profile--collapsed': collapsed }" :aria-label="`${t('account.menu')}: ${name ?? ''}`" :disabled="logoutPending">
+        <span v-if="!collapsed" class="min-w-0 flex-1">
+          <span class="block truncate text-sm font-semibold">{{ name }}</span>
+          <span class="block text-xs font-normal text-[var(--color-muted)]">{{ roleLabel }}</span>
+        </span>
+        <UIcon v-if="!collapsed" name="i-lucide-chevrons-up-down" class="size-5 shrink-0 text-[var(--color-muted)]" />
+      </UButton>
+    </UTooltip>
     <template #whats-new-trailing><span v-if="unread" class="release-unread-dot" :aria-label="t('releaseAnnouncement.unread')" /></template>
   </UDropdownMenu>
 </template>
@@ -41,6 +43,12 @@ const items = computed<DropdownMenuItem[][]>(() => [
 .sidebar-profile {
   background: var(--color-surface-muted);
   transition: background-color 150ms ease-out;
+}
+.sidebar-profile--collapsed {
+  min-width: 44px;
+  min-height: 44px;
+  justify-content: center;
+  padding-inline: 0;
 }
 .sidebar-profile:hover,
 .sidebar-profile[data-state="open"] {

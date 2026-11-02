@@ -52,7 +52,7 @@ function dismissBanner() {
   </Teleport>
   <section class="page-wrap space-y-6">
     <template v-if="administrator && ready">
-      <PageHeader :title="t('nav.home')">
+      <PageHeader class="dashboard-header" :title="t('nav.home')">
         <template #actions>
           <UDropdownMenu :items="[{ label: switchLabel, icon: 'i-lucide-repeat-2', onSelect: switchDesign }]" :content="{ align: 'end' }">
             <UButton class="min-h-11 min-w-11" icon="i-lucide-ellipsis" color="neutral" variant="soft" :aria-label="t('operations.designMenu')" />
@@ -66,3 +66,9 @@ function dismissBanner() {
     <div v-else class="space-y-4" :aria-label="t('operations.loading')" aria-busy="true"><USkeleton class="h-16 w-full rounded-2xl" /><USkeleton class="h-64 w-full rounded-2xl" /></div>
   </section>
 </template>
+
+<style scoped>
+@media (max-width: 639px) {
+  .dashboard-header :deep(.page-header__actions) { display: none; }
+}
+</style>

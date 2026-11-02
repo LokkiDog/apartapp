@@ -1,16 +1,20 @@
-export interface ApartmentFilters {
-  onlyMine: boolean
-  hotelId: string
-  typeId: string
-  status: string
-}
+import { z } from 'zod'
+
+export const apartmentFiltersSchema = z.object({
+  onlyMine: z.boolean().default(false),
+  hotelId: z.string().default('all'),
+  typeId: z.string().default('all'),
+  status: z.enum(['all', 'active', 'inactive', 'archived']).default('all'),
+  publication: z.enum(['all', 'published', 'unpublished']).default('all'),
+})
+export type ApartmentFilters = z.infer<typeof apartmentFiltersSchema>
 
 export function createApartmentFilters(): ApartmentFilters {
-  return { onlyMine: false, hotelId: 'all', typeId: 'all', status: 'all' }
+  return apartmentFiltersSchema.parse({})
 }
 
 export function matchesApartmentFilters(
-  apartment: { hotel: { id: string }, type: { id: string }, status: string, managers: Array<{ id: string }> },
+  apartment: { hotel: { id: string }, type: { id: string }, status: string, isPublished?: boolean, managers: Array<{ id: string }> },
   filters: ApartmentFilters,
   currentUserId?: string
 ): boolean {
@@ -18,4 +22,5 @@ export function matchesApartmentFilters(
     && (filters.hotelId === 'all' || apartment.hotel.id === filters.hotelId)
     && (filters.typeId === 'all' || apartment.type.id === filters.typeId)
     && (filters.status === 'all' || apartment.status === filters.status)
+    && (filters.publication === 'all' || Boolean(apartment.isPublished) === (filters.publication === 'published'))
 }

@@ -263,7 +263,9 @@ async function save(event: FormSubmitEvent<ApartmentInput>) {
 
     <UAlert v-if="error" color="error" variant="soft" icon="i-lucide-circle-alert" :title="t('apartments.saveError')" :description="error" />
 
-    <div class="apartment-form-actions surface">
+    <slot name="before-actions" />
+
+    <div class="apartment-form-actions surface flex-wrap">
       <UButton
         to="/apartments"
         color="neutral"
@@ -272,7 +274,7 @@ async function save(event: FormSubmitEvent<ApartmentInput>) {
       >
         {{ t('common.cancel') }}
       </UButton>
-      <p class="hidden text-sm text-[var(--color-muted)] sm:block">{{ t('apartments.saveRequiredHint') }}</p>
+      <slot name="actions"><p class="hidden text-sm text-[var(--color-muted)] sm:block">{{ t('apartments.saveRequiredHint') }}</p></slot>
       <UButton
         type="submit"
         :loading="pending"

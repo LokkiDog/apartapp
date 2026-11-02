@@ -21,5 +21,5 @@ export default defineEventHandler(async event => {
       : await db.query.tasks.findFirst({ where: and(eq(tasks.id, query.entityId), eq(tasks.organizationId, actor.organizationId)) }).then(task => Boolean(task && canAccessAssignedWork(actor, task.assigneeId)))
     if (!allowed) throw createError({ statusCode: 403, statusMessage: 'Нет доступа к вложениям' })
   }
-  return db.query.attachments.findMany({ where: and(eq(attachments.organizationId, actor.organizationId), eq(attachments.entityType, query.entityType), eq(attachments.entityId, query.entityId)), orderBy: [asc(attachments.createdAt)] })
+  return db.query.attachments.findMany({ where: and(eq(attachments.organizationId, actor.organizationId), eq(attachments.entityType, query.entityType), eq(attachments.entityId, query.entityId)), orderBy: query.entityType === 'apartment' ? [asc(attachments.position), asc(attachments.createdAt), asc(attachments.id)] : [asc(attachments.createdAt)] })
 })

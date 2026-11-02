@@ -127,6 +127,15 @@
     "chooseBooking": "יש לבחור הזמנה",
     "tariffReason": "יש להזין סיבה לשינוי התעריף — לפחות 3 תווים"
   },
+  "integrations": {
+    "retry": "ניסיון חוזר",
+    "title": "אינטגרציות",
+    "connected": "מחובר",
+    "disconnected": "לא מחובר",
+    "error": "שגיאה",
+    "loading": "טוען…",
+    "calendarUrl": "קישור iCal"
+  },
   "icalImport": {
     "title": "Booking.com iCal",
     "hint": "הדביקו קישור iCal של Booking.com. התאריכים מסתנכרנים אוטומטית; יש להזין את מספר האורחים בנפרד.",
@@ -253,6 +262,8 @@
     "discrepancy": "פער:"
   },
   "nav": {
+    "collapseMenu": "כיווץ התפריט",
+    "expandMenu": "הרחבת התפריט",
     "work": "עבודה",
     "objects": "נכסים",
     "reports": "דוחות",
@@ -493,8 +504,18 @@
     "filterHotel": "מלון",
     "filterType": "סוג",
     "filterStatus": "סטטוס",
+    "filterPublication": "פרסום",
+    "filterPublished": "מפורסמות",
+    "filterUnpublished": "לא מפורסמות",
     "resetFilters": "איפוס",
-    "showFiltered": "הצגה ({count})"
+    "showFiltered": "הצגה ({count})",
+    "photoMain": "ראשית",
+    "photoDrag": "גרירת תמונה",
+    "photoPrevious": "העברה אחורה",
+    "photoNext": "העברה קדימה",
+    "photoOrderError": "לא ניתן לשמור את סדר התמונות. נסו שוב.",
+    "photoOrderSaved": "סדר התמונות נשמר",
+    "photoOrderSaving": "שומר את סדר התמונות…"
   },
   "hotels": {
     "title": "נכסים",
@@ -1084,7 +1105,8 @@
     },
     "titles": {
       "accountAndWork": "פרופיל, אבטחה וכלי עבודה",
-      "unifiedInterface": "ממשק אחיד ב־Aparts"
+      "unifiedInterface": "ממשק אחיד ב־Aparts",
+      "guestAndApartments": "אתר לאורחים וניהול דירות"
     },
     "groups": {
       "added": "נוסף",
@@ -1102,7 +1124,19 @@
       "reload": "תוקנו שגיאות תצוגה בפרופיל, במפתחות הגישה ובהתראות לאחר {highlight}.",
       "consistentDesign": "{highlight} עוצבו באופן אחיד, גם במכשירים ניידים.",
       "languages": "הורחבה התמיכה {highlight}, כולל תצוגה מימין לשמאל.",
-      "liveUpdates": "שופר {highlight} ללא טעינה מחדש של העמוד."
+      "liveUpdates": "שופר {highlight} ללא טעינה מחדש של העמוד.",
+      "guestCatalogue": "{highlight} עם דירות נבחרות, קטלוג, מפה, גלריות ותצוגת דירה. פנייה ב-WhatsApp כוללת את הדירה שנבחרה ואת תאריכי השהייה.",
+      "publicationSettings": "{highlight}: חלון נפרד לשם הציבורי, לתיאור, לכתובת העמוד, לסדר בקטלוג ולמתקנים לפי קבוצות. מצב הפרסום מוצג ברשימת הדירות.",
+      "bookingIntegration": "{highlight}: חיבור, ניתוק, סנכרון ידני וצפייה במצב הייבוא באזור האינטגרציות של הדירה.",
+      "operationsDashboard": "{highlight} עם ניקיונות לשבוע, עבודות דחופות, עומס עובדים והכנות להגעות. נשמרת האפשרות לבחור בתצוגה הקודמת.",
+      "publicationLanguages": "{highlight} באתר האורחים. נוספו תרגום אוטומטי ועריכה ידנית של הטקסטים הציבוריים, שמירת השפה ותצוגה מימין לשמאל בעברית.",
+      "apartmentPhotos": "{highlight} ל-CRM ולאתר: גרירה עם תצוגה מקדימה של המיקום; התמונה הראשונה היא תמונת השער. כל התמונות מוצגות באתר באותו סדר.",
+      "savedApartmentFilters": "{highlight} כוללים כעת מצב פרסום. החיפוש והמסננים נשמרים בנפרד לכל משתמש וארגון.",
+      "compactNavigation": "{highlight} ניתן לצמצום לסמלים והבחירה נשמרת. אזורי עריכת הדירה משתמשים ברוחב המסך הזמין.",
+      "dashboardPlanning": "{highlight} מציגה סך עבודות, עבודות דחופות ועבודות ללא שיבוץ, עם קישורים לרשימות מסוננות. התצוגה בנייד קומפקטית יותר ובחירת תקופת ההכנה להגעות ברורה יותר.",
+      "catalogueSearch": "{highlight}: נוספו מפת אתר, robots.txt וקישורים לגרסאות השפה של העמודים עבור מנועי חיפוש.",
+      "publicationValidation": "{highlight} מציגה שגיאות בשדות חובה, יוצרת כתובת קריאה ומטפלת בכתובות תפוסות. פרסום דורש תמונות; מחיקת התמונה האחרונה מסתירה את הדירה.",
+      "publicationPrivacy": "{highlight} אינן נגישות לאחר ביטול הפרסום; מטמון ציבורי מושבת. דירות בארכיון ודירות לא פעילות אינן נכללות בקטלוג."
     },
     "highlights": {
       "profile": "פרופיל אישי",
@@ -1115,7 +1149,19 @@
       "reload": "טעינה מחדש של העמוד",
       "consistentDesign": "הכרטיסים, הטפסים, הסטטוסים והפעולות",
       "languages": "ברוסית, באנגלית ובעברית",
-      "liveUpdates": "עדכון ההתראות"
+      "liveUpdates": "עדכון ההתראות",
+      "guestCatalogue": "אתר לאורחים",
+      "publicationSettings": "פרסום מתוך ה-CRM",
+      "bookingIntegration": "Booking.com באמצעות iCal",
+      "operationsDashboard": "לוח תפעול",
+      "publicationLanguages": "רוסית, אנגלית, עברית ובולגרית",
+      "apartmentPhotos": "גלריית תמונות משותפת",
+      "savedApartmentFilters": "מסנני הדירות",
+      "compactNavigation": "תפריט הצד",
+      "dashboardPlanning": "תוכנית הניקיונות השבועית",
+      "catalogueSearch": "איתור אתר האורחים",
+      "publicationValidation": "בדיקת פרסום",
+      "publicationPrivacy": "מודעות ותמונות שהוסתרו"
     }
   },
   "releaseAnnouncement": {
@@ -1165,6 +1211,30 @@
     "noTeam": "אין שיבוצים עדיין",
     "noTeamDescription": "יש לשבץ עובדים לניקיונות ולמשימות של היום.",
     "week": "7 הימים הקרובים",
+    "allWork": "כל העבודות",
+    "day": "יום",
+    "totalCleanings": "סה״כ ניקיונות",
+    "assignCount": "שיבוץ {count}",
+    "allAssigned": "הכול משובץ",
+    "noCleanings": "אין ניקיונות",
+    "weekCounts": {
+      "cleanings": {
+        "zero": "{count} ניקיונות",
+        "one": "ניקיון {count}",
+        "two": "{count} ניקיונות",
+        "few": "{count} ניקיונות",
+        "many": "{count} ניקיונות",
+        "other": "{count} ניקיונות"
+      },
+      "urgent": {
+        "zero": "מתוכם {count} דחופים",
+        "one": "מתוכם {count} דחוף",
+        "two": "מתוכם {count} דחופים",
+        "few": "מתוכם {count} דחופים",
+        "many": "מתוכם {count} דחופים",
+        "other": "מתוכם {count} דחופים"
+      }
+    },
     "assigned": "משובצים",
     "unassigned": "ללא עובד",
     "chartLabel": "מספר הניקיונות בשבעת הימים הקרובים",
@@ -1248,6 +1318,11 @@
     }
   },
   "publication": {
+    "translationsDescription": "ניתן לבדוק ולערוך את התרגומים. הם יישמרו עם הפרסום.",
+    "translationFailed": "לא ניתן לתרגם. נסו שוב או הזינו את הטקסט ידנית.",
+    "translationLanguage": "שפה",
+    "configure": "הגדרות פרסום",
+    "allPhotosHint": "כל תמונות הדירה מוצגות באתר. התמונה הראשית היא תמונת השער.",
     "title": "פרסום",
     "live": "באתר",
     "draft": "טיוטה",
@@ -1260,7 +1335,7 @@
     "order": "סדר בקטלוג",
     "amenities": "מתקנים",
     "photos": "תמונות לאתר",
-    "photoHint": "בחרו תמונות. התמונה הראשונה תשמש כתמונת שער.",
+    "photoHint": "בחרו תמונות לאתר. הסדר נקבע באזור תמונות הנכס.",
     "noPhotos": "תחילה העלו תמונות של הדירה.",
     "cover": "תמונת שער",
     "missingPhoto": "התמונה נמחקה — הסירו אותה מהרשימה",
@@ -1273,15 +1348,78 @@
     "retry": "נסו שוב",
     "amenity": {
       "wifi": "Wi-Fi",
-      "kitchen": "מטבח",
-      "parking": "חניה",
-      "balcony": "מרפסת",
-      "washing_machine": "מכונת כביסה",
       "air_conditioning": "מיזוג אוויר",
+      "heating": "חימום",
+      "tv": "טלוויזיה",
+      "smart_tv": "טלוויזיה חכמה",
+      "dedicated_workspace": "פינת עבודה",
+      "soundproofing": "בידוד אקוסטי",
+      "kitchen": "מטבח",
+      "refrigerator": "מקרר",
+      "stove": "כיריים",
+      "oven": "תנור אפייה",
+      "microwave": "מיקרוגל",
+      "dishwasher": "מדיח כלים",
+      "electric_kettle": "קומקום חשמלי",
+      "coffee_machine": "מכונת קפה",
+      "toaster": "טוסטר",
+      "cookware": "כלי בישול",
+      "dishes": "כלי אוכל וסכו״ם",
+      "dining_table": "שולחן אוכל",
+      "washing_machine": "מכונת כביסה",
+      "dryer": "מייבש כביסה",
+      "hair_dryer": "מייבש שיער",
+      "iron": "מגהץ",
+      "ironing_board": "קרש גיהוץ",
+      "hot_water": "מים חמים",
+      "bathtub": "אמבטיה",
+      "shower": "מקלחת",
+      "towels": "מגבות",
+      "toiletries": "מוצרי רחצה",
+      "bed_linen": "מצעים",
+      "blackout_curtains": "וילונות האפלה",
+      "wardrobe": "ארון בגדים",
+      "crib": "מיטת תינוק",
+      "high_chair": "כיסא אוכל לתינוק",
+      "balcony": "מרפסת",
+      "terrace": "טרסה",
+      "mountain_view": "נוף להרים",
+      "garden": "גינה",
+      "outdoor_furniture": "ריהוט גן",
+      "barbecue": "מנגל",
+      "parking": "חניה",
+      "lift": "מעלית",
       "ski_storage": "אחסון ציוד סקי",
       "pool": "בריכה",
-      "lift": "מעלית"
+      "indoor_pool": "בריכה מקורה",
+      "sauna": "סאונה",
+      "hot_tub": "ג׳קוזי",
+      "gym": "חדר כושר",
+      "ev_charger": "עמדת טעינה לרכב חשמלי",
+      "step_free_access": "כניסה ללא מדרגות",
+      "self_check_in": "צ׳ק-אין עצמי",
+      "pets_allowed": "מותר להביא חיות מחמד",
+      "luggage_storage": "שמירת חפצים",
+      "long_stays": "שהיות ארוכות",
+      "smoke_alarm": "גלאי עשן",
+      "carbon_monoxide_alarm": "גלאי פחמן חד-חמצני",
+      "fire_extinguisher": "מטף",
+      "first_aid_kit": "ערכת עזרה ראשונה",
+      "safe": "כספת"
     },
-    "validationError": "בדקו את כתובת העמוד. לפרסום נדרשים שם, תיאור קצר, תיאור מלא ולפחות תמונה אחת."
+    "validationError": "בדקו את כתובת העמוד. לפרסום נדרשים שם, תיאור קצר, תיאור מלא ולפחות תמונה אחת.",
+    "amenityGroups": {
+      "essentials": "ציוד בסיסי ועבודה",
+      "kitchen": "מטבח ואוכל",
+      "bathroom": "רחצה וכביסה",
+      "bedroom": "חדר שינה וילדים",
+      "outdoor": "בחוץ",
+      "building": "בבניין ובמתחם",
+      "services": "אפשרויות השהייה",
+      "safety": "בטיחות"
+    },
+    "searchAmenities": "חיפוש שירותים",
+    "amenitiesSelected": "נבחרו: {count}",
+    "noAmenityMatches": "לא נמצאו תוצאות. נסו חיפוש אחר."
   }
 }

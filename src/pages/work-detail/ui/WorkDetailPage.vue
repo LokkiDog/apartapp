@@ -361,7 +361,7 @@ function requestComplete() {
             </div>
           </div>
         </div>
-        <div v-if="props.kind === 'cleaning' && linenPlan" class="work-detail-linen-plan" :class="{ 'rounded-xl bg-amber-50 py-4 text-amber-950 dark:bg-amber-950/25 dark:text-amber-50': linenPlan.mismatch }">
+        <div v-if="props.kind === 'cleaning' && linenPlan" class="work-detail-linen-plan" :class="{ 'aligned-highlight rounded-xl bg-amber-50 py-4 text-amber-950 dark:bg-amber-950/25 dark:text-amber-50': linenPlan.mismatch }">
           <p class="detail-label">{{ t('work.nextArrival') }}</p>
           <p class="mt-1 font-semibold tabular-nums">{{ linenGuestCountLabel }} · {{ linenPlan.current.source === 'booking' ? formatDate(linenPlan.current.checkInOn!) : t('work.noStay') }}</p>
           <p v-if="linenPlan.prepared" class="mt-2 text-sm text-[var(--color-muted)]" :class="{ 'text-amber-800 dark:text-amber-200': linenPlan.mismatch }">{{ t('work.preparedForGuests', { count: linenPlan.prepared.guestCount }) }}</p>

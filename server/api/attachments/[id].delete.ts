@@ -1,7 +1,7 @@
 import { and, eq } from 'drizzle-orm'
 import { canManageApartment, requireActor, requireRole } from '../../infrastructure/auth/actor'
 import { db } from '../../infrastructure/database/client'
-import { attachments } from '../../infrastructure/database/schema'
+import { apartments, attachments } from '../../infrastructure/database/schema'
 import { fileStorage } from '../../infrastructure/storage/local'
 
 export default defineEventHandler(async event => {
@@ -13,7 +13,10 @@ export default defineEventHandler(async event => {
     requireRole(actor, 'manager')
     if (!(await canManageApartment(actor, attachment.entityId))) throw createError({ statusCode: 403, statusMessage: 'Нет доступа к фотографии' })
   }
-  await db.delete(attachments).where(eq(attachments.id, attachment.id))
+  await db.transaction(async tx => {
+    await tx.select({ id: apartments.id }).from(apartments).where(and(eq(apartments.id, attachment.entityId), eq(apartments.organizationId, actor.organizationId))).for('update')
+    await tx.delete(attachments).where(and(eq(attachments.id, attachment.id), eq(attachments.organizationId, actor.organizationId)))
+  })
   await Promise.allSettled([fileStorage.remove(attachment.storageKey)])
   return { id: attachment.id }
 })

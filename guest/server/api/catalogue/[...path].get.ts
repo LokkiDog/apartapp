@@ -4,7 +4,8 @@ export default defineEventHandler(async (event): Promise<unknown> => {
   if (!/^apartments(?:\/[a-z0-9]+(?:-[a-z0-9]+)*(?:\/photos\/[0-9a-f-]{36})?)?$/.test(path)) throw createError({ statusCode: 404 })
   const base = useRuntimeConfig(event).catalogueApiBase.replace(/\/$/, '')
   try {
-    const response = await $fetch.raw<unknown>(`${base}/api/catalogue/${path}`, { responseType: path.includes('/photos/') ? 'arrayBuffer' : 'json' })
+    const locale = getQuery(event).locale
+    const response = await $fetch.raw<unknown>(`${base}/api/catalogue/${path}`, { query: typeof locale === 'string' ? { locale } : undefined, timeout: 10000, retry: 0, responseType: path.includes('/photos/') ? 'arrayBuffer' : 'json' })
     setHeader(event, 'cache-control', 'no-store')
     if (path.includes('/photos/')) { setHeader(event, 'content-type', 'image/webp'); return Buffer.from(response._data as ArrayBuffer) }
     return response._data

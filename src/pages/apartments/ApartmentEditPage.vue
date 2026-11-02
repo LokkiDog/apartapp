@@ -11,7 +11,7 @@ import { useCurrentUser } from '#fsd/shared/auth'
 import { DeleteConfirmModal, PageHeader } from '#fsd/shared/ui'
 import ApartmentPhotoPanel, { type ApartmentPhotoAttachment } from './ApartmentPhotoPanel.vue'
 import ApartmentPublicationPanel from './ApartmentPublicationPanel.vue'
-import IcalIntegrationPanel from '../calendar/IcalIntegrationPanel.vue'
+import ApartmentIntegrationsPanel from './ApartmentIntegrationsPanel.vue'
 import { useI18n } from 'vue-i18n'
 
 type ApartmentRecord = ApartmentInput & {
@@ -24,6 +24,7 @@ const route = useRoute()
 const apartmentId = String(route.params.id)
 const currentUser = useCurrentUser()
 const { t } = useI18n()
+const publicationOpen = ref(false)
 const isAdministrator = computed(() => Boolean(currentUser.value?.roles.includes('administrator')))
 const isApartmentOwner = computed(() => Boolean(currentUser.value?.roles.includes('manager') && !isAdministrator.value))
 const canOpenApartmentSettings = computed(() => Boolean(currentUser.value?.roles.some(role => ['administrator', 'manager'].includes(role))))
@@ -64,6 +65,24 @@ const initialValue = computed<Partial<ApartmentInput>>(() => apartment.value ? {
   status: apartment.value.status
 } : {})
 
+const photoOrderPending = ref(false)
+const photoOrderError = ref('')
+async function reorderPhotos(photoIds: string[]) {
+  if (photoOrderPending.value || uploadPending.value || photoDeletePending.value) return
+  const previous = [...(photos.value ?? [])]
+  photoOrderPending.value = true
+  photoOrderError.value = ''
+  const byId = new Map(previous.map(photo => [photo.id, photo]))
+  photos.value = photoIds.map(id => byId.get(id)!).filter(Boolean)
+  try {
+    photos.value = await $fetch<Attachment[]>(`/api/apartments/${apartmentId}/photos/order`, { method: 'PATCH', body: { photoIds } })
+  } catch (cause: any) {
+    photos.value = previous
+    photoOrderError.value = cause?.data?.statusMessage ?? t('apartments.photoOrderError')
+  } finally {
+    photoOrderPending.value = false
+  }
+}
 const uploadPending = ref(false)
 const pendingPhotos = ref<File[]>([])
 const photoToDelete = ref<Attachment | null>(null)
@@ -199,7 +218,7 @@ async function removeApartment() {
       </template>
     </PageHeader>
 
-    <div v-if="loading" class="mx-auto grid max-w-5xl gap-5">
+    <div v-if="loading" class="grid w-full gap-5">
       <USkeleton class="h-72 rounded-2xl" />
       <USkeleton class="h-80 rounded-2xl" />
       <USkeleton class="h-52 rounded-2xl" />
@@ -222,6 +241,10 @@ async function removeApartment() {
         :pending-photos="pendingPhotos"
         :loading="photosStatus === 'pending'"
         :uploading="uploadPending"
+        :reordering="photoOrderPending"
+        :disabled="photoDeletePending || photoOrderPending || uploadPending"
+        :order-error="photoOrderError"
+        @reorder="reorderPhotos"
         @select="uploadPhotos"
         @remove-pending="removePendingPhoto"
         @remove-attachment="askToDeletePhoto"
@@ -256,11 +279,18 @@ async function removeApartment() {
         :hotels="hotels ?? []"
         :managers="users ?? []"
         :apartment-types="types ?? []"
-      />
+      >
+        <template #before-actions>
+          <ApartmentIntegrationsPanel :apartment-id="apartmentId" :apartment-name="apartment.name" @synced="refreshApartment" />
+        </template>
+        <template #actions>
+          <UButton type="button" color="neutral" variant="outline" icon="i-lucide-globe" class="min-h-11 max-sm:order-first max-sm:w-full" aria-haspopup="dialog" :aria-expanded="publicationOpen" @click="publicationOpen = true">{{ t('publication.configure') }}</UButton>
+        </template>
+      </ApartmentForm>
 
-      <ApartmentPublicationPanel v-if="isAdministrator" :apartment-id="apartmentId" :apartment-status="apartment.status" :photos="photos ?? []" />
+      <ApartmentPublicationPanel v-if="isAdministrator" v-model:open="publicationOpen" :apartment-id="apartmentId" :apartment-status="apartment.status" :photos="photos ?? []" />
 
-      <IcalIntegrationPanel :apartment-id="apartmentId" :apartment-name="apartment.name" @synced="refreshApartment" />
+      <ApartmentIntegrationsPanel v-if="!isAdministrator" :apartment-id="apartmentId" :apartment-name="apartment.name" @synced="refreshApartment" />
 
       <section v-if="isAdministrator" class="apartment-management surface">
         <div class="apartment-danger-zone">

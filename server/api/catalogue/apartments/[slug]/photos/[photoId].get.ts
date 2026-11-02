@@ -5,7 +5,7 @@ export default defineEventHandler(async event => {
   const organizationId = useRuntimeConfig(event).catalogueOrganizationId
   const [row] = await publicPublicationRows(organizationId, getRouterParam(event, 'slug')!)
   if (!row) throw createError({ statusCode: 404, statusMessage: 'Фото не найдено' })
-  const photos = await publicPhotos(row.publication.id, organizationId, row.publication.apartmentId)
+  const photos = await publicPhotos(organizationId, row.publication.apartmentId)
   const photo = photos.find(item => item.id === getRouterParam(event, 'photoId'))
   if (!photo) throw createError({ statusCode: 404, statusMessage: 'Фото не найдено' })
   try {

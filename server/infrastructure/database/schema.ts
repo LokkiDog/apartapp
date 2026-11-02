@@ -559,9 +559,10 @@ export const attachments = pgTable('attachments', {
   fileName: text('file_name').notNull(),
   mimeType: text('mime_type').notNull(),
   storageKey: text('storage_key').notNull().unique(),
+  position: integer('position').notNull().default(0),
   uploadedById: uuid('uploaded_by_id').notNull().references(() => users.id),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
-})
+}, table => [index('attachment_apartment_photo_order_idx').on(table.organizationId, table.entityType, table.entityId, table.position, table.createdAt, table.id)])
 
 export interface CleaningTariff {
   ownerTotalEur: number

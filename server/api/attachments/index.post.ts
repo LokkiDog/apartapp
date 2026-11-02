@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { and, eq } from 'drizzle-orm'
+import { and, eq, max } from 'drizzle-orm'
 import { canAccessAssignedWork, canManageApartment, requireActor } from '../../infrastructure/auth/actor'
 import { db } from '../../infrastructure/database/client'
 import { apartments, attachments, cleaningProblems, cleanings, tasks } from '../../infrastructure/database/schema'
@@ -55,7 +55,22 @@ export default defineEventHandler(async event => {
   const fileName = file.filename || 'photo.jpg'
   const storageKey = `${actor.organizationId}/${storedEntityType}/${storedEntityId}/${randomUUID()}-${fileName.replace(/[^a-zA-Z0-9._-]/g, '_')}`
   await fileStorage.put(storageKey, file.data)
-  const attachment = (await db.insert(attachments).values({ organizationId: actor.organizationId, entityType: storedEntityType, entityId: storedEntityId, fileName, mimeType, storageKey, uploadedById: actor.id }).returning())[0]
+  let attachment
+  try {
+    attachment = await db.transaction(async tx => {
+      let position = 0
+      if (storedEntityType === 'apartment') {
+        const [apartment] = await tx.select({ id: apartments.id }).from(apartments).where(and(eq(apartments.id, storedEntityId), eq(apartments.organizationId, actor.organizationId))).for('update')
+        if (!apartment) throw createError({ statusCode: 404, statusMessage: 'Апартамент не найден' })
+        const [last] = await tx.select({ position: max(attachments.position) }).from(attachments).where(and(eq(attachments.organizationId, actor.organizationId), eq(attachments.entityType, 'apartment'), eq(attachments.entityId, storedEntityId)))
+        position = (last?.position ?? -1) + 1
+      }
+      return (await tx.insert(attachments).values({ organizationId: actor.organizationId, entityType: storedEntityType, entityId: storedEntityId, fileName, mimeType, storageKey, uploadedById: actor.id, position }).returning())[0]
+    })
+  } catch (error) {
+    await Promise.allSettled([fileStorage.remove(storageKey)])
+    throw error
+  }
   if (cleaningIdForRealtime) await publishCleaningChangeForId(actor, cleaningIdForRealtime, 'progress')
   if (entityType === 'task') {
     const task = await db.query.tasks.findFirst({ where: and(eq(tasks.id, entityId), eq(tasks.organizationId, actor.organizationId)) })

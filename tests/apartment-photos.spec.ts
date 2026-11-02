@@ -20,7 +20,6 @@ describe('apartment photos', () => {
     const form = readFileSync('src/pages/apartments/ApartmentPhotoPanel.vue', 'utf8')
 
     expect(service).toContain('photo: photos[0] ?? null, photos')
-    expect(service).toContain('.orderBy(asc(attachments.createdAt), asc(attachments.id))')
     expect(list).toContain('<ApartmentPhotoCarousel v-if="apartment.photos.length"')
     expect(form).toContain('accept="image/jpeg,image/png,image/webp" multiple')
     expect(form).toContain('URL.revokeObjectURL')
