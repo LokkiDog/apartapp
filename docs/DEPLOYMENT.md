@@ -111,8 +111,9 @@ Push в ветку релиза или ручной запуск на ней с�
    новый checkout как `.env.production` с правами 0600. Для MagicMop укажите
    `POSTGRES_DB=magicmop`, `POSTGRES_USER=magicmop`, новый пароль и соответствующий
    `DATABASE_URL=postgresql://magicmop:<пароль>@postgres:5432/magicmop`.
-   Установите `ORGANIZATION_NAME=MagicMop`, `NUXT_PUBLIC_APP_URL=https://app.magicmopcrm.com`,
-   bootstrap-логин и пароль, отдельные session/VAPID-ключи и подтверждённого
+   Установите `NUXT_ORGANIZATION_NAME=MagicMop`, `NUXT_PUBLIC_APP_URL=https://app.magicmopcrm.com`,
+   `NUXT_BOOTSTRAP_ADMIN_EMAIL`, `NUXT_BOOTSTRAP_ADMIN_PASSWORD`, отдельные
+   session/VAPID-ключи и подтверждённого
    отправителя MagicMop. Если нужен системный доступ для создания клиентов,
    укажите тот же адрес администратора в `SUPERUSER_EMAIL`.
 3. Для каждого экземпляра создайте `/var/lib/aparts-deploy/<экземпляр>`

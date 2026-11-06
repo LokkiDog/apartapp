@@ -38,6 +38,17 @@ for service in $services; do
   rm -f "$rollback/$service.image"
   if [ -n "$container" ]; then
     image=$(docker inspect --format '{{.Image}}' "$container")
+    if ! docker image inspect "$image" >/dev/null 2>&1; then
+      # With containerd an OCI index may be addressable by its tag only.
+      image=$(docker inspect --format '{{.Config.Image}}' "$container")
+      manifest=$(docker inspect --format '{{.ImageManifestDescriptor.Digest}}' "$container")
+      platform=$(docker inspect --format '{{.ImageManifestDescriptor.Platform.OS}}/{{.ImageManifestDescriptor.Platform.Architecture}}' "$container")
+      available=$(docker image inspect --platform "$platform" --format '{{.Descriptor.Digest}}' "$image")
+      if [ "$manifest" != "$available" ]; then
+        echo "Cannot identify the running $instance $service image for rollback." >&2
+        exit 1
+      fi
+    fi
     docker image tag "$image" "$instance-$service:rollback"
     printf '%s\n' "$instance-$service:rollback" > "$rollback/$service.image"
   fi
