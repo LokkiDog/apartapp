@@ -7,6 +7,7 @@ const { data: clients, refresh, status, error: loadError } = await useAsyncData<
 const search = ref('')
 const filtered = computed(() => clients.value.filter(client => `${client.name} ${client.administrators.map(admin => admin.email).join(' ')}`.toLowerCase().includes(search.value.toLowerCase())))
 const open = ref(false); const pending = ref(false); const error = ref(''); const notice = ref('')
+const enteringClientId = ref<string | null>(null)
 const selected = ref<PlatformClient | null>(null)
 const kind = ref<'create' | 'edit' | 'invite'>('create')
 const form = reactive({ name: '', timezone: 'Europe/Sofia', administratorName: '', email: '' })
@@ -40,8 +41,14 @@ async function resend(client: PlatformClient, administratorId: string) {
   catch (cause: any) { error.value = cause?.data?.statusMessage ?? 'Не удалось отправить письмо' }
 }
 async function enter(client: PlatformClient) {
+  if (enteringClientId.value) return
+  enteringClientId.value = client.id
+  error.value = ''
   try { await switchClientContext(client.id) }
-  catch (cause: any) { error.value = cause?.data?.statusMessage ?? 'Не удалось открыть клиента' }
+  catch (cause: any) {
+    error.value = cause?.data?.statusMessage ?? 'Не удалось открыть клиента'
+    enteringClientId.value = null
+  }
 }
 function actions(client: PlatformClient) {
   return [
@@ -78,7 +85,7 @@ function actions(client: PlatformClient) {
           <div v-for="admin in client.administrators" :key="admin.id" class="min-w-0"><strong>{{ admin.name }}</strong><p class="break-all text-[var(--color-muted)]">{{ admin.email }}<span v-if="admin.status === 'invited'"> · Приглашён</span></p></div>
         </div>
         <footer class="catalog-card__footer">
-          <UButton color="neutral" variant="soft" @click="enter(client)">Открыть CRM</UButton>
+          <UButton color="neutral" variant="soft" :loading="enteringClientId === client.id" :disabled="enteringClientId !== null" @click="enter(client)">Открыть CRM</UButton>
           <UDropdownMenu :items="actions(client)" :content="{ align: 'end' }" :modal="false"><UButton icon="i-lucide-ellipsis-vertical" aria-label="Действия клиента" color="neutral" variant="ghost" class="size-11" /></UDropdownMenu>
         </footer>
       </article>

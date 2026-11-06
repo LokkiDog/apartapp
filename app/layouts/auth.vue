@@ -2,6 +2,7 @@
 import { CrmBrandMark, LanguageSwitcher } from '#fsd/app'
 
 const { public: { brand } } = useRuntimeConfig()
+const isMagicMop = brand.id === 'magicmop'
 </script>
 
 <template>
@@ -14,8 +15,8 @@ const { public: { brand } } = useRuntimeConfig()
     <div class="auth-shell__body">
       <section class="auth-shell__intro" aria-labelledby="auth-intro-title">
         <div class="auth-shell__story">
-          <h2 id="auth-intro-title">{{ $t('auth.introTitle') }}</h2>
-          <p>{{ $t('auth.introText') }}</p>
+          <h2 id="auth-intro-title">{{ $t(isMagicMop ? 'auth.magicmopIntroTitle' : 'auth.introTitle') }}</h2>
+          <p>{{ $t(isMagicMop ? 'auth.magicmopIntroText' : 'auth.introText') }}</p>
           <div class="auth-product" aria-hidden="true">
             <div class="auth-product__apartment">
               <img src="/illustrations/apartment.svg" alt="" width="640" height="440" />

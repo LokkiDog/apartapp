@@ -3948,7 +3948,11 @@ html[dir="rtl"] .desktop-sidebar__toggle--collapsed :is(svg, .iconify) {
   display: none;
   min-width: 0;
 }
-.auth-shell__story h2 {
+.auth-shell__story > h2,
+.auth-shell__story > p {
+  white-space: pre-line;
+}
+.auth-shell__story > h2 {
   font-size: clamp(36px, 3.35vw, 56px);
   line-height: 1.08;
   font-weight: 650;

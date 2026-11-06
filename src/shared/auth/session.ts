@@ -15,12 +15,20 @@ export function usesManagerOnlyNavigation(user: Pick<SessionUser, 'roles'> | nul
   )
 }
 
+let clientContextChannel: BroadcastChannel | undefined
+
+export function getClientContextChannel() {
+  if (import.meta.client && typeof BroadcastChannel !== 'undefined') {
+    clientContextChannel ??= new BroadcastChannel('aparts-client-context')
+  }
+  return clientContextChannel
+}
+
 export async function switchClientContext(organizationId: string | null) {
   await $fetch('/api/system/context', { method: 'POST', body: { organizationId } })
   if (import.meta.client) {
-    const channel = new BroadcastChannel('aparts-client-context')
-    channel.postMessage({ type: 'changed' })
-    channel.close()
+    // Use the listener's channel so this document does not receive its own message.
+    getClientContextChannel()?.postMessage({ type: 'changed' })
     // A new document discards requests, page state and realtime subscriptions.
     window.location.assign(organizationId ? '/' : '/system/clients')
   }

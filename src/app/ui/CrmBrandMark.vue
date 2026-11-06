@@ -3,6 +3,12 @@ const { public: { brand } } = useRuntimeConfig()
 </script>
 
 <template>
-  <img v-if="brand.logo" :src="brand.logo" :alt="brand.shortName" class="h-9 w-28 object-contain" width="112" height="36" />
+  <img v-if="brand.logo" :src="brand.logo" :alt="brand.shortName" class="block h-auto" width="122" height="34" />
   <template v-else>aparts<span>.</span></template>
 </template>
+
+<style scoped>
+img {
+  outline: none;
+}
+</style>
