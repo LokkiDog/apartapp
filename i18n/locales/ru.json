@@ -146,12 +146,12 @@
     "conflicts": "Конфликты бронирований",
     "conflictTitle": "Пересечение · {apartment}",
     "bookingCalendar": "Booking.com",
-    "bookingAparts": "Aparts",
+    "booking{brand}": "{brand}",
     "guestsEnteredSeparately": "Число гостей указывается отдельно",
     "same": "Это тот же заезд",
     "different": "Другое бронирование",
-    "keepAparts": "Оставить Aparts",
-    "bookingStaysActive": "Решение «Оставить Aparts» скроет событие только в Aparts. Бронирование в Booking.com останется активным.",
+    "keep{brand}": "Оставить {brand}",
+    "bookingStaysActive": "Решение «Оставить {brand}» скроет событие только в {brand}. Бронирование в Booking.com останется активным.",
     "adminReview": "Нужно решение администратора",
     "waitAdmin": "Случай передан администратору.",
     "guestCountTitle": "Гости",
@@ -291,15 +291,15 @@
     "specialist": "Специалист"
   },
   "pwa": {
-    "ariaLabel": "Установка приложения Aparts",
-    "iosTitle": "Открыть Aparts без панелей Safari",
-    "installTitle": "Установить Aparts",
+    "ariaLabel": "Установка приложения {brand}",
+    "iosTitle": "Открыть {brand} без панелей Safari",
+    "installTitle": "Установить {brand}",
     "iosDescription": "Установите CRM с crm.aparts-bansko.com как веб-приложение.",
     "installDescription": "Быстрый доступ к CRM с домашнего экрана.",
     "installAsApp": "Установить как приложение",
     "instructions": "Инструкция",
     "install": "Установить",
-    "dismiss": "Закрыть предложение установить Aparts",
+    "dismiss": "Закрыть предложение установить {brand}",
     "iosStepsTitle": "Установите CRM как веб-приложение",
     "step1": "Откройте crm.aparts-bansko.com напрямую в Safari.",
     "step2": "Нажмите «Поделиться»",
@@ -307,7 +307,7 @@
     "step4": "Включите «Открывать как веб-приложение / Open as Web App», если переключатель отображается.",
     "step5": "Нажмите «Добавить».",
     "repairTitle": "Если панели Safari уже появляются",
-    "repairText": "Удалите старую иконку Aparts с экрана «Домой», затем повторите установку по шагам выше."
+    "repairText": "Удалите старую иконку {brand} с экрана «Домой», затем повторите установку по шагам выше."
   },
   "auth": {
     "showPassword": "Показать пароль",
@@ -319,7 +319,7 @@
     "illustrationChecklist": "Чек-лист уборки",
     "introTitle": "Управление апартаментами",
     "introText": "Бронирования, уборки, задачи и расходы — в одном месте.",
-    "welcome": "Вход в Aparts",
+    "welcome": "Вход в {brand}",
     "loginText": "Войдите в своё рабочее пространство.",
     "email": "Email",
     "password": "Пароль",
@@ -1037,10 +1037,10 @@
     "defaultName": "Мой ключ",
     "passwordHelp": "Подтвердите пароль, чтобы добавить ключ.",
     "add": "Добавить ключ",
-    "added": "Ключ добавлен. Теперь с ним можно входить в Aparts.",
+    "added": "Ключ добавлен. Теперь с ним можно входить в {brand}.",
     "addError": "Не удалось добавить ключ. Попробуйте ещё раз.",
     "empty": "Ключей пока нет",
-    "unsupported": "Ключи доступа недоступны в этом браузере. Откройте Aparts по HTTPS в поддерживаемом браузере.",
+    "unsupported": "Ключи доступа недоступны в этом браузере. Откройте {brand} по HTTPS в поддерживаемом браузере.",
     "deleteKey": "Удалить ключ «{name}»",
     "deleteTitle": "Удалить ключ?",
     "deleteDescription": "Ключ «{name}» больше не сможет использоваться для входа. Вход с паролем останется доступен.",
@@ -1096,7 +1096,7 @@
     }
   },
   "changelog": {
-    "description": "История обновлений Aparts по версиям.",
+    "description": "История обновлений {brand} по версиям.",
     "version": "Версия {version}",
     "prepared": "Подготовлено",
     "status": {
@@ -1105,7 +1105,7 @@
     },
     "titles": {
       "accountAndWork": "Профиль, безопасность и рабочие инструменты",
-      "unifiedInterface": "Единый интерфейс Aparts",
+      "unifiedInterface": "Единый интерфейс {brand}",
       "guestAndApartments": "Гостевой сайт и управление апартаментами"
     },
     "groups": {
@@ -1167,11 +1167,11 @@
     }
   },
   "releaseAnnouncement": {
-    "title": "Что нового в Aparts",
+    "title": "Что нового в {brand}",
     "description": "Обновили личный кабинет и управление уведомлениями. Вот главное:",
-    "imageAlt": "Возможности Aparts: бронирования, профиль, безопасность, уведомления и отчёты",
+    "imageAlt": "Возможности {brand}: бронирования, профиль, безопасность, уведомления и отчёты",
     "openImage": "Открыть изображение",
-    "imageTitle": "Возможности Aparts",
+    "imageTitle": "Возможности {brand}",
     "dismiss": "Понятно",
     "viewAll": "Посмотреть полностью",
     "preview": "Посмотреть анонс",

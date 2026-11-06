@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import CrmBrandMark from "./CrmBrandMark.vue";
 import {
   switchClientContext,
   canAccessWorkSection,
@@ -229,7 +230,7 @@ async function logout() {
     <aside class="desktop-sidebar">
       <div class="desktop-sidebar__header">
         <NuxtLink v-if="!sidebarCollapsed" :to="homeHref" class="brand-mark"
-          >aparts<span>.</span></NuxtLink
+          ><CrmBrandMark /></NuxtLink
         >
         <UTooltip :text="sidebarToggleLabel" :content="sidebarTooltipContent">
           <UButton
@@ -276,7 +277,7 @@ async function logout() {
     <div class="app-content">
       <header class="app-topbar">
         <NuxtLink :to="homeHref" class="brand-mark lg:hidden"
-          >aparts<span>.</span></NuxtLink
+          ><CrmBrandMark /></NuxtLink
         >
         <div class="app-topbar__actions">
           <LanguageSwitcher />

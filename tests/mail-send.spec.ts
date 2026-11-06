@@ -9,11 +9,11 @@ vi.mock('nodemailer', () => ({
   default: { createTransport }
 }))
 
+import { getCrmBrand } from '../shared/config/crm-brand'
 import { sendAccountLink } from '../server/infrastructure/mail/send'
 
 const fetchMock = vi.fn()
 const config: Record<string, any> = {
-  public: { appUrl: 'https://crm.aparts-bansko.com' },
   smtpFrom: 'Aparts CRM <noreply@aparts-bansko.com>',
   smtpHost: 'localhost',
   smtpPort: '1025',
@@ -22,6 +22,7 @@ const config: Record<string, any> = {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  config.public = { appUrl: 'https://crm.aparts-bansko.com', brand: getCrmBrand('aparts') }
   delete config.brevoApiKey
   delete config.smtpUser
   delete config.smtpPassword
@@ -60,7 +61,8 @@ describe('sendAccountLink', () => {
       .rejects.toThrow('Brevo API request failed (401)')
   })
 
-  it('keeps SMTP as a fallback when no Brevo API key is configured', async () => {
+  it('sends a MagicMop reset link by SMTP when no Brevo API key is configured', async () => {
+    config.public = { appUrl: 'https://app.magicmopcrm.com', brand: getCrmBrand('magicmop') }
     await sendAccountLink({ to: 'user@example.com', name: 'Иван', type: 'password_reset', token: 'test-token' })
 
     expect(fetchMock).not.toHaveBeenCalled()
@@ -70,6 +72,9 @@ describe('sendAccountLink', () => {
       connectionTimeout: 10_000,
       socketTimeout: 15_000
     }))
-    expect(sendMail).toHaveBeenCalledOnce()
+    expect(sendMail).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+      subject: 'Восстановление пароля MagicMop',
+      text: expect.stringContaining('https://app.magicmopcrm.com/set-password?token=test-token&lang=ru')
+    }))
   })
 })

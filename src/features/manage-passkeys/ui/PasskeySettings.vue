@@ -1,4 +1,5 @@
 <script setup lang="ts">
+const { public: { brand } } = useRuntimeConfig()
 import { useCurrentUser } from '#fsd/shared/auth'
 import { usePasskeys } from '#fsd/shared/lib'
 import PasskeyManager from './PasskeyManager.vue'
@@ -22,7 +23,7 @@ async function acceptOffer() {
   try {
     if (await passkeys.acceptOffer(t('passkeys.defaultName'))) {
       await refreshNuxtData('account-passkeys')
-      toast.add({ title: t('passkeys.added'), color: 'success' })
+      toast.add({ title: t('passkeys.added', { brand: brand.shortName }), color: 'success' })
     } else {
       open.value = true
     }

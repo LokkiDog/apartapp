@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { LanguageSwitcher } from '#fsd/app'
+import { CrmBrandMark, LanguageSwitcher } from '#fsd/app'
+
+const { public: { brand } } = useRuntimeConfig()
 </script>
 
 <template>
   <main class="auth-shell">
     <header class="auth-shell__header">
-      <NuxtLink to="/login" class="brand-mark text-2xl">aparts<span>.</span></NuxtLink>
+      <NuxtLink to="/login" class="brand-mark text-2xl"><CrmBrandMark /></NuxtLink>
       <LanguageSwitcher :persist="false" labeled />
     </header>
 
@@ -48,6 +50,6 @@ import { LanguageSwitcher } from '#fsd/app'
       <div class="auth-shell__form"><slot /></div>
     </section>
 
-    <footer class="auth-shell__footer">© {{ new Date().getFullYear() }} Aparts</footer>
+    <footer class="auth-shell__footer">© {{ new Date().getFullYear() }} {{ brand.shortName }}</footer>
   </main>
 </template>

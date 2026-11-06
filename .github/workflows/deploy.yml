@@ -3,11 +3,13 @@ name: Deploy production
 on:
   push:
     branches:
-      - main
+      - aparts
+      - magicmop
+  pull_request:
   workflow_dispatch:
 
 concurrency:
-  group: production
+  group: crm-${{ github.ref }}
   cancel-in-progress: false
 
 permissions:
@@ -17,7 +19,9 @@ jobs:
   verify:
     name: Verify
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
+    env:
+      CRM_BRAND: ${{ github.ref_name == 'magicmop' && 'magicmop' || 'aparts' }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -48,12 +52,13 @@ jobs:
     needs: verify
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    environment: production
+    if: github.ref == 'refs/heads/aparts' || github.ref == 'refs/heads/magicmop'
+    environment: ${{ github.ref_name == 'magicmop' && 'magicmop-production' || 'production' }}
     env:
       DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
       DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
       DEPLOY_PORT: ${{ vars.DEPLOY_PORT || '22' }}
-      DEPLOY_PATH: ${{ vars.DEPLOY_PATH || '/home/aparts-bansko' }}
+      DEPLOY_PATH: ${{ vars.DEPLOY_PATH || (github.ref_name == 'magicmop' && '/home/magicmop-crm' || '/home/aparts-bansko') }}
     steps:
       - name: Validate deployment configuration
         env:
@@ -85,11 +90,27 @@ jobs:
           printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
 
-      - name: Run production deployment
+      - name: Deploy exact commit
         run: |
+          [[ "$DEPLOY_PATH" =~ ^/[a-zA-Z0-9_./-]+$ ]]
           ssh \
             -i ~/.ssh/id_ed25519 \
             -p "$DEPLOY_PORT" \
             -o BatchMode=yes \
             "$DEPLOY_USER@$DEPLOY_HOST" \
-            "cd -- '$DEPLOY_PATH' && ./deploy/deploy.sh"
+            "sh -s -- '$DEPLOY_PATH' '$GITHUB_REF_NAME' '$GITHUB_SHA'" <<'SH'
+          set -eu
+          cd "$1"
+          branch=$2
+          sha=$3
+          case "$branch" in aparts|magicmop) ;; *) exit 2 ;; esac
+          state="/var/lib/aparts-deploy/$branch"
+          test "$(cat "$state/checkout")" = "$(pwd -P)"
+          exec 8>"$state/checkout.lock"
+          flock 8
+          test -z "$(git status --porcelain)"
+          git fetch --no-tags origin "refs/heads/$branch"
+          git merge-base --is-ancestor "$sha" FETCH_HEAD
+          git checkout --detach "$sha"
+          ./deploy/deploy.sh "$branch" "$sha"
+          SH

@@ -83,6 +83,7 @@ export async function notifyUsers(input: {
     keys: { p256dh: subscription.p256dh, auth: subscription.auth }
     }, JSON.stringify({
       id: notification.id,
+      icon: config.public.brand.icon192,
       title: localizedNotificationTitle(notification.type, locale, notification.title, notification.eventKey),
       body: localizedNotificationBody(notification.type, locale, notification.body),
       href: notification.href ?? '/notifications',

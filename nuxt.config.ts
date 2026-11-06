@@ -2,6 +2,10 @@ import { resolve } from 'node:path'
 import { specialServiceIconClientNames } from './shared/config/special-service-icons'
 import { AUTH_SESSION_IDLE_MAX_AGE_SECONDS } from './shared/config/auth-session'
 
+import { getCrmBrand } from './shared/config/crm-brand'
+
+const brand = getCrmBrand(process.env.CRM_BRAND)
+
 export default defineNuxtConfig({
   compatibilityDate: '2026-08-09',
   devtools: { enabled: true },
@@ -28,19 +32,19 @@ export default defineNuxtConfig({
   },
   app: {
     head: {
-      title: 'Aparts CRM',
+      title: brand.name,
       viewport: 'width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover',
       meta: [
         { name: 'description', content: 'Операционная CRM для апарт-отелей' },
         { name: 'theme-color', content: '#1f5d50' },
         { name: 'mobile-web-app-capable', content: 'yes' },
         { name: 'apple-mobile-web-app-capable', content: 'yes' },
-        { name: 'apple-mobile-web-app-title', content: 'Aparts' },
+        { name: 'apple-mobile-web-app-title', content: brand.shortName },
         { name: 'apple-mobile-web-app-status-bar-style', content: 'default' }
       ],
       link: [
-        { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' },
-        { rel: 'apple-touch-icon', sizes: '180x180', href: '/apple-touch-icon.png' }
+        { rel: 'icon', type: brand.faviconType, href: brand.favicon },
+        { rel: 'apple-touch-icon', sizes: '180x180', href: brand.appleIcon }
       ]
     }
   },
@@ -98,7 +102,7 @@ export default defineNuxtConfig({
     vapidPublicKey: process.env.NUXT_VAPID_PUBLIC_KEY || process.env.VAPID_PUBLIC_KEY,
     vapidPrivateKey: process.env.NUXT_VAPID_PRIVATE_KEY || process.env.VAPID_PRIVATE_KEY,
     public: {
-      appName: process.env.NUXT_PUBLIC_APP_NAME || 'Aparts',
+      brand,
       appUrl: process.env.NUXT_PUBLIC_APP_URL || 'http://localhost:3000',
       vapidPublicKey: process.env.NUXT_PUBLIC_VAPID_PUBLIC_KEY || process.env.NUXT_VAPID_PUBLIC_KEY || process.env.VAPID_PUBLIC_KEY || ''
     }
@@ -111,11 +115,11 @@ export default defineNuxtConfig({
     client: {
       installPrompt: 'aparts-pwa-install-dismissed'
     },
-    includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
+    includeAssets: [brand.favicon.slice(1), brand.appleIcon.slice(1)],
     manifest: {
       id: '/',
-      name: 'Aparts CRM',
-      short_name: 'Aparts',
+      name: brand.name,
+      short_name: brand.shortName,
       description: 'Операционная CRM для апарт-отелей',
       lang: 'ru',
       start_url: '/',
@@ -124,9 +128,9 @@ export default defineNuxtConfig({
       background_color: '#f5f7f6',
       theme_color: '#1f5d50',
       icons: [
-        { src: '/pwa-192x192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
-        { src: '/pwa-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
-        { src: '/pwa-maskable-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }
+        { src: brand.icon192, sizes: '192x192', type: 'image/png', purpose: 'any' },
+        { src: brand.icon512, sizes: '512x512', type: 'image/png', purpose: 'any' },
+        ...(brand.maskableIcon ? [{ src: brand.maskableIcon, sizes: '512x512', type: 'image/png', purpose: 'maskable' as const }] : [])
       ]
     },
     injectManifest: {

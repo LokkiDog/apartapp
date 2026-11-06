@@ -1,0 +1,12 @@
+name: magicmop
+
+services:
+  postgres:
+    ports: !reset []
+
+  app:
+    ports: !override
+      - "127.0.0.1:3002:3000"
+
+  guest:
+    profiles: ["aparts-only"]

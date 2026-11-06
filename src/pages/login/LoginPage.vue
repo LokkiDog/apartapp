@@ -1,4 +1,5 @@
 <script setup lang="ts">
+const { public: { brand } } = useRuntimeConfig()
 import type { RegistrationSettings } from '@contracts/platform'
 import { usePasskeys } from '#fsd/shared/lib'
 const passkeys = usePasskeys()
@@ -44,7 +45,7 @@ async function resetPassword() { resetPending.value = true; resetNotice.value = 
 <template>
   <div class="w-full">
     <div class="surface auth-card auth-card--login">
-      <h2 class="auth-card__title">{{ t('auth.welcome') }}</h2>
+      <h2 class="auth-card__title">{{ t('auth.welcome', { brand: brand.shortName }) }}</h2>
       <p class="auth-card__description">{{ t('auth.loginText') }}</p>
       <UAlert v-if="archivedNotice" class="mt-5" color="warning" variant="soft" icon="i-lucide-archive" :description="archivedNotice" />
       <form ref="loginForm" class="auth-login-form" @keydown.enter="submitLoginOnEnter" @submit.prevent="login">

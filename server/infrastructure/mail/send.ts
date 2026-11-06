@@ -36,20 +36,23 @@ export async function sendAccountLink(input: { to: string; name: string; type: '
   const baseUrl = config.public.appUrl || 'http://localhost:3000'
   const locale = input.locale ?? 'ru'
   const link = `${baseUrl}/set-password?token=${encodeURIComponent(input.token)}&lang=${locale}`
+  const brandName = config.public.brand.name
   const copy = locale === 'en'
-    ? { invitation: 'Invitation to Aparts CRM', reset: 'Reset your Aparts CRM password', hello: 'Hello', inviteText: 'Create a password to sign in to Aparts CRM', resetText: 'Set a new password for Aparts CRM' }
+    ? { invitation: `Invitation to ${brandName}`, reset: `Reset your ${brandName} password`, hello: 'Hello', inviteText: `Create a password to sign in to ${brandName}`, resetText: `Set a new password for ${brandName}` }
     : locale === 'he'
-      ? { invitation: 'הזמנה ל־Aparts CRM', reset: 'איפוס סיסמה ל־Aparts CRM', hello: 'שלום', inviteText: 'צרו סיסמה כדי להיכנס ל־Aparts CRM', resetText: 'הגדירו סיסמה חדשה ל־Aparts CRM' }
-      : { invitation: 'Приглашение в Aparts CRM', reset: 'Восстановление пароля Aparts CRM', hello: 'Здравствуйте', inviteText: 'Создайте пароль для входа в Aparts CRM', resetText: 'Установите новый пароль для Aparts CRM' }
+      ? { invitation: `הזמנה ל־${brandName}`, reset: `איפוס סיסמה ל־${brandName}`, hello: 'שלום', inviteText: `צרו סיסמה כדי להיכנס ל־${brandName}`, resetText: `הגדירו סיסמה חדשה ל־${brandName}` }
+      : { invitation: `Приглашение в ${brandName}`, reset: `Восстановление пароля ${brandName}`, hello: 'Здравствуйте', inviteText: `Создайте пароль для входа в ${brandName}`, resetText: `Установите новый пароль для ${brandName}` }
   const subject = input.type === 'invitation' ? copy.invitation : copy.reset
   const text = `${copy.hello}, ${input.name}! ${input.type === 'invitation' ? copy.inviteText : copy.resetText}: ${link}`
   await sendMail({ to: input.to, name: input.name, subject, text })
 }
 
 export async function sendRegistrationLink(input: { to: string; name: string; token: string }) {
-  const baseUrl = useRuntimeConfig().public.appUrl || 'http://localhost:3000'
+  const { appUrl, brand } = useRuntimeConfig().public
+  const brandName = brand.name
+  const baseUrl = appUrl || 'http://localhost:3000'
   const link = `${baseUrl}/register?token=${encodeURIComponent(input.token)}`
-  await sendMail({ to: input.to, name: input.name, subject: 'Подтверждение регистрации Aparts CRM', text: `Здравствуйте, ${input.name}! Подтвердите email для создания компании в Aparts CRM: ${link}` })
+  await sendMail({ to: input.to, name: input.name, subject: `Подтверждение регистрации ${brandName}`, text: `Здравствуйте, ${input.name}! Подтвердите email для создания компании в ${brandName}: ${link}` })
 }
 
 async function sendMail(input: { to: string; name: string; subject: string; text: string }) {

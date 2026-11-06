@@ -64,7 +64,7 @@ export async function passkeyRegistrationOptions(event: H3Event, password: strin
   if (!await verifyPassword(user.passwordHash, password)) throw createError({ statusCode: 401, statusMessage: 'Неверный пароль' })
   const existing = await db.query.passkeys.findMany({ where: eq(passkeys.userId, user.id) })
   const options = await generateRegistrationOptions({
-    rpName: 'Aparts', rpID, userID: new TextEncoder().encode(user.id), userName: user.email, userDisplayName: user.name,
+    rpName: useRuntimeConfig(event).public.brand.shortName, rpID, userID: new TextEncoder().encode(user.id), userName: user.email, userDisplayName: user.name,
     attestationType: 'none', excludeCredentials: existing.map(key => ({ id: key.id })),
     authenticatorSelection: { residentKey: 'required', userVerification: 'required' }
   })

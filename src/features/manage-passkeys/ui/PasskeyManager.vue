@@ -1,4 +1,5 @@
 <script setup lang="ts">
+const { public: { brand } } = useRuntimeConfig()
 import type { AccountPasskey } from '@contracts/platform'
 import { useCurrentUser } from '#fsd/shared/auth'
 import { usePasskeys } from '#fsd/shared/lib'
@@ -26,7 +27,7 @@ async function add() {
   pending.value = true; error.value = ''; notice.value = ''
   try {
     await passkeys.register(password.value, name.value.trim() || t('passkeys.defaultName'))
-    password.value = ''; name.value = ''; notice.value = t('passkeys.added')
+    password.value = ''; name.value = ''; notice.value = t('passkeys.added', { brand: brand.shortName })
     await refresh()
   } catch (cause: any) {
     error.value = cause?.name === 'NotAllowedError' || cause?.name === 'AbortError' ? t('passkeys.cancelled') : cause?.data?.statusMessage ?? t('passkeys.addError')
@@ -63,7 +64,7 @@ async function remove() {
         <UAlert v-if="error" color="error" :description="error" />
         <UAlert v-if="notice" color="success" :description="notice" />
       </form>
-      <UAlert v-else color="neutral" :description="t('passkeys.unsupported')" />
+      <UAlert v-else color="neutral" :description="t('passkeys.unsupported', { brand: brand.shortName })" />
     </div>
     <div class="form-actions mt-4">
       <UButton v-if="passkeys.supported.value" type="submit" :form="formId" icon="i-lucide-plus" :loading="pending" :disabled="pending || !password">{{ t('passkeys.add') }}</UButton>

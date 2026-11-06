@@ -146,12 +146,12 @@
     "conflicts": "Booking conflicts",
     "conflictTitle": "Overlapping stays · {apartment}",
     "bookingCalendar": "Booking.com",
-    "bookingAparts": "Aparts",
+    "booking{brand}": "{brand}",
     "guestsEnteredSeparately": "Enter the guest count separately",
     "same": "Same stay, dates changed",
     "different": "Different booking",
-    "keepAparts": "Keep Aparts stay",
-    "bookingStaysActive": "Keep Aparts hides this event only in Aparts. The Booking.com reservation remains active.",
+    "keep{brand}": "Keep {brand} stay",
+    "bookingStaysActive": "Keep {brand} hides this event only in {brand}. The Booking.com reservation remains active.",
     "adminReview": "Admin review required",
     "waitAdmin": "This case was sent to an administrator.",
     "guestCountTitle": "Guests",
@@ -291,15 +291,15 @@
     "specialist": "Specialist"
   },
   "pwa": {
-    "ariaLabel": "Install Aparts",
-    "iosTitle": "Open Aparts without Safari bars",
-    "installTitle": "Install Aparts",
+    "ariaLabel": "Install {brand}",
+    "iosTitle": "Open {brand} without Safari bars",
+    "installTitle": "Install {brand}",
     "iosDescription": "Install the CRM from crm.aparts-bansko.com as a web app.",
     "installDescription": "Quick access to CRM from your home screen.",
     "installAsApp": "Install as an app",
     "instructions": "Instructions",
     "install": "Install",
-    "dismiss": "Close Aparts installation prompt",
+    "dismiss": "Close {brand} installation prompt",
     "iosStepsTitle": "Install the CRM as a web app",
     "step1": "Open crm.aparts-bansko.com directly in Safari.",
     "step2": "Tap Share",
@@ -307,7 +307,7 @@
     "step4": "Enable Open as Web App if the switch is shown.",
     "step5": "Tap Add.",
     "repairTitle": "If Safari bars still appear",
-    "repairText": "Remove the old Aparts icon from your Home Screen, then repeat the steps above."
+    "repairText": "Remove the old {brand} icon from your Home Screen, then repeat the steps above."
   },
   "auth": {
     "showPassword": "Show password",
@@ -319,7 +319,7 @@
     "illustrationChecklist": "Cleaning checklist",
     "introTitle": "Apartment management",
     "introText": "Bookings, cleanings, tasks and expenses — all in one place.",
-    "welcome": "Sign in to Aparts",
+    "welcome": "Sign in to {brand}",
     "loginText": "Sign in to your workspace.",
     "email": "Email",
     "password": "Password",
@@ -1037,10 +1037,10 @@
     "defaultName": "My passkey",
     "passwordHelp": "Confirm your password to add a passkey.",
     "add": "Add passkey",
-    "added": "Passkey added. You can now use it to sign in to Aparts.",
+    "added": "Passkey added. You can now use it to sign in to {brand}.",
     "addError": "Could not add the passkey. Try again.",
     "empty": "No passkeys yet",
-    "unsupported": "Passkeys are unavailable in this browser. Open Aparts over HTTPS in a supported browser.",
+    "unsupported": "Passkeys are unavailable in this browser. Open {brand} over HTTPS in a supported browser.",
     "deleteKey": "Delete passkey “{name}”",
     "deleteTitle": "Delete passkey?",
     "deleteDescription": "“{name}” will no longer be usable to sign in. Password sign-in will remain available.",
@@ -1096,7 +1096,7 @@
     }
   },
   "changelog": {
-    "description": "Aparts updates, organized by version.",
+    "description": "{brand} updates, organized by version.",
     "version": "Version {version}",
     "prepared": "Prepared",
     "status": {
@@ -1105,7 +1105,7 @@
     },
     "titles": {
       "accountAndWork": "Profile, security and work tools",
-      "unifiedInterface": "A consistent Aparts interface",
+      "unifiedInterface": "A consistent {brand} interface",
       "guestAndApartments": "Guest website and apartment management"
     },
     "groups": {
@@ -1167,11 +1167,11 @@
     }
   },
   "releaseAnnouncement": {
-    "title": "What’s new in Aparts",
+    "title": "What’s new in {brand}",
     "description": "We updated your account and notification preferences. Here are the highlights:",
-    "imageAlt": "Aparts features: bookings, profile, security, notifications and reports",
+    "imageAlt": "{brand} features: bookings, profile, security, notifications and reports",
     "openImage": "Open image",
-    "imageTitle": "Aparts features",
+    "imageTitle": "{brand} features",
     "dismiss": "Got it",
     "viewAll": "View full update",
     "preview": "Preview announcement",

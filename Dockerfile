@@ -8,6 +8,10 @@ RUN npm ci
 
 FROM dependencies AS build
 
+ARG CRM_BRAND=aparts
+ARG CRM_APP_URL=http://localhost:3000
+ENV CRM_BRAND=$CRM_BRAND NUXT_PUBLIC_APP_URL=$CRM_APP_URL
+
 ENV NODE_OPTIONS=--max-old-space-size=1536
 
 COPY . .

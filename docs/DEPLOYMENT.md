@@ -89,136 +89,76 @@ docker run --rm node:22-alpine sh -c "npx --yes web-push generate-vapid-keys"
 Первый администратор создается идемпотентно при первом успешном старте.
 Последующее изменение bootstrap-пароля не меняет существующую учетную запись.
 
-## Первый запуск
+## Экземпляры и релизы
 
-Проверьте production-конфигурацию:
+| Ветка CRM | GitHub Environment | Checkout на VPS | Compose project | Домен |
+| --- | --- | --- | --- | --- |
+| `aparts` | `production` | `/home/aparts-bansko` | `aparts` | `crm.aparts-bansko.com` |
+| `magicmop` | `magicmop-production` | `/home/magicmop-crm` | `magicmop` | `app.magicmopcrm.com` |
 
-```sh
-docker compose --env-file .env.production -f docker-compose.prod.yml config --quiet
-```
+Общие изменения делаются в `main`, затем переносятся в каждую ветку релиза.
+Push в ветку релиза или ручной запуск на ней собирает и выкатывает SHA события.
+Существующие тома `aparts_postgres_data` и `aparts_uploads_data` используются
+повторно. MagicMop получает свои тома и сеть. Его PostgreSQL доступен только
+внутри Docker, гостевой контейнер не запускается.
 
-Для первого запуска выполните:
+### Подготовка checkout и окружений
 
-```sh
-cd /home/aparts-bansko
-./deploy/deploy.sh
-```
+1. На VPS проверьте ресурсы, свободный `127.0.0.1:3002` и Docker Compose
+   версии 2.24.4 или новее. Установите `curl`, `python3`, `flock` и `rclone`.
+2. Сделайте отдельный checkout для MagicMop. Сохраните текущий checkout
+   Aparts и его `.env.production`. Скопируйте `.env.production.example` в
+   новый checkout как `.env.production` с правами 0600. Для MagicMop укажите
+   `POSTGRES_DB=magicmop`, `POSTGRES_USER=magicmop`, новый пароль и соответствующий
+   `DATABASE_URL=postgresql://magicmop:<пароль>@postgres:5432/magicmop`.
+   Установите `ORGANIZATION_NAME=MagicMop`, `NUXT_PUBLIC_APP_URL=https://app.magicmopcrm.com`,
+   bootstrap-логин и пароль, отдельные session/VAPID-ключи и подтверждённого
+   отправителя MagicMop. Если нужен системный доступ для создания клиентов,
+   укажите тот же адрес администратора в `SUPERUSER_EMAIL`.
+3. Для каждого экземпляра создайте `/var/lib/aparts-deploy/<экземпляр>`
+   с правами 0711 и владельцем SSH-пользователя деплоя. Запишите физический
+   абсолютный путь checkout одной строкой в файл `checkout` (режим 0600).
+   Nginx должен иметь право проверить существование файла `maintenance`.
+4. В обоих GitHub Environments задайте `DEPLOY_HOST`, `DEPLOY_USER`,
+   `DEPLOY_SSH_PRIVATE_KEY` и `DEPLOY_KNOWN_HOSTS`. Для MagicMop используйте
+   отдельный SSH-ключ. Закрепите проверенный host key сервера и разрешите
+   каждому Environment только его ветку. При необходимости задайте variables
+   `DEPLOY_PATH` и `DEPLOY_PORT`. Пользователю деплоя нужен доступ к своему
+   checkout и Docker.
+5. Установите HTTPS-vhost обоих экземпляров с проверкой файла `maintenance`
+   до первого запуска Actions. Во время миграций Nginx возвращает 503.
+   Деплой сам проверяет этот ответ перед остановкой CRM. Затем снимает дамп,
+   применяет миграции, проверяет healthcheck и бренд PWA и сохраняет SHA
+   в `/var/lib/aparts-deploy/<экземпляр>/release-sha`.
 
-Скрипт требует чистый checkout на ветке `main`, выполняет fast-forward из
-`origin/main`, собирает app и migrate images, запускает PostgreSQL, применяет
-Drizzle-миграции и ждет healthy-состояния приложения. Ошибка сборки не
-останавливает текущую версию; ошибка миграции не запускает новую.
+Скрипт хранит предыдущие образы под тегами `<экземпляр>-app:rollback`
+и для Aparts `aparts-guest:rollback`, а дамп перед миграциями — в
+`rollback/database.dump` в каталоге состояния. Если запуск после миграции
+не прошёл, скрипт восстанавливает базу и предыдущий образ, пока вход закрыт
+кодом 503. При прерванной операции или ошибке восстановления сохраните
+`maintenance` и закончите восстановление вручную до снятия этого файла.
 
-Проверьте локальный endpoint до настройки Nginx:
+### Резервные копии
 
-```sh
-curl --fail --show-error http://127.0.0.1:3000/api/health
-docker compose --env-file .env.production -f docker-compose.prod.yml ps
-docker compose --env-file .env.production -f docker-compose.prod.yml logs --tail=100 app
-```
-
-## Автоматический деплой из GitHub
-
-Workflow `.github/workflows/deploy.yml` запускается после каждого push в
-ветку `main`. Сначала GitHub Actions устанавливает зависимости, запускает
-тесты, typecheck и production build. Только после успешных проверок отдельный
-job подключается к VPS по SSH и запускает уже установленный
-`/home/aparts-bansko/deploy/deploy.sh`. Одновременные production-деплои выполняются
-последовательно и не прерывают друг друга.
-
-### Отдельный SSH-ключ для GitHub Actions
-
-Создавайте ключ на своем компьютере, а не внутри репозитория. Ключ не должен
-иметь passphrase: GitHub Actions работает без интерактивного ввода. Комментарий
-помогает позднее понять назначение ключа:
-
-```sh
-ssh-keygen -t ed25519 -C "github-actions-aparts-production" -f ~/.ssh/aparts_github_actions
-```
-
-Когда `ssh-keygen` спросит passphrase, дважды нажмите Enter. Будут созданы два
-файла:
-
-- `~/.ssh/aparts_github_actions` — приватный ключ; его содержимое добавляется
-  только в GitHub Secret `DEPLOY_SSH_PRIVATE_KEY`;
-- `~/.ssh/aparts_github_actions.pub` — публичный ключ; его нужно добавить на
-  VPS в `~/.ssh/authorized_keys` пользователя, под которым выполняется деплой.
-
-Скопируйте публичный ключ на VPS. Замените `deploy` и адрес сервера на реальные
-SSH-пользователя и host:
-
-```sh
-ssh-copy-id -i ~/.ssh/aparts_github_actions.pub deploy@your-server.example.com
-```
-
-Если `ssh-copy-id` недоступен, выведите публичную часть командой
-`cat ~/.ssh/aparts_github_actions.pub`, подключитесь к VPS обычным способом и
-добавьте всю строку в `~/.ssh/authorized_keys`. На VPS проверьте права:
-
-```sh
-chmod 700 ~/.ssh
-chmod 600 ~/.ssh/authorized_keys
-```
-
-Пользователь деплоя должен владеть checkout `/home/aparts-bansko`, иметь право запускать
-Docker без `sudo` и читать этот каталог. Обычно для этого его добавляют в группу
-`docker`, после чего нужно выйти из SSH-сессии и войти снова:
-
-```sh
-sudo usermod -aG docker deploy
-sudo chown -R deploy:deploy /home/aparts-bansko
-```
-
-До добавления ключа в GitHub проверьте его с компьютера:
-
-```sh
-ssh -i ~/.ssh/aparts_github_actions deploy@your-server.example.com \
-  'cd /home/aparts-bansko && git status --short && docker compose version'
-```
-
-### GitHub Environment, secrets и variables
-
-В GitHub откройте репозиторий, затем **Settings → Environments → New
-environment**, создайте environment с точным именем `production`. Внутри него
-добавьте Environment secrets:
-
-- `DEPLOY_HOST` — домен или IP VPS без `https://`;
-- `DEPLOY_USER` — SSH-пользователь, например `deploy`;
-- `DEPLOY_SSH_PRIVATE_KEY` — полное содержимое приватного файла
-  `~/.ssh/aparts_github_actions`, включая строки `BEGIN` и `END`;
-- `DEPLOY_KNOWN_HOSTS` — закрепленный публичный SSH host key сервера.
-
-`DEPLOY_KNOWN_HOSTS` получите на своем компьютере, где вы уже проверили SSH
-fingerprint сервера:
-
-```sh
-ssh-keyscan -H -t ed25519 your-server.example.com
-```
-
-Не копируйте результат вслепую из непроверенной сети. Сверьте fingerprint с
-выводом на самом VPS (`sudo ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub`),
-а затем сохраните всю подтвержденную строку `ssh-keyscan` в secret. Если SSH
-работает на нестандартном порту, используйте
-`ssh-keyscan -H -t ed25519 -p PORT HOST`.
-
-В разделе Environment variables при необходимости добавьте:
-
-- `DEPLOY_PORT` — SSH-порт; без variable используется `22`;
-- `DEPLOY_PATH` — путь checkout на VPS; без variable используется
-  `/home/aparts-bansko`.
-
-Значения из `.env.production` в GitHub переносить не нужно: workflow запускает
-скрипт на VPS, а Docker Compose читает production-секреты непосредственно из
-локального `/home/aparts-bansko/.env.production`.
-
-После настройки можно запустить workflow вручную на вкладке **Actions → Deploy
-production → Run workflow**. В дальнейшем каждый push в `main` автоматически
-пройдет проверки и задеплоится. Ручной аварийный запуск на VPS остается тем же:
-
-```sh
-cd /home/aparts-bansko
-./deploy/deploy.sh
-```
+1. Настройте offsite-репозиторий rclone с шифрованием и сроком хранения
+   не менее 30 дней. Для каждого экземпляра создайте `backup.env` (0600)
+   с `CRM_BACKUP_REMOTE=remote:crm-backups` и абсолютным `RCLONE_CONFIG`.
+   Скрипт добавляет отдельный префикс экземпляра и метку времени.
+2. Установите unit-файлы из `deploy/systemd/`. В drop-in для каждого service
+   задайте `[Service]` и `User=<SSH-пользователь деплоя>` с доступом к
+   Docker, каталогу состояния и конфигу rclone. Выполните `systemctl daemon-reload`
+   и включите таймеры `aparts-backup@aparts.timer` и
+   `aparts-backup@magicmop.timer`.
+3. Запустите по одному `aparts-backup@<экземпляр>.service` вручную. Таймер
+   кратковременно останавливает целевую CRM за ответом 503, чтобы копии
+   БД и загрузок соответствовали одному состоянию. Передача в offsite
+   идёт после возобновления CRM. При сбое передачи локальная копия остаётся
+   в `backups/`. Контролируйте статусы таймеров и свободное место на VPS.
+4. До открытия MagicMop клиентам запустите `./deploy/verify-backup.sh <offsite-каталог>`
+   от пользователя бэкапа с его `RCLONE_CONFIG`. Скрипт скачивает копию,
+   проверяет контрольные суммы, восстанавливает БД во временный PostgreSQL
+   и распаковывает файлы в изолированный каталог. Повторяйте проверку после
+   изменения инфраструктуры и настроек копирования.
 
 ## Host Nginx и TLS
 
@@ -273,6 +213,18 @@ systemctl status certbot.timer --no-pager
 
 Полный Nginx-конфиг устанавливает HTTPS-редирект, стандартные proxy-заголовки
 и лимит запроса 10 МБ для фотографий размером до 8 МБ.
+
+### HTTPS для MagicMop CRM
+
+Убедитесь, что `app.magicmopcrm.com` указывает на текущий VPS. Проверьте, что
+этот домен встречается ровно в одной включённой конфигурации Nginx. Для
+первого выпуска сертификата установите `deploy/nginx/magicmop-crm-http.conf`
+как временный HTTP-vhost и выполните `sudo nginx -t && sudo systemctl reload nginx`.
+Выпустите сертификат командой `sudo certbot certonly --nginx -d app.magicmopcrm.com`.
+Замените временный конфиг на `deploy/nginx/magicmop-crm.conf`, снова проверьте
+и перечитайте Nginx. При существующем сертификате можно сразу установить
+HTTPS-vhost. Ссылка «Войти» на лендинге ведёт на
+`https://app.magicmopcrm.com/login` после проверки коммерческой CRM.
 
 ## Гостевой сайт основного домена
 
@@ -339,7 +291,7 @@ API каталога принимает `?locale=en`, `?locale=he` или `?loca
 
 Порядок первого запуска:
 
-1. Соберите и поднимите CRM с миграцией и гостевой сервис через `deploy/deploy.sh`.
+1. После установки HTTPS-vhost CRM запустите workflow для ветки `aparts`.
 2. Проверьте локальные порты 3000 и 3001 и подготовьте публикации в CRM.
 3. Установите `deploy/nginx/aparts-site-http.conf`, выпустите отдельный сертификат
    `certbot certonly --nginx -d aparts-bansko.com`, затем установите
@@ -384,9 +336,8 @@ Healthcheck возвращает только `{ "status": "ok" }` после у
 PostgreSQL. Затем проверьте вход bootstrap-администратором и отправьте
 приглашение на контролируемый email для проверки SMTP.
 
-Автоматические резервные копии PostgreSQL и uploads в эту конфигурацию не
-входят. До их добавления потеря Docker volumes означает потерю production-
-данных и фотографий.
+Для MagicMop выполните те же проверки на `https://app.magicmopcrm.com`.
+Перед первым запуском клиентских аккаунтов проверьте восстановление offsite-копии.
 
 ## Перевод названий допуслуг
 

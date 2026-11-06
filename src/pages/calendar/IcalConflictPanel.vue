@@ -1,4 +1,5 @@
 <script setup lang="ts">
+const { public: { brand } } = useRuntimeConfig()
 import { StatusBadge } from '#fsd/shared/ui'
 import { formatDate } from '#fsd/shared/lib'
 import { useI18n } from 'vue-i18n'
@@ -12,7 +13,7 @@ const conflicts = ref<Conflict[]>([])
 const busy = ref('')
 const error = ref('')
 const targetCleaning = reactive<Record<string, string>>({})
-function cleaningEntries(conflict: Conflict) { return [{ label: t('icalImport.bookingCalendar'), cleaning: conflict.importedStay.cleaning }, { label: t('icalImport.bookingAparts'), cleaning: conflict.existingStay.cleaning }] }
+function cleaningEntries(conflict: Conflict) { return [{ label: t('icalImport.bookingCalendar'), cleaning: conflict.importedStay.cleaning }, { label: t('icalImport.bookingAparts', { brand: brand.shortName }), cleaning: conflict.existingStay.cleaning }] }
 function cleaningStatusLabel(status: string) { return ({ unassigned: t('calendarExtra.cleaningUnassigned'), assigned: t('calendarExtra.cleaningAssigned'), in_progress: t('calendarExtra.cleaningInProgress'), completed: t('calendarExtra.cleaningCompleted'), canceled: t('calendarExtra.cleaningCanceled') } as Record<string, string>)[status] ?? status }
 async function load() { try { conflicts.value = await $fetch<Conflict[]>('/api/calendar-import/conflicts'); for (const conflict of conflicts.value) if (!targetCleaning[conflict.id] && conflict.importedStay.cleaning && conflict.existingStay.cleaning) targetCleaning[conflict.id] = conflict.existingStay.cleaning.id } catch { conflicts.value = [] } }
 async function resolve(conflict: Conflict, decision: 'same' | 'different' | 'keep_aparts') {
@@ -31,7 +32,7 @@ watch(() => props.isAdministrator, load)
       <header class="flex items-center justify-between gap-2"><h2 class="font-semibold">{{ t('icalImport.conflictTitle', { apartment: conflict.apartmentName }) }}</h2><StatusBadge v-if="conflict.status === 'needs_admin'" tone="warning" :label="t('icalImport.adminReview')" /></header>
       <div class="grid gap-3 sm:grid-cols-2">
         <div class="rounded-md bg-[var(--color-surface-muted)] p-3"><p class="text-xs text-[var(--color-muted)]">{{ t('icalImport.bookingCalendar') }}</p><p class="font-medium">{{ conflict.importedStay.icalSummary || t('icalImport.bookingCalendar') }}</p><p>{{ formatDate(conflict.importedStay.checkInOn) }} → {{ formatDate(conflict.importedStay.checkOutOn) }}</p><p class="text-sm">{{ t('icalImport.guestsEnteredSeparately') }}</p></div>
-        <div class="rounded-md bg-[var(--color-surface-muted)] p-3"><p class="text-xs text-[var(--color-muted)]">{{ t('icalImport.bookingAparts') }}</p><p class="font-medium">{{ conflict.existingStay.guestName || t('icalImport.bookingAparts') }}</p><p>{{ formatDate(conflict.existingStay.checkInOn) }} → {{ formatDate(conflict.existingStay.checkOutOn) }}</p></div>
+        <div class="rounded-md bg-[var(--color-surface-muted)] p-3"><p class="text-xs text-[var(--color-muted)]">{{ t('icalImport.bookingAparts', { brand: brand.shortName }) }}</p><p class="font-medium">{{ conflict.existingStay.guestName || t('icalImport.bookingAparts', { brand: brand.shortName }) }}</p><p>{{ formatDate(conflict.existingStay.checkInOn) }} → {{ formatDate(conflict.existingStay.checkOutOn) }}</p></div>
       </div>
       <div v-for="entry in cleaningEntries(conflict)" :key="entry.label" class="rounded-md border border-[var(--color-line)] p-3 text-sm">
         <p class="font-medium">{{ entry.label }} · {{ entry.cleaning ? cleaningStatusLabel(entry.cleaning.status) : t('icalImport.noCleaning') }}</p>
@@ -44,12 +45,12 @@ watch(() => props.isAdministrator, load)
       </div>
       <p v-if="conflict.status === 'needs_admin' && !isAdministrator" class="text-sm text-[var(--color-muted)]">{{ t('icalImport.waitAdmin') }}</p>
       <div v-else class="flex flex-wrap gap-2">
-        <USelect v-if="isAdministrator && conflict.importedStay.cleaning && conflict.existingStay.cleaning" v-model="targetCleaning[conflict.id]" :items="[{ label: t('icalImport.bookingCalendar'), value: conflict.importedStay.cleaning.id }, { label: t('icalImport.bookingAparts'), value: conflict.existingStay.cleaning.id }]" class="min-w-48" />
+        <USelect v-if="isAdministrator && conflict.importedStay.cleaning && conflict.existingStay.cleaning" v-model="targetCleaning[conflict.id]" :items="[{ label: t('icalImport.bookingCalendar'), value: conflict.importedStay.cleaning.id }, { label: t('icalImport.bookingAparts', { brand: brand.shortName }), value: conflict.existingStay.cleaning.id }]" class="min-w-48" />
         <UButton :loading="busy === conflict.id" :disabled="Boolean(busy)" @click="resolve(conflict, 'same')">{{ t('icalImport.same') }}</UButton>
         <UButton color="neutral" variant="soft" :loading="busy === conflict.id" :disabled="Boolean(busy)" @click="resolve(conflict, 'different')">{{ t('icalImport.different') }}</UButton>
-        <UButton color="neutral" variant="ghost" :loading="busy === conflict.id" :disabled="Boolean(busy)" @click="resolve(conflict, 'keep_aparts')">{{ t('icalImport.keepAparts') }}</UButton>
+        <UButton color="neutral" variant="ghost" :loading="busy === conflict.id" :disabled="Boolean(busy)" @click="resolve(conflict, 'keep_aparts')">{{ t('icalImport.keepAparts', { brand: brand.shortName }) }}</UButton>
       </div>
-      <p v-if="conflict.status === 'open'" class="text-xs text-[var(--color-muted)]">{{ t('icalImport.bookingStaysActive') }}</p>
+      <p v-if="conflict.status === 'open'" class="text-xs text-[var(--color-muted)]">{{ t('icalImport.bookingStaysActive', { brand: brand.shortName }) }}</p>
       <p v-if="error" role="alert" class="text-sm text-error">{{ error }}</p>
     </article>
   </section>

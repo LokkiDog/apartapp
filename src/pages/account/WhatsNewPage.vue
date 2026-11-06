@@ -1,4 +1,5 @@
 <script setup lang="ts">
+const { public: { brand } } = useRuntimeConfig()
 import { Translation } from 'vue-i18n'
 import { PageHeader } from '#fsd/shared/ui'
 import { changelog, releaseAnchor, latestReleaseAnnouncement } from '#shared/config/changelog'
@@ -20,14 +21,14 @@ function releaseDate(date: string) {
 <template>
   <section class="page-wrap space-y-6">
     <div class="changelog-content space-y-6">
-      <PageHeader :title="t('account.whatsNew')" :description="t('changelog.description')" />
+      <PageHeader :title="t('account.whatsNew')" :description="t('changelog.description', { brand: brand.shortName })" />
       <ol class="space-y-6">
         <li v-for="release in changelog" :key="release.version">
           <article class="surface overflow-hidden" :aria-labelledby="releaseAnchor(release.version)">
             <header class="flex flex-wrap items-start justify-between gap-3 border-b border-[var(--color-line)] p-5 sm:p-6">
               <div class="min-w-0 space-y-2">
                 <h2 :id="releaseAnchor(release.version)" class="release-version text-lg font-semibold leading-6">{{ t('changelog.version', { version: release.version }) }}</h2>
-                <p class="text-pretty text-sm leading-5">{{ t(`changelog.titles.${release.title}`) }}</p>
+                <p class="text-pretty text-sm leading-5">{{ t(`changelog.titles.${release.title}`, { brand: brand.shortName }) }}</p>
                 <UButton v-if="release.announcement?.enabled" color="neutral" variant="link" icon="i-lucide-eye" class="px-0" @click="announcements.preview(release.version)">{{ t('releaseAnnouncement.preview') }}</UButton>
               <p class="text-sm text-[var(--color-muted)]">
                   <time :datetime="release.date">{{ release.status === 'upcoming' ? `${t('changelog.prepared')} ${releaseDate(release.date)}` : releaseDate(release.date) }}</time>

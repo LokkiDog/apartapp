@@ -1,4 +1,5 @@
 <script setup lang="ts">
+const { public: { brand } } = useRuntimeConfig()
 import { getPwaInstallDismissedKey, getPwaInstallVariant, isStandalonePwa } from '../model/install-pwa'
 
 const pwa = usePWA()
@@ -41,12 +42,13 @@ async function install() {
 </script>
 
 <template>
-  <section v-if="visible" class="pwa-install-card" :aria-label="$t('pwa.ariaLabel')">
+  <section v-if="visible" class="pwa-install-card" :aria-label="$t('pwa.ariaLabel', { brand: brand.shortName })">
     <header class="pwa-install-card__header">
-      <p class="pwa-install-card__title">Aparts</p>
+      <p class="pwa-install-card__title">{{ brand.shortName }}</p>
       <div class="pwa-install-card__header-actions">
-        <UButton class="pwa-install-card__dismiss" color="neutral" variant="ghost" icon="i-lucide-x" :aria-label="$t('pwa.dismiss')" @click="dismiss" />
-        <div class="pwa-install-card__icon" aria-hidden="true">a<span>.</span></div>
+        <UButton class="pwa-install-card__dismiss" color="neutral" variant="ghost" icon="i-lucide-x" :aria-label="$t('pwa.dismiss', { brand: brand.shortName })" @click="dismiss" />
+        <img v-if="brand.logo" :src="brand.icon192" alt="" class="size-10 rounded-lg" width="40" height="40" />
+        <div v-else class="pwa-install-card__icon" aria-hidden="true">a<span>.</span></div>
       </div>
     </header>
 
@@ -71,7 +73,7 @@ async function install() {
       </ol>
       <div class="pwa-install-card__repair">
         <p class="font-semibold">{{ $t('pwa.repairTitle') }}</p>
-        <p>{{ $t('pwa.repairText') }}</p>
+        <p>{{ $t('pwa.repairText', { brand: brand.shortName }) }}</p>
       </div>
       <UButton color="neutral" variant="ghost" size="sm" @click="iosInstructionsOpen = false">{{ $t('common.close') }}</UButton>
     </div>

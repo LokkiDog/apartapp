@@ -1,4 +1,5 @@
 <script setup lang="ts">
+const { public: { brand } } = useRuntimeConfig()
 import { releaseAnchor } from '#shared/config/changelog'
 import { useCurrentUser } from '#fsd/shared/auth'
 import { useReleaseAnnouncement } from '../model/useReleaseAnnouncement'
@@ -85,11 +86,11 @@ async function viewAll() {
 </script>
 
 <template>
-  <UModal :open="announcements.open.value" :title="t('releaseAnnouncement.title')" :description="announcements.displayed.value ? t('changelog.version', { version: announcements.displayed.value.version }) : ''" :ui="{ content: 'release-announcement-modal' }" @update:open="value => { if (!value) dismiss() }">
+  <UModal :open="announcements.open.value" :title="t('releaseAnnouncement.title', { brand: brand.shortName })" :description="announcements.displayed.value ? t('changelog.version', { version: announcements.displayed.value.version }) : ''" :ui="{ content: 'release-announcement-modal' }" @update:open="value => { if (!value) dismiss() }">
     <template #body>
       <div v-if="announcements.displayed.value?.announcement" class="space-y-5">
         <button type="button" class="release-announcement-image-button" :aria-label="t('releaseAnnouncement.openImage')" @click="imageOpen = true">
-          <img :src="announcements.displayed.value.announcement.image" :alt="t('releaseAnnouncement.imageAlt')" class="release-announcement-cover" width="1536" height="1024" />
+          <img :src="announcements.displayed.value.announcement.image" :alt="t('releaseAnnouncement.imageAlt', { brand: brand.shortName })" class="release-announcement-cover" width="1536" height="1024" />
           <span class="release-announcement-zoom" aria-hidden="true"><UIcon name="i-lucide-expand" /></span>
         </button>
         <div class="space-y-2">
@@ -108,9 +109,9 @@ async function viewAll() {
       </div>
     </template>
   </UModal>
-  <UModal v-model:open="imageOpen" fullscreen :title="t('releaseAnnouncement.imageTitle')" :ui="{ content: 'release-image-viewer', body: 'release-image-viewer-body', close: 'release-image-viewer-close' }">
+  <UModal v-model:open="imageOpen" fullscreen :title="t('releaseAnnouncement.imageTitle', { brand: brand.shortName })" :ui="{ content: 'release-image-viewer', body: 'release-image-viewer-body', close: 'release-image-viewer-close' }">
     <template #body>
-      <img v-if="announcements.displayed.value?.announcement" :src="announcements.displayed.value.announcement.image" :alt="t('releaseAnnouncement.imageAlt')" class="release-image-full" width="1536" height="1024" />
+      <img v-if="announcements.displayed.value?.announcement" :src="announcements.displayed.value.announcement.image" :alt="t('releaseAnnouncement.imageAlt', { brand: brand.shortName })" class="release-image-full" width="1536" height="1024" />
     </template>
   </UModal>
 </template>

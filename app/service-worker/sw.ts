@@ -8,11 +8,11 @@ clientsClaim()
 precacheAndRoute(self.__WB_MANIFEST)
 
 self.addEventListener('push', event => {
-  const data = event.data?.json() as { id?: string; title?: string; body?: string; href?: string; timestamp?: string } | undefined
-  event.waitUntil(self.registration.showNotification(data?.title || 'Aparts CRM', {
+  const data = event.data?.json() as { id?: string; title?: string; icon?: string; body?: string; href?: string; timestamp?: string } | undefined
+  event.waitUntil(self.registration.showNotification(data?.title || 'CRM', {
     body: data?.body || '',
-    icon: '/pwa-192x192.png',
-    badge: '/pwa-192x192.png',
+    icon: data?.icon || '/pwa-192x192.png',
+    badge: data?.icon || '/pwa-192x192.png',
     tag: data?.id ? `notification:${data.id}` : undefined,
     data: { href: data?.href || '/', timestamp: data?.timestamp }
   }))

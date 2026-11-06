@@ -146,12 +146,12 @@
     "conflicts": "התנגשויות בהזמנות",
     "conflictTitle": "שהיות חופפות · {apartment}",
     "bookingCalendar": "Booking.com",
-    "bookingAparts": "Aparts",
+    "booking{brand}": "{brand}",
     "guestsEnteredSeparately": "יש להזין את מספר האורחים בנפרד",
     "same": "אותה שהייה, התאריכים השתנו",
     "different": "הזמנה אחרת",
-    "keepAparts": "השארת שהיית Aparts",
-    "bookingStaysActive": "האירוע יוסתר ב-Aparts בלבד. ההזמנה ב-Booking.com תישאר פעילה.",
+    "keep{brand}": "השארת שהיית {brand}",
+    "bookingStaysActive": "האירוע יוסתר ב-{brand} בלבד. ההזמנה ב-Booking.com תישאר פעילה.",
     "adminReview": "נדרשת בדיקת מנהל",
     "waitAdmin": "המקרה הועבר למנהל.",
     "guestCountTitle": "אורחים",
@@ -291,9 +291,9 @@
     "specialist": "מומחה"
   },
   "pwa": {
-    "ariaLabel": "התקנת Aparts",
-    "iosTitle": "פתיחת Aparts ללא סרגלי Safari",
-    "installTitle": "התקנת Aparts",
+    "ariaLabel": "התקנת {brand}",
+    "iosTitle": "פתיחת {brand} ללא סרגלי Safari",
+    "installTitle": "התקנת {brand}",
     "iosDescription": "התקינו את ה־CRM מ־crm.aparts-bansko.com כאפליקציית web.",
     "installDescription": "גישה מהירה ל־CRM ממסך הבית.",
     "installAsApp": "התקנה כאפליקציה",
@@ -307,7 +307,7 @@
     "step4": "הפעילו «Open as Web App» אם המתג מופיע.",
     "step5": "לחצו על «הוספה».",
     "repairTitle": "אם סרגלי Safari עדיין מופיעים",
-    "repairText": "הסירו את סמל Aparts הישן ממסך הבית וחזרו על השלבים."
+    "repairText": "הסירו את סמל {brand} הישן ממסך הבית וחזרו על השלבים."
   },
   "auth": {
     "showPassword": "הצגת סיסמה",
@@ -319,7 +319,7 @@
     "illustrationChecklist": "רשימת ניקיון",
     "introTitle": "ניהול דירות",
     "introText": "הזמנות, ניקיונות, משימות והוצאות — במקום אחד.",
-    "welcome": "כניסה ל־Aparts",
+    "welcome": "כניסה ל־{brand}",
     "loginText": "היכנסו לסביבת העבודה שלכם.",
     "email": "דוא״ל",
     "password": "סיסמה",
@@ -1037,10 +1037,10 @@
     "defaultName": "המפתח שלי",
     "passwordHelp": "אשרו את הסיסמה כדי להוסיף מפתח.",
     "add": "הוספת מפתח",
-    "added": "המפתח נוסף. כעת ניתן להיכנס איתו ל־Aparts.",
+    "added": "המפתח נוסף. כעת ניתן להיכנס איתו ל־{brand}.",
     "addError": "לא ניתן להוסיף את המפתח. נסו שוב.",
     "empty": "אין עדיין מפתחות גישה",
-    "unsupported": "מפתחות גישה אינם זמינים בדפדפן זה. פתחו את Aparts ב־HTTPS בדפדפן נתמך.",
+    "unsupported": "מפתחות גישה אינם זמינים בדפדפן זה. פתחו את {brand} ב־HTTPS בדפדפן נתמך.",
     "deleteKey": "מחיקת המפתח ״{name}״",
     "deleteTitle": "למחוק את המפתח?",
     "deleteDescription": "לא ניתן יהיה להיכנס עם המפתח ״{name}״. כניסה עם סיסמה תישאר זמינה.",
@@ -1096,7 +1096,7 @@
     }
   },
   "changelog": {
-    "description": "העדכונים ב־Aparts, לפי גרסאות.",
+    "description": "העדכונים ב־{brand}, לפי גרסאות.",
     "version": "גרסה {version}",
     "prepared": "הוכן בתאריך",
     "status": {
@@ -1105,7 +1105,7 @@
     },
     "titles": {
       "accountAndWork": "פרופיל, אבטחה וכלי עבודה",
-      "unifiedInterface": "ממשק אחיד ב־Aparts",
+      "unifiedInterface": "ממשק אחיד ב־{brand}",
       "guestAndApartments": "אתר לאורחים וניהול דירות"
     },
     "groups": {
@@ -1167,11 +1167,11 @@
     }
   },
   "releaseAnnouncement": {
-    "title": "מה חדש ב־Aparts",
+    "title": "מה חדש ב־{brand}",
     "description": "עדכנו את החשבון האישי ואת העדפות ההתראות. אלה השינויים העיקריים:",
-    "imageAlt": "יכולות Aparts: הזמנות, פרופיל, אבטחה, התראות ודוחות",
+    "imageAlt": "יכולות {brand}: הזמנות, פרופיל, אבטחה, התראות ודוחות",
     "openImage": "פתיחת התמונה",
-    "imageTitle": "יכולות Aparts",
+    "imageTitle": "יכולות {brand}",
     "dismiss": "הבנתי",
     "viewAll": "לכל פרטי העדכון",
     "preview": "תצוגה מקדימה",

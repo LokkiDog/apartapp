@@ -1,0 +1,9 @@
+[Unit]
+Description=Offsite backup for %i CRM
+After=docker.service network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=/var/lib/aparts-deploy/%i/backup.env
+ExecStart=/usr/bin/flock /var/lib/aparts-deploy/%i/checkout.lock /bin/sh -ec 'exec "$$(cat /var/lib/aparts-deploy/%i/checkout)/deploy/backup.sh" %i'
