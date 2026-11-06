@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import { createError, createEvent, getResponseHeader, defineEventHandler, getQuery, getRouterParam } from 'h3'
 import webpush from 'web-push'
 
+import { getCrmBrand } from '../shared/config/crm-brand'
 import { changelog } from '../shared/config/changelog'
 import { authenticator } from './helpers/passkey'
 import { IncomingMessage, ServerResponse } from 'node:http'
@@ -68,7 +69,7 @@ describe.skipIf(!url)('platform PostgreSQL integration', () => {
     vi.stubGlobal('getUserSession', async () => ({ user: sessionUser }))
     // Renewal transport is separately covered by auth-session.spec.ts.
     vi.stubGlobal('setUserSession', async () => undefined)
-    vi.stubGlobal('useRuntimeConfig', () => ({ session: { password: 'platform-test-password-more-than-32-chars' }, public: { appUrl: 'https://aparts.example' } }))
+    vi.stubGlobal('useRuntimeConfig', () => ({ session: { password: 'platform-test-password-more-than-32-chars' }, public: { appUrl: 'https://aparts.example', brand: getCrmBrand('aparts') } }))
     await db.execute(querySql`SET client_min_messages TO WARNING`)
     await db.execute(querySql`TRUNCATE organizations, pending_registrations, registration_attempts, platform_audit_logs CASCADE`)
     await db.update(tables.systemSettings).set({ registrationMode: 'superuser_only' })
@@ -406,7 +407,7 @@ describe.skipIf(!url)('platform PostgreSQL integration', () => {
     await preferences.updateNotificationPreferences(principal, { changes: [{ event: 'manual', ...channels }] })
     await db.update(tables.users).set({ locale: 'en' }).where(eq(tables.users.id, user.id))
     await db.insert(tables.pushSubscriptions).values({ userId: user.id, endpoint: 'https://push.example/endpoint', p256dh: 'key', auth: 'auth' })
-    vi.stubGlobal('useRuntimeConfig', () => ({ session: { password: 'platform-test-password-more-than-32-chars' }, public: { appUrl: 'https://aparts.example' }, vapidPublicKey: 'public', vapidPrivateKey: 'private', vapidSubject: 'mailto:push@example.com' }))
+    vi.stubGlobal('useRuntimeConfig', () => ({ session: { password: 'platform-test-password-more-than-32-chars' }, public: { appUrl: 'https://aparts.example', brand: getCrmBrand('aparts') }, vapidPublicKey: 'public', vapidPrivateKey: 'private', vapidSubject: 'mailto:push@example.com' }))
     const received = vi.fn()
     realtime.registerNotificationPeer(user.id, { id: 'channel-test', send: received })
     try {

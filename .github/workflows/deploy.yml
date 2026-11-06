@@ -110,7 +110,10 @@ jobs:
           flock 8
           test -z "$(git status --porcelain)"
           git fetch --no-tags origin "refs/heads/$branch"
-          git merge-base --is-ancestor "$sha" FETCH_HEAD
+          if [ "$sha" != "$(git rev-parse FETCH_HEAD)" ]; then
+            echo "Skipping superseded release $sha from $branch."
+            exit 0
+          fi
           git checkout --detach "$sha"
           ./deploy/deploy.sh "$branch" "$sha"
           SH
