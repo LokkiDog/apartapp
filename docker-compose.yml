@@ -1,5 +1,8 @@
+name: aparts
+
 services:
-  postgres:
+  postgres-aparts:
+    container_name: postgres-aparts
     image: postgres:17-alpine
     environment:
       POSTGRES_DB: aparts
@@ -15,6 +18,23 @@ services:
       timeout: 5s
       retries: 10
 
+  postgres-magicmop:
+    container_name: postgres-magicmop
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: magicmop
+      POSTGRES_USER: magicmop
+      POSTGRES_PASSWORD: ${MAGICMOP_POSTGRES_PASSWORD:-magicmop}
+    ports:
+      - "127.0.0.1:52951:5432"
+    volumes:
+      - magicmop_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U magicmop -d magicmop"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   mailpit:
     image: axllent/mailpit:v1.28
     ports:
@@ -23,3 +43,4 @@ services:
 
 volumes:
   postgres_data:
+  magicmop_postgres_data:

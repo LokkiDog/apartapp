@@ -2711,6 +2711,24 @@ html[dir="rtl"] .desktop-sidebar__toggle--collapsed :is(svg, .iconify) {
 .work-pending-acceptance {
   background-color: color-mix(in srgb, #fef3c7 96%, transparent);
 }
+.work-employee-avatar {
+  display: inline-grid;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 50%;
+  background-color: var(--tone-neutral-bg);
+  color: var(--tone-neutral-ink);
+  font-size: 1rem;
+  font-weight: 600;
+}
+.work-employee-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
 .work-group-header {
   background-color: #f1f3f2;
 }

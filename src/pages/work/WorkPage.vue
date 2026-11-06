@@ -1046,82 +1046,92 @@ function taskMenuItems(task: Task): DropdownMenuItem[] {
           </div>
         </section>
 
-        <section
+        <UCollapsible
           v-if="cleaningPlan.attention.length"
+          as="section"
+          :default-open="true"
           class="surface overflow-hidden"
         >
-          <div
-            class="flex items-center gap-3 border-b border-[var(--color-line)] bg-amber-50/70 px-5 py-4"
-          >
-            <UIcon
-              name="i-lucide-calendar-clock"
-              class="size-5 text-amber-700"
-            />
-            <div>
-              <h2 class="font-semibold">{{ t("reports.attention") }}</h2>
-              <p class="text-sm text-amber-800/80">
-                {{ t("reports.refreshSummary") }}
-              </p>
-            </div>
-          </div>
-          <div class="divide-y divide-[var(--color-line)] px-5 sm:px-6">
-            <article
-              v-for="cleaning in cleaningPlan.attention"
-              :key="`attention-${cleaning.id}`"
-              class="work-cleaning-row flex items-center gap-3"
-              :class="{ 'work-cleaning-row--urgent': cleaning.isUrgent, 'work-cleaning-row--awaiting-acceptance': awaitingCleaningAcceptance(cleaning) }"
-              @click="openCleaningCard($event, cleaning)"
+          <template #default="{ open }">
+            <button
+              type="button"
+              class="flex min-h-11 w-full cursor-pointer items-center gap-3 px-5 py-4 text-start transition-colors hover:bg-[var(--color-primary-soft)] active:bg-[var(--color-primary-soft)] focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[var(--color-primary)]"
+              :aria-label="t('reports.attention')"
             >
-              <div
-                class="grid size-9 shrink-0 place-items-center rounded-lg bg-[var(--color-primary-soft)] text-[var(--color-primary)]"
-              >
-                <UIcon name="i-lucide-broom" class="size-4" />
-              </div>
-              <div class="min-w-0 flex-1">
-                <p class="truncate font-medium">
-                  <span v-if="cleaning.isUrgent" class="work-cleaning-row__urgent-label">{{ t("work.urgentCleaning") }}</span><span v-if="cleaning.isUrgent" aria-hidden="true"> · </span>{{ cleaning.apartment.name }}
-                </p>
-                <p class="truncate text-sm text-[var(--color-muted)]">
-                  {{ cleaningSubtitle(cleaning) }} ·
-                  {{ formatDate(cleaning.scheduledOn) }} ·
-                  {{ cleanerNames(cleaning) }}
-                </p>
-              </div>
-              <span class="work-cleaning-row__linen"><LinenStatusControl v-if="isAdministrator || isSpecialist" :started-at="cleaning.startedAt" :collected="cleaning.linenCollected" :editable="canCollectLinen(cleaning)" @toggle="toggleLinen(cleaning, $event)" /></span>
-              <span
-                v-if="isSpecialist"
-                class="work-cleaning-status-dot"
-                :data-tone="statusTones[cleaning.status] ?? 'neutral'"
-                role="img"
-                :aria-label="cleaningStatusLabel(cleaning)"
-                :title="cleaningStatusLabel(cleaning)"
+              <UIcon
+                name="i-lucide-calendar-clock"
+                class="size-5 shrink-0 text-amber-700"
               />
-              <StatusBadge
-                v-if="!isSpecialist"
-                :label="cleaningStatusLabel(cleaning)"
-                tone="warning"
-              /><UButton
-                v-if="isAdministrator && !isFinished(cleaning)"
-                color="primary"
-                variant="soft"
-                icon="i-lucide-calendar-plus"
-                @click="openEditCleaning(cleaning)"
-                >{{ t("common.assignCleaning") }}</UButton
-              ><UDropdownMenu
-                v-if="!isSpecialist && cleaningMenuItems(cleaning).length"
-                :items="cleaningMenuItems(cleaning)"
-                :content="{ align: 'end' }"
-                :modal="false"
-                ><UButton
-                  color="neutral"
-                  variant="ghost"
-                  icon="i-lucide-ellipsis-vertical"
-                  :aria-label="t('work.cleanings')"
-                  class="min-h-11 min-w-11 active:scale-[0.96] transition-transform"
-              /></UDropdownMenu>
-            </article>
-          </div>
-        </section>
+              <span class="min-w-0 flex-1 font-semibold">{{ t("reports.attention") }}</span>
+              <UIcon
+                :name="open ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down'"
+                class="size-5 shrink-0 text-[var(--color-muted)]"
+                aria-hidden="true"
+              />
+            </button>
+          </template>
+          <template #content>
+            <div class="divide-y divide-[var(--color-line)] border-t border-[var(--color-line)] px-5 sm:px-6">
+              <article
+                v-for="cleaning in cleaningPlan.attention"
+                :key="`attention-${cleaning.id}`"
+                class="work-cleaning-row flex items-center gap-3 py-2"
+                :class="{ 'work-cleaning-row--urgent': cleaning.isUrgent, 'work-cleaning-row--awaiting-acceptance': awaitingCleaningAcceptance(cleaning) }"
+                @click="openCleaningCard($event, cleaning)"
+              >
+                <div
+                  class="grid size-9 shrink-0 place-items-center rounded-lg bg-[var(--color-primary-soft)] text-[var(--color-primary)]"
+                >
+                  <UIcon name="i-lucide-broom" class="size-4" />
+                </div>
+                <div class="min-w-0 flex-1">
+                  <p class="truncate font-medium">
+                    <span v-if="cleaning.isUrgent" class="work-cleaning-row__urgent-label">{{ t("work.urgentCleaning") }}</span><span v-if="cleaning.isUrgent" aria-hidden="true"> · </span>{{ cleaning.apartment.name }}
+                  </p>
+                  <p class="truncate text-sm text-[var(--color-muted)]">
+                    {{ cleaningSubtitle(cleaning) }} ·
+                    {{ formatDate(cleaning.scheduledOn) }} ·
+                    {{ cleanerNames(cleaning) }}
+                  </p>
+                </div>
+                <span class="work-cleaning-row__linen"><LinenStatusControl v-if="isAdministrator || isSpecialist" :started-at="cleaning.startedAt" :collected="cleaning.linenCollected" :editable="canCollectLinen(cleaning)" @toggle="toggleLinen(cleaning, $event)" /></span>
+                <span
+                  v-if="isSpecialist"
+                  class="work-cleaning-status-dot"
+                  :data-tone="statusTones[cleaning.status] ?? 'neutral'"
+                  role="img"
+                  :aria-label="cleaningStatusLabel(cleaning)"
+                  :title="cleaningStatusLabel(cleaning)"
+                />
+                <StatusBadge
+                  v-if="!isSpecialist"
+                  :label="cleaningStatusLabel(cleaning)"
+                  tone="warning"
+                /><UButton
+                  v-if="isAdministrator && !isFinished(cleaning)"
+                  color="primary"
+                  variant="soft"
+                  size="sm"
+                  class="shrink-0 px-2.5"
+                  icon="i-lucide-calendar-plus"
+                  @click="openEditCleaning(cleaning)"
+                  >{{ t("common.assignCleaning") }}</UButton
+                ><UDropdownMenu
+                  v-if="!isSpecialist && cleaningMenuItems(cleaning).length"
+                  :items="cleaningMenuItems(cleaning)"
+                  :content="{ align: 'end' }"
+                  :modal="false"
+                  ><UButton
+                    color="neutral"
+                    variant="ghost"
+                    icon="i-lucide-ellipsis-vertical"
+                    :aria-label="t('work.cleanings')"
+                    class="min-h-11 min-w-11 active:scale-[0.96] transition-transform"
+                /></UDropdownMenu>
+              </article>
+            </div>
+          </template>
+        </UCollapsible>
 
         <template v-if="planningMode === 'days'">
           <section
@@ -1305,28 +1315,16 @@ function taskMenuItems(task: Task): DropdownMenuItem[] {
             class="surface overflow-hidden"
           >
             <div
-              class="flex items-center gap-3 border-b border-[var(--color-line)] px-5 py-4 sm:px-6"
+              class="flex items-center gap-3 border-b border-[var(--color-line)] px-5 py-2 sm:px-6"
             >
-              <div
-                class="grid size-10 place-items-center rounded-full bg-[var(--color-primary-soft)] text-[var(--color-primary)]"
-              >
-                <UIcon name="i-lucide-user-round" class="size-5" />
-              </div>
-              <div>
-                <h2 class="mt-0.5 font-semibold">{{ employee.cleanerName }}</h2>
-                <p class="text-sm text-[var(--color-muted)]">
-                  {{
-                    employee.days.reduce(
-                      (total, day) =>
-                        total +
-                        day.cleanings.filter((item) => !isFinished(item))
-                          .length,
-                      0,
-                    )
-                  }}
-                  {{ activeCleaningCountLabel(employee.days.reduce((total, day) => total + day.cleanings.filter((item) => !isFinished(item)).length, 0)) }}
-                </p>
-              </div>
+              <UAvatar
+                :src="`/api/users/${encodeURIComponent(employee.cleanerId)}/photo`"
+                :alt="employee.cleanerName"
+                :text="Array.from(employee.cleanerName.trim())[0]?.toLocaleUpperCase(locale)"
+                size="md"
+                class="work-employee-avatar"
+              />
+              <h2 class="min-w-0 truncate font-semibold">{{ employee.cleanerName }}</h2>
             </div>
             <div
               v-for="day in employee.days"

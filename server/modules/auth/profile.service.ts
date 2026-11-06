@@ -26,8 +26,20 @@ export async function updateOwnProfile(actor: Actor, input: unknown) {
 }
 export async function ownProfilePhoto(actor: Actor) {
   const user = await db.query.users.findFirst({ where: ownUser(actor), columns: { profilePhotoKey: true } })
-  if (!user?.profilePhotoKey) throw createError({ statusCode: 404 })
-  try { return await fileStorage.get(user.profilePhotoKey) }
+  return readProfilePhoto(user?.profilePhotoKey)
+}
+
+export async function organizationProfilePhoto(actor: Actor, userId: string) {
+  const user = await db.query.users.findFirst({
+    where: and(eq(users.id, userId), eq(users.organizationId, actor.organizationId), eq(users.status, 'active'), eq(users.isSuperuser, false)),
+    columns: { profilePhotoKey: true }
+  })
+  return readProfilePhoto(user?.profilePhotoKey)
+}
+
+async function readProfilePhoto(key: string | null | undefined) {
+  if (!key) throw createError({ statusCode: 404 })
+  try { return await fileStorage.get(key) }
   catch (error: any) { if (error?.code === 'ENOENT') throw createError({ statusCode: 404 }); throw error }
 }
 export async function setOwnProfilePhoto(actor: Actor, file: { data: Buffer; type?: string } | null) {
