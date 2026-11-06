@@ -16,12 +16,14 @@ const crmBrands = {
     name: 'MagicMop',
     shortName: 'MagicMop',
     logo: '/brand/magicmop/logo.webp',
-    favicon: '/brand/magicmop/favicon.png',
-    faviconType: 'image/png',
+    favicon: '/brand/magicmop/favicon.svg',
+    faviconType: 'image/svg+xml',
+    faviconPng: '/brand/magicmop/favicon.png',
+    faviconIco: '/brand/magicmop/favicon.ico',
     appleIcon: '/brand/magicmop/apple-touch-icon.png',
     icon192: '/brand/magicmop/pwa-192x192.png',
     icon512: '/brand/magicmop/pwa-512x512.png',
-    maskableIcon: ''
+    maskableIcon: '/brand/magicmop/pwa-maskable-512x512.png'
   }
 } as const
 

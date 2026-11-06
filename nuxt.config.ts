@@ -43,7 +43,11 @@ export default defineNuxtConfig({
         { name: 'apple-mobile-web-app-status-bar-style', content: 'default' }
       ],
       link: [
-        { rel: 'icon', type: brand.faviconType, href: brand.favicon },
+        ...(brand.id === 'magicmop' ? [
+          { rel: 'icon', type: 'image/x-icon', href: brand.faviconIco },
+          { rel: 'icon', type: 'image/png', sizes: '64x64', href: brand.faviconPng },
+          { rel: 'icon', type: brand.faviconType, sizes: 'any', href: brand.favicon }
+        ] : [{ rel: 'icon', type: brand.faviconType, href: brand.favicon }]),
         { rel: 'apple-touch-icon', sizes: '180x180', href: brand.appleIcon }
       ]
     }
@@ -130,7 +134,7 @@ export default defineNuxtConfig({
       icons: [
         { src: brand.icon192, sizes: '192x192', type: 'image/png', purpose: 'any' },
         { src: brand.icon512, sizes: '512x512', type: 'image/png', purpose: 'any' },
-        ...(brand.maskableIcon ? [{ src: brand.maskableIcon, sizes: '512x512', type: 'image/png', purpose: 'maskable' as const }] : [])
+        { src: brand.maskableIcon, sizes: '512x512', type: 'image/png', purpose: 'maskable' }
       ]
     },
     injectManifest: {
