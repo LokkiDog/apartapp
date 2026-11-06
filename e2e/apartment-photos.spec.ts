@@ -7,7 +7,7 @@ async function login(page: import('@playwright/test').Page) {
     localStorage.setItem('aparts-pwa-install-card-dismissed-ios-v2', 'true')
   })
   await page.goto('/login')
-  await page.getByLabel('Email').fill(process.env.E2E_ADMIN_EMAIL || 'admin@aparts.local')
+  await page.getByLabel(/^(Email|Электронная почта)$/).fill(process.env.E2E_ADMIN_EMAIL || 'admin@aparts.local')
   await page.getByLabel('Пароль').fill(process.env.E2E_ADMIN_PASSWORD || 'AdminPassword123')
   await page.getByRole('button', { name: 'Войти' }).click()
   await expect(page).toHaveURL('/')

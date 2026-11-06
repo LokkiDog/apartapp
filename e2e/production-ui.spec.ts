@@ -4,7 +4,7 @@ async function login(page: import('@playwright/test').Page) {
   await page.goto('/login')
   const submit = page.getByRole('button', { name: 'Войти' })
   await expect(submit).toBeEnabled()
-  await page.getByLabel('Email').fill(process.env.E2E_ADMIN_EMAIL || 'admin@aparts.local')
+  await page.getByLabel(/^(Email|Электронная почта)$/).fill(process.env.E2E_ADMIN_EMAIL || 'admin@aparts.local')
   await page.getByLabel('Пароль').fill(process.env.E2E_ADMIN_PASSWORD || 'AdminPassword123')
   const response = page.waitForResponse(item => item.url().includes('/api/auth/login'))
   await submit.click()

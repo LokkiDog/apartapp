@@ -45,8 +45,7 @@ async function resetPassword() { resetPending.value = true; resetNotice.value = 
 <template>
   <div class="w-full">
     <div class="surface auth-card auth-card--login">
-      <h2 class="auth-card__title">{{ t('auth.welcome', { brand: brand.shortName }) }}</h2>
-      <p class="auth-card__description">{{ t('auth.loginText') }}</p>
+      <h1 class="auth-card__title">{{ t('auth.welcome', { brand: brand.shortName }) }}</h1>
       <UAlert v-if="archivedNotice" class="mt-5" color="warning" variant="soft" icon="i-lucide-archive" :description="archivedNotice" />
       <form ref="loginForm" class="auth-login-form" @keydown.enter="submitLoginOnEnter" @submit.prevent="login">
         <UFormField :label="t('auth.email')" name="email">
@@ -56,7 +55,7 @@ async function resetPassword() { resetPending.value = true; resetNotice.value = 
           <template #hint>
             <UButton type="button" color="neutral" variant="link" class="auth-reset" @keydown.enter.stop @click="resetOpen = true">{{ t('auth.forgotPassword') }}</UButton>
           </template>
-          <UInput v-model="password" :type="passwordVisible ? 'text' : 'password'" autocomplete="current-password" placeholder="••••••••" class="w-full" size="xl" :ui="{ base: 'pe-12', trailing: 'pe-0' }" required>
+          <UInput v-model="password" :type="passwordVisible ? 'text' : 'password'" autocomplete="current-password" class="w-full" size="xl" :ui="{ base: 'pe-12', trailing: 'pe-0' }" required>
             <template #trailing>
               <UButton type="button" color="neutral" variant="ghost" :icon="passwordVisible ? 'i-lucide-eye-off' : 'i-lucide-eye'" :aria-label="t(passwordVisible ? 'auth.hidePassword' : 'auth.showPassword')" :aria-pressed="passwordVisible" class="auth-password-toggle" @keydown.enter.stop @click="passwordVisible = !passwordVisible" />
             </template>
@@ -65,7 +64,7 @@ async function resetPassword() { resetPending.value = true; resetNotice.value = 
         <UAlert v-if="error" color="error" variant="soft" icon="i-lucide-circle-alert" :description="error" />
         <UButton type="submit" block size="lg" class="auth-submit" :loading="pending" :disabled="!hydrated || pending || passkeyPending">{{ t('auth.login') }}</UButton>
       </form>
-      <UButton v-if="passkeys.supported.value" type="button" block size="lg" color="neutral" variant="outline" icon="i-lucide-fingerprint" class="mt-4 min-h-11 cursor-pointer" :loading="passkeyPending" :disabled="pending || passkeyPending" @click="loginWithPasskey">{{ t('passkeys.login') }}</UButton>
+      <UButton v-if="passkeys.supported.value" type="button" block size="lg" color="neutral" variant="outline" icon="i-lucide-key-round" class="auth-passkey" :loading="passkeyPending" :disabled="pending || passkeyPending" @click="loginWithPasskey">{{ t('passkeys.login') }}</UButton>
       <UButton v-if="registration?.registrationMode === 'self_service'" to="/register" variant="link" class="mt-4 min-h-11 cursor-pointer">Регистрация</UButton>
       <p class="auth-card__access">{{ t('auth.accessNote') }}</p>
     </div>
