@@ -3943,6 +3943,18 @@ html[dir="rtl"] .desktop-sidebar__toggle--collapsed :is(svg, .iconify) {
   color: #526a5d;
   text-wrap: pretty;
 }
+.auth-shell__story--magicmop {
+  container-type: inline-size;
+}
+.auth-shell__story--magicmop > h1 {
+  max-width: none;
+  font-size: min(30px, 10cqi);
+  white-space: pre;
+}
+.auth-shell__story--magicmop > p {
+  font-size: min(15px, 4.6cqi);
+  white-space: pre;
+}
 .auth-product {
   display: none;
   grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
@@ -4173,6 +4185,12 @@ html[dir="rtl"] .desktop-sidebar__toggle--collapsed :is(svg, .iconify) {
   .auth-shell__story > p {
     font-size: 17px;
   }
+  .auth-shell__story--magicmop > h1 {
+    font-size: min(clamp(36px, 4vw, 46px), 10cqi);
+  }
+  .auth-shell__story--magicmop > p {
+    font-size: min(17px, 4.6cqi);
+  }
   .auth-product {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
@@ -4200,6 +4218,12 @@ html[dir="rtl"] .desktop-sidebar__toggle--collapsed :is(svg, .iconify) {
   }
   .auth-shell__story > p {
     font-size: 18px;
+  }
+  .auth-shell__story--magicmop > h1 {
+    font-size: min(clamp(50px, 4vw, 56px), 10cqi);
+  }
+  .auth-shell__story--magicmop > p {
+    font-size: min(18px, 4.6cqi);
   }
   .auth-product {
     grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);

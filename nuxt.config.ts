@@ -44,9 +44,9 @@ export default defineNuxtConfig({
       ],
       link: [
         ...(brand.id === 'magicmop' ? [
-          { rel: 'icon', type: 'image/x-icon', href: brand.faviconIco },
-          { rel: 'icon', type: 'image/png', sizes: '64x64', href: brand.faviconPng },
-          { rel: 'icon', type: brand.faviconType, sizes: 'any', href: brand.favicon }
+          { rel: 'icon', type: 'image/x-icon', href: brand.faviconIco + '?v=universal' },
+          { rel: 'icon', type: 'image/png', sizes: '64x64', href: brand.faviconPng + '?v=universal' },
+          { rel: 'icon', type: brand.faviconType, sizes: 'any', href: brand.favicon + '?v=universal' }
         ] : [{ rel: 'icon', type: brand.faviconType, href: brand.favicon }]),
         { rel: 'apple-touch-icon', sizes: '180x180', href: brand.appleIcon }
       ]

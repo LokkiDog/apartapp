@@ -319,6 +319,8 @@
     "illustrationChecklist": "Cleaning checklist",
     "introTitle": "Apartment management",
     "introText": "Bookings, cleanings, tasks and expenses — all in one place.",
+    "magicmopIntroTitle": "Short-term\nrental management",
+    "magicmopIntroText": "Bookings, cleanings, tasks and expenses —\nall in one place.",
     "welcome": "Sign in to {brand}",
     "loginText": "Sign in to your workspace.",
     "email": "Email",
