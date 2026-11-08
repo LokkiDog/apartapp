@@ -1448,6 +1448,27 @@
     "invalidAddress": "Enter a website address without a path, such as https://aparts-bansko.com"
   },
   "messaging": {
+    "instructions": {
+      "button": "Instructions",
+      "title": "Create a Telegram bot",
+      "description": "Create a bot with BotFather and connect it to the CRM.",
+      "openBotFather": "Open BotFather",
+      "createTitle": "Start creating a bot",
+      "createText": "Open the official {'@'}BotFather in Telegram, tap Start and send /newbot. When asked for a name, enter a guest-facing name such as Apartment Guests.",
+      "createAlt": "Example BotFather chat with /newbot and the name Apartment Guests.",
+      "usernameTitle": "Choose a username",
+      "usernameText": "Enter a unique username such as my_apartments_bot. Use 5–32 Latin letters, numbers or underscores, ending in bot. If it is taken, choose another one.",
+      "usernameAlt": "Example of choosing my_apartments_bot and receiving a bot link.",
+      "tokenTitle": "Copy the token",
+      "tokenText": "BotFather will send a token below “Use this token to access the HTTP API”. Copy the entire string, including the numbers, colon and letters.",
+      "tokenAlt": "Example BotFather message with a masked access token.",
+      "connectTitle": "Connect the bot to the CRM",
+      "connectText": "Return to messaging settings, paste the token into Bot token and click Connect. Share the bot link with your guest. The guest must tap Start and send a message for the conversation to appear in the CRM.",
+      "exampleNote": "Images show example conversations. Telegram may look different; the token is masked.",
+      "tokenPrivacy": "Keep the token like a password: it grants control of your bot.",
+      "officialGuide": "Official Telegram guide",
+      "done": "Got it"
+    },
     "unsupported": "Unsupported message",
     "title": "Messages",
     "settings": "Messaging settings",

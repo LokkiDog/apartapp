@@ -2,6 +2,7 @@
 import type { MessagingConnection } from '@contracts/messaging'
 import { useCurrentUser } from '#fsd/shared/auth'
 import { ConfirmActionModal, PageHeader } from '#fsd/shared/ui'
+import TelegramInstructionsModal from './TelegramInstructionsModal.vue'
 const { t } = useI18n()
 const user = useCurrentUser()
 const identity = computed(
@@ -34,9 +35,11 @@ const token = ref('')
 const pending = ref(false)
 const error = ref('')
 const confirmDisconnect = ref(false)
+const instructionsOpen = ref(false)
 watch([identity, allowed], () => {
   token.value = ''
   error.value = ''
+  instructionsOpen.value = false
   data.value = null
   if (!allowed.value) {
     clear()
@@ -114,9 +117,19 @@ async function disconnect() {
           >{{ t('messaging.openBot') }}</UButton
         >
       </template>
-      <p class="text-sm text-[var(--color-muted)]">
-        {{ t('messaging.botHelp') }}
-      </p>
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <p class="text-sm text-[var(--color-muted)]">
+          {{ t('messaging.botHelp') }}
+        </p>
+        <UButton
+          color="neutral"
+          variant="outline"
+          icon="i-lucide-book-open"
+          class="min-h-11 shrink-0"
+          @click="instructionsOpen = true"
+          >{{ t('messaging.instructions.button') }}</UButton
+        >
+      </div>
       <form class="space-y-3" @submit.prevent="connect">
         <UFormField :label="t('messaging.token')"
           ><UInput
@@ -146,6 +159,7 @@ async function disconnect() {
         </div>
       </form>
     </div>
+    <TelegramInstructionsModal v-model:open="instructionsOpen" />
     <ConfirmActionModal
       v-model:open="confirmDisconnect"
       :title="t('messaging.disconnectTitle')"

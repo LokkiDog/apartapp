@@ -1448,6 +1448,27 @@
     "invalidAddress": "יש להזין כתובת אתר ללא נתיב, למשל https://aparts-bansko.com"
   },
   "messaging": {
+    "instructions": {
+      "button": "הוראות",
+      "title": "יצירת בוט ב־Telegram",
+      "description": "צרו בוט באמצעות BotFather וחברו אותו ל־CRM.",
+      "openBotFather": "פתיחת BotFather",
+      "createTitle": "התחלת יצירת הבוט",
+      "createText": "פתחו את {'@'}BotFather הרשמי ב־Telegram, לחצו Start ושלחו /newbot. כשהבוט מבקש שם, הזינו שם ברור לאורחים, למשל Apartment Guests.",
+      "createAlt": "דוגמה לשיחת BotFather עם הפקודה /newbot והשם Apartment Guests.",
+      "usernameTitle": "בחירת שם משתמש",
+      "usernameText": "הזינו שם משתמש ייחודי, למשל my_apartments_bot. השתמשו ב־5–32 אותיות לטיניות, ספרות או קו תחתון, עם הסיומת bot. אם השם תפוס, בחרו שם אחר.",
+      "usernameAlt": "דוגמה לבחירת my_apartments_bot ולקבלת קישור לבוט.",
+      "tokenTitle": "העתקת הטוקן",
+      "tokenText": "BotFather ישלח טוקן מתחת לשורה “Use this token to access the HTTP API”. העתיקו את כל המחרוזת, כולל הספרות, הנקודתיים והאותיות.",
+      "tokenAlt": "דוגמה להודעת BotFather עם טוקן גישה מוסתר.",
+      "connectTitle": "חיבור הבוט ל־CRM",
+      "connectText": "חזרו להגדרות ההודעות, הדביקו את הטוקן בשדה טוקן הבוט ולחצו חיבור. שתפו את קישור הבוט עם האורח. האורח צריך ללחוץ Start ולשלוח הודעה כדי שהשיחה תופיע ב־CRM.",
+      "exampleNote": "התמונות מציגות שיחות לדוגמה. המראה של Telegram עשוי להשתנות; הטוקן מוסתר.",
+      "tokenPrivacy": "שמרו את הטוקן כמו סיסמה: הוא מאפשר שליטה בבוט.",
+      "officialGuide": "המדריך הרשמי של Telegram",
+      "done": "הבנתי"
+    },
     "unsupported": "הודעה שאינה נתמכת",
     "title": "הודעות",
     "settings": "הגדרות הודעות",
