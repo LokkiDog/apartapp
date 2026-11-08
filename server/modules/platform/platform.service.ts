@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { and, desc, eq } from 'drizzle-orm'
 import { db } from '../../infrastructure/database/client'
-import { organizations, platformAuditLogs, platformSessions, systemSettings, users } from '../../infrastructure/database/schema'
+import { organizations, platformAuditLogs, platformSessions, systemSettings, users, messagingMessages, messagingOutbox } from '../../infrastructure/database/schema'
 import { createInvitation, deliverInvitation, resendInvitation } from '../auth/account.service'
 import type { Actor } from '../../infrastructure/auth/actor'
 import { sessionExpiry } from '../../infrastructure/auth/platform'
@@ -42,8 +42,23 @@ export async function updateClient(actor: Actor, id: string, input: z.infer<type
   const updated = await db.transaction(async tx => {
     const [previous] = await tx.select().from(organizations).where(eq(organizations.id, id)).for('update')
     if (!previous) throw createError({ statusCode: 404, statusMessage: 'Клиент не найден' })
-    const [updated] = await tx.update(organizations).set({ ...input, updatedAt: new Date() }).where(eq(organizations.id, id)).returning()
+    const messagingEnabled = input.messagingEnabled ?? previous.messagingEnabled
+    const messagingResumed = messagingEnabled && (!previous.messagingEnabled || (previous.status === 'blocked' && input.status === 'active'))
+    const [updated] = await tx.update(organizations).set({
+      ...input,
+      ...(messagingResumed ? { messagingEnabledSince: new Date() } : {}),
+      updatedAt: new Date()
+    }).where(eq(organizations.id, id)).returning()
     await tx.insert(platformAuditLogs).values({ actorId: actor.id, organizationId: id, action: input.status && previous.status !== input.status ? `client.${input.status === 'blocked' ? 'blocked' : 'unblocked'}` : 'client.updated', payload: { before: previous, after: input } })
+    if (input.messagingEnabled !== undefined && input.messagingEnabled !== previous.messagingEnabled) {
+      await tx.insert(platformAuditLogs).values({ actorId: actor.id, organizationId: id, action: input.messagingEnabled ? 'client.messaging_enabled' : 'client.messaging_disabled' })
+    }
+    if (input.messagingEnabled === false || input.status === 'blocked') {
+      await tx.delete(messagingOutbox).where(eq(messagingOutbox.organizationId, id))
+      await tx.update(messagingMessages).set({ status: 'canceled' }).where(and(eq(messagingMessages.organizationId, id), eq(messagingMessages.status, 'pending')))
+      // A crashed sender may already have reached Telegram before releasing its lock.
+      await tx.update(messagingMessages).set({ status: 'unknown' }).where(and(eq(messagingMessages.organizationId, id), eq(messagingMessages.status, 'sending')))
+    }
     return updated
   })
   if (input.status === 'blocked') {

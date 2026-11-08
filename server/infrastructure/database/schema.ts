@@ -43,6 +43,8 @@ export const authTokenTypeEnum = pgEnum('auth_token_type', ['invitation', 'passw
 export const organizations = pgTable('organizations', {
   id: uuid('id').primaryKey().defaultRandom(),
   name: text('name').notNull(),
+  messagingEnabled: boolean('messaging_enabled').notNull().default(false),
+  messagingEnabledSince: timestamp('messaging_enabled_since', { withTimezone: true }),
   status: text('status').$type<'active' | 'blocked'>().notNull().default('active'),
   timezone: text('timezone').notNull().default('Europe/Sofia'),
   ...timestamps
@@ -780,3 +782,82 @@ export const apartmentPublicationPhotos = pgTable('apartment_publication_photos'
   attachmentId: uuid('attachment_id').notNull().references(() => attachments.id, { onDelete: 'cascade' }),
   position: integer('position').notNull()
 }, table => [primaryKey({ columns: [table.publicationId, table.attachmentId] })])
+
+
+export const messagingConnections = pgTable('messaging_connections', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  organizationId: uuid('organization_id').notNull().references(() => organizations.id),
+  channel: text('channel').notNull().default('telegram'),
+  botId: text('bot_id').notNull().unique(),
+  botName: text('bot_name').notNull(),
+  botUsername: text('bot_username').notNull(),
+  encryptedToken: text('encrypted_token').notNull(),
+  webhookSecret: text('webhook_secret').notNull(),
+  connected: boolean('connected').notNull().default(false),
+  ...timestamps
+}, table => [uniqueIndex('messaging_org_channel_idx').on(table.organizationId, table.channel)])
+
+export const messagingContacts = pgTable('messaging_contacts', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  organizationId: uuid('organization_id').notNull().references(() => organizations.id),
+  connectionId: uuid('connection_id').notNull().references(() => messagingConnections.id),
+  externalId: text('external_id').notNull(),
+  name: text('name').notNull(),
+  username: text('username').notNull().default(''),
+  ...timestamps
+}, table => [uniqueIndex('messaging_contact_external_idx').on(table.connectionId, table.externalId)])
+
+export const messagingConversations = pgTable('messaging_conversations', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  organizationId: uuid('organization_id').notNull().references(() => organizations.id),
+  connectionId: uuid('connection_id').notNull().references(() => messagingConnections.id),
+  contactId: uuid('contact_id').notNull().references(() => messagingContacts.id),
+  stayId: uuid('stay_id').references(() => stays.id, { onDelete: 'set null' }),
+  unread: integer('unread').notNull().default(0),
+  lastMessageAt: timestamp('last_message_at', { withTimezone: true }).notNull().defaultNow(),
+  ...timestamps
+}, table => [uniqueIndex('messaging_conversation_contact_idx').on(table.contactId), index('messaging_conversation_org_idx').on(table.organizationId, table.lastMessageAt)])
+
+export const messagingMessages = pgTable('messaging_messages', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  organizationId: uuid('organization_id').notNull().references(() => organizations.id),
+  conversationId: uuid('conversation_id').notNull().references(() => messagingConversations.id),
+  direction: text('direction').$type<'incoming' | 'outgoing'>().notNull(),
+  text: text('text').notNull().default(''),
+  status: text('status').$type<import('../../../shared/contracts/messaging').MessageStatus>().notNull(),
+  externalId: text('external_id'),
+  unsupported: boolean('unsupported').notNull().default(false),
+  requestId: uuid('request_id'),
+  sentAt: timestamp('sent_at', { withTimezone: true }),
+  authorId: uuid('author_id').references(() => users.id, { onDelete: 'set null' }),
+  authorName: text('author_name'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+}, table => [uniqueIndex('messaging_message_request_idx').on(table.organizationId, table.requestId), uniqueIndex('messaging_message_external_idx').on(table.conversationId, table.direction, table.externalId), index('messaging_message_history_idx').on(table.conversationId, table.createdAt, table.id)])
+
+export const messagingAttachments = pgTable('messaging_attachments', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  organizationId: uuid('organization_id').notNull().references(() => organizations.id),
+  messageId: uuid('message_id').notNull().references(() => messagingMessages.id),
+  name: text('name').notNull(),
+  mimeType: text('mime_type').notNull(),
+  size: integer('size').notNull(),
+  externalFileId: text('external_file_id'),
+  storageKey: text('storage_key'),
+  available: boolean('available').notNull().default(true)
+})
+
+export const messagingOutbox = pgTable('messaging_outbox', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  organizationId: uuid('organization_id').notNull().references(() => organizations.id),
+  messageId: uuid('message_id').notNull().unique().references(() => messagingMessages.id),
+  attempts: integer('attempts').notNull().default(0),
+  availableAt: timestamp('available_at', { withTimezone: true }).notNull().defaultNow(),
+  leaseUntil: timestamp('lease_until', { withTimezone: true }),
+  leaseToken: uuid('lease_token')
+}, table => [index('messaging_outbox_pending_idx').on(table.availableAt)])
+
+export const messagingUpdates = pgTable('messaging_updates', {
+  connectionId: uuid('connection_id').notNull().references(() => messagingConnections.id),
+  updateId: text('update_id').notNull(),
+  receivedAt: timestamp('received_at', { withTimezone: true }).notNull().defaultNow()
+}, table => [primaryKey({ columns: [table.connectionId, table.updateId] })])

@@ -17,6 +17,7 @@ export interface Actor {
   isSuperuser?: boolean
   inSystem?: boolean
   organizationName?: string
+  messagingEnabled?: boolean
   organizationStatus?: 'active' | 'blocked'
   platformSessionId?: string
   contextRevision?: string

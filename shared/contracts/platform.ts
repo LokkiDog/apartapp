@@ -10,6 +10,7 @@ export const clientInputSchema = z.object({
   administratorName: z.string().trim().min(2).max(200), email: emailSchema
 })
 export const clientUpdateSchema = z.object({
+  messagingEnabled: z.boolean().optional(),
   name: z.string().trim().min(2).max(200).optional(), timezone: timezoneSchema.optional(), status: z.enum(['active', 'blocked']).optional()
 }).strict()
 export const registrationInputSchema = z.object({
@@ -20,6 +21,7 @@ export const administratorInputSchema = z.object({ name: z.string().trim().min(2
 export const confirmationSchema = z.object({ token: z.string().min(20).max(200) })
 export type RegistrationMode = z.infer<typeof registrationModeSchema>
 export interface PlatformClient {
+  messagingEnabled: boolean;
   id: string; name: string; timezone: string; status: 'active' | 'blocked'; createdAt: string;
   administrators: Array<{ id: string; name: string; email: string; status: string; isSuperuser: boolean }>;
   invitationSent?: boolean

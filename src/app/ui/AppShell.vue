@@ -117,7 +117,9 @@ const managerPrimary = computed<NavItem[]>(() => [
   },
   ...managerFinance.value,
 ]);
+const messagingItems = computed<NavItem[]>(() => user.value?.messagingEnabled ? [{ to: '/messages', label: t('messaging.title'), icon: 'i-lucide-messages-square' }] : []);
 const settings = computed<NavItem[]>(() => [
+  ...(user.value?.messagingEnabled ? [{ to: '/settings/messaging', label: t('messaging.title'), icon: 'i-lucide-messages-square' }] : []),
   { to: "/settings/site", label: t("siteSettings.title"), icon: "i-lucide-globe" },
   { to: "/settings/users", label: t("nav.users"), icon: "i-lucide-users" },
   {
@@ -135,7 +137,7 @@ const settings = computed<NavItem[]>(() => [
 const groups = computed(() => {
   if (user.value?.roles.includes("administrator"))
     return [
-      { label: t("nav.work"), items: [...work.value, problems.value, expenses.value] },
+      { label: t("nav.work"), items: [...work.value, ...messagingItems.value, problems.value, expenses.value] },
       { label: t("nav.objects"), items: objects.value },
       { label: t("nav.reports"), items: reports.value },
       { label: t("nav.settings"), items: settings.value },

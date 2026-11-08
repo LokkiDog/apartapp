@@ -35,6 +35,12 @@ async function setStatus(client: PlatformClient, next: 'active' | 'blocked') {
   catch (cause: any) { error.value = cause?.data?.statusMessage ?? 'Не удалось изменить статус' }
   finally { pending.value = false }
 }
+async function setMessaging(client: PlatformClient, enabled: boolean) {
+  pending.value = true; error.value = ''
+  try { await $fetch(`/api/system/clients/${client.id}`, { method: 'PATCH', body: { messagingEnabled: enabled } }); await refresh() }
+  catch (cause: any) { error.value = cause?.data?.statusMessage ?? 'Не удалось изменить доступ к сообщениям' }
+  finally { pending.value = false }
+}
 async function resend(client: PlatformClient, administratorId: string) {
   error.value = ''; notice.value = ''
   try { await $fetch(`/api/system/clients/${client.id}/resend-invitation`, { method: 'POST', body: { userId: administratorId } }); notice.value = 'Приглашение отправлено' }
@@ -84,6 +90,7 @@ function actions(client: PlatformClient) {
           <p class="text-[var(--color-muted)]">{{ client.timezone }} · {{ new Date(client.createdAt).toLocaleDateString('ru-RU') }}</p>
           <div v-for="admin in client.administrators" :key="admin.id" class="min-w-0"><strong>{{ admin.name }}</strong><p class="break-all text-[var(--color-muted)]">{{ admin.email }}<span v-if="admin.status === 'invited'"> · Приглашён</span></p></div>
         </div>
+        <div class="catalog-card__body"><USwitch :model-value="client.messagingEnabled" label="Сообщения" :disabled="pending" class="min-h-11" @update:model-value="setMessaging(client, $event)" /></div>
         <footer class="catalog-card__footer">
           <UButton color="neutral" variant="soft" :loading="enteringClientId === client.id" :disabled="enteringClientId !== null" @click="enter(client)">Открыть CRM</UButton>
           <UDropdownMenu :items="actions(client)" :content="{ align: 'end' }" :modal="false"><UButton icon="i-lucide-ellipsis-vertical" aria-label="Действия клиента" color="neutral" variant="ghost" class="size-11" /></UDropdownMenu>
