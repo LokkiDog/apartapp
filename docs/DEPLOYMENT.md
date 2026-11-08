@@ -437,3 +437,26 @@ restart alone does not refresh its environment. Docker Compose already loads
 Set repository variable `RECAPTCHA_SITE_KEY` in the landing repository and
 rebuild that static site. Its default verification URL is
 `https://app.magicmopcrm.com/api/public/booking/verify`.
+
+### Add booked MagicMop demo to a calendar
+
+Set `NUXT_CALENDLY_API_TOKEN` in the same MagicMop `.env.production`. The PAT
+needs only `scheduled_events:read`; no public variable or separate service is
+needed. `NUXT_CALENDLY_EVENT_NAME` defaults to `Демо MagicMop` and must match
+the booked Calendly event title. Recreate the app container on the next deploy
+to load changes to its environment.
+
+`POST /api/public/booking/calendar` takes only the event UUID and invitee UUID
+from the trusted Calendly booking-completed message. Both are required; the
+backend confirms their relationship and active status before returning only
+the event title, times, invitee timezone, safe HTTPS Zoom join URL and stable
+iCalendar UID. Internal notes, invitee PII and management links are not exposed.
+The references act as an unguessable capability pair; keep them out of URL query
+strings and application logs. The existing landing origin allowlist and
+per-IP booking limit apply. Provider requests do not follow redirects.
+
+The landing generates a Google Calendar draft and a UTF-8 iCalendar file in
+the browser. Both contain the actual scheduled times and Zoom link. These are
+calendar copies; later reschedules/cancellations remain managed by the original
+Calendly invitation. If Zoom is still provisioning, the UI waits for a manual
+refresh before offering exports. No extra meeting is created.

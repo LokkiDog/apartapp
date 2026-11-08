@@ -6,8 +6,8 @@ export default defineEventHandler(event => {
   const path = getRequestURL(event).pathname
   if (!path.startsWith('/api/')) return
   setHeader(event, 'cache-control', 'private, no-store')
-  // This token-only public endpoint validates its own narrow CORS policy.
-  if (path === '/api/public/booking/verify' && ['POST', 'OPTIONS'].includes(getMethod(event))) return
+  // These public booking endpoints validate their own narrow CORS policy.
+  if (['/api/public/booking/verify', '/api/public/booking/calendar'].includes(path) && ['POST', 'OPTIONS'].includes(getMethod(event))) return
   if (['GET', 'HEAD', 'OPTIONS'].includes(getMethod(event))) return
   const origin = getHeader(event, 'origin')
   const host = getHeader(event, 'host')

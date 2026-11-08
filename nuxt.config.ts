@@ -84,6 +84,8 @@ export default defineNuxtConfig({
     }
   },
   runtimeConfig: {
+    calendlyApiToken: '',
+    calendlyEventName: 'Демо MagicMop',
     recaptchaSecretKey: '',
     recaptchaAllowedOrigins: 'https://magicmopcrm.com,https://www.magicmopcrm.com',
     recaptchaMinimumScore: '0.5',
