@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { baseCompile } from '@intlify/message-compiler'
 import { appLocaleSchema } from '../shared/contracts/crm'
 import { localizedNotificationBody, localizedNotificationTitle } from '../server/infrastructure/notification/localize'
 import ru from '../i18n/locales/ru.json'
@@ -22,6 +23,15 @@ describe('localization contracts', () => {
     expect(localizedNotificationTitle('problem', 'en', 'Проблема в уборке')).toBe('Work problem')
     expect(localizedNotificationBody('problem', 'he', 'Требуется проверить полотенца')).toBe('Требуется проверить полотенца')
     expect(localizedNotificationTitle('cleaning_changed', 'en', 'Cleaning completed')).toBe('Cleaning completed')
+  })
+
+  it.each([{ locale: 'ru', messages: ru }, { locale: 'en', messages: en }, { locale: 'he', messages: he }])('compiles every message in $locale', ({ locale, messages }) => {
+    for (const path of leafPaths(messages)) {
+      const message = path.split('.').reduce<unknown>((value, key) => (value as Record<string, unknown>)[key], messages)
+      baseCompile(message as string, {
+        onError(error) { throw new Error(`${locale}.${path}: ${error.message}`) }
+      })
+    }
   })
 
   it('keeps all locale catalogs structurally identical', () => {
