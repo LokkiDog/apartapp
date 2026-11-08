@@ -3,6 +3,7 @@ name: Deploy production
 on:
   push:
     branches:
+      - main
       - aparts
       - magicmop
   pull_request:
@@ -34,6 +35,9 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Validate production Compose configurations
+        run: npm run check:compose
 
       - name: Run tests
         run: npm test

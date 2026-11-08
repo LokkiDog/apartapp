@@ -32,8 +32,10 @@ export NUXT_PUBLIC_APP_URL="https://$hostname"
 compose() {
   if [ "$instance" = magicmop ]; then
     set -- -f docker-compose.magicmop.yml "$@"
+  else
+    set -- -f docker-compose.prod.yml "$@"
   fi
-  docker compose -p "$instance" --env-file "$env_file" -f docker-compose.prod.yml "$@"
+  docker compose -p "$instance" --env-file "$env_file" "$@"
 }
 
 dump_database() {

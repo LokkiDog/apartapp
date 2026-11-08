@@ -8,6 +8,7 @@
     "preview": "nuxt preview",
     "prepare": "nuxt prepare",
     "typecheck": "nuxt typecheck",
+    "check:compose": "node scripts/check-compose.mjs",
     "lint:fsd": "steiger src",
     "pretest": "nuxt prepare guest",
     "test": "vitest run",

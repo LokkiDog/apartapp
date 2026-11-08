@@ -1,0 +1,100 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    ports:
+      - "127.0.0.1:15432:5432"
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required}
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  migrate:
+    profiles: ["tools"]
+    build:
+      context: .
+      target: migrate
+    env_file:
+      - ${APARTS_ENV_FILE:-.env.production}
+    networks:
+      - backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  app:
+    build:
+      context: .
+      target: runtime
+      args:
+        CRM_BRAND: ${CRM_DEPLOY_BRAND:-aparts}
+        CRM_APP_URL: ${NUXT_PUBLIC_APP_URL:?NUXT_PUBLIC_APP_URL is required}
+    restart: unless-stopped
+    env_file:
+      - ${APARTS_ENV_FILE:-.env.production}
+    environment:
+      NODE_ENV: production
+      NITRO_HOST: 0.0.0.0
+      NUXT_PUBLIC_APP_URL: ${NUXT_PUBLIC_APP_URL:?NUXT_PUBLIC_APP_URL is required}
+      PORT: 3000
+      FILE_STORAGE_PATH: /app/.data/uploads
+      NUXT_VAPID_SUBJECT: ${NUXT_VAPID_SUBJECT:?NUXT_VAPID_SUBJECT is required}
+      NUXT_VAPID_PUBLIC_KEY: ${NUXT_VAPID_PUBLIC_KEY:?NUXT_VAPID_PUBLIC_KEY is required}
+      NUXT_VAPID_PRIVATE_KEY: ${NUXT_VAPID_PRIVATE_KEY:?NUXT_VAPID_PRIVATE_KEY is required}
+      NUXT_PUBLIC_VAPID_PUBLIC_KEY: ${NUXT_PUBLIC_VAPID_PUBLIC_KEY:?NUXT_PUBLIC_VAPID_PUBLIC_KEY is required}
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - uploads_data:/app/.data/uploads
+    networks:
+      - backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(response => { if (!response.ok) process.exit(1) }).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  guest:
+    build:
+      context: .
+      target: guest-runtime
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      NITRO_HOST: 0.0.0.0
+      PORT: 3001
+      NUXT_CATALOGUE_API_BASE: http://app:3000
+    ports:
+      - "127.0.0.1:3001:3001"
+    networks:
+      - backend
+    depends_on:
+      app:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/').then(response => { if (!response.ok) process.exit(1) }).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+networks:
+  backend: {}
+
+volumes:
+  postgres_data:
+  uploads_data:

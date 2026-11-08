@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 
 describe('production Push configuration', () => {
   it('maps required VAPID secrets to Nuxt runtime configuration', () => {
-    const compose = readFileSync('docker-compose.prod.yml', 'utf8')
+    const compose = readFileSync('docker-compose.prod.services.yml', 'utf8')
 
     expect(compose).toContain('NUXT_VAPID_SUBJECT: ${NUXT_VAPID_SUBJECT:?NUXT_VAPID_SUBJECT is required}')
     expect(compose).toContain('NUXT_VAPID_PUBLIC_KEY: ${NUXT_VAPID_PUBLIC_KEY:?NUXT_VAPID_PUBLIC_KEY is required}')
