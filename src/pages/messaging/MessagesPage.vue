@@ -345,7 +345,7 @@ function formattedTime(value: string) {
 }
 </script>
 <template>
-  <section v-if="allowed" class="space-y-3">
+  <section v-if="allowed" class="page-wrap space-y-3">
     <PageHeader :title="t('messaging.title')"
       ><template #actions
         ><UButton

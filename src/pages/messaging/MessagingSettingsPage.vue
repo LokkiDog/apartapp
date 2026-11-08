@@ -84,7 +84,7 @@ async function disconnect() {
 }
 </script>
 <template>
-  <section v-if="allowed" class="space-y-4">
+  <section v-if="allowed" class="page-wrap space-y-4">
     <PageHeader :title="t('messaging.title')" />
     <UAlert
       v-if="loadError || error"
