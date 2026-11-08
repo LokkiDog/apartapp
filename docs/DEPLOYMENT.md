@@ -409,3 +409,31 @@ NUXT_GOOGLE_TRANSLATION_MONTHLY_CHARACTER_LIMIT=450000
 Не обнуляйте таблицу и не восстанавливайте старый счётчик в текущем месяце.
 Сохраняйте также квоты на стороне Google. Источник расчёта месяцев:
 https://docs.cloud.google.com/billing/docs/how-to/pricing-table.
+
+## MagicMop landing reCAPTCHA
+
+Only the MagicMop instance exposes `POST /api/public/booking/verify` and its
+OPTIONS preflight. This token-only API does not use CRM sessions or the database.
+Aparts returns 404. Existing authenticated API CORS restrictions stay in place.
+
+Set `NUXT_RECAPTCHA_SECRET_KEY` in `/home/magicmop-crm/.env.production`.
+Do not replace the rest of the CRM environment. The old standalone service and
+`/var/www/magicmop-landing/.env` are no longer used by the application.
+The server also accepts `RECAPTCHA_SECRET_KEY` for migration, but prefer the
+Nuxt-prefixed variable. The secret must never appear in public runtime config.
+
+Allowed browser origins default to `https://magicmopcrm.com` and
+`https://www.magicmopcrm.com`. Customize with comma-separated
+`NUXT_RECAPTCHA_ALLOWED_ORIGINS`; use `NUXT_RECAPTCHA_MINIMUM_SCORE` to change
+the default 0.5 threshold. Token action must be `demo_booking`; Google hostname
+must match the browser origin, and tokens older than two minutes are rejected.
+The endpoint allows ten attempts per minute per IP per process. Production
+Nginx must overwrite X-Real-IP, and the container must remain loopback-only.
+
+Deploy the new backend before enabling the landing public site key. Recreate
+the existing app container after editing environment variables; a container
+restart alone does not refresh its environment. Docker Compose already loads
+`.env.production`; no new service, port, database or Nginx route is required.
+Set repository variable `RECAPTCHA_SITE_KEY` in the landing repository and
+rebuild that static site. Its default verification URL is
+`https://app.magicmopcrm.com/api/public/booking/verify`.
