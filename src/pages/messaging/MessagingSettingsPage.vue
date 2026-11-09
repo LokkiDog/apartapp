@@ -88,7 +88,7 @@ async function disconnect() {
 </script>
 <template>
   <section v-if="allowed" class="page-wrap space-y-4">
-    <PageHeader :title="t('messaging.title')" />
+    <PageHeader :title="t('messaging.settings')" />
     <UAlert
       v-if="loadError || error"
       color="error"
@@ -99,65 +99,68 @@ async function disconnect() {
         }}</UButton></template
       ></UAlert
     >
-    <div class="surface p-4 space-y-4">
-      <div class="flex items-center justify-between gap-3">
-        <h2 class="text-lg font-semibold">Telegram</h2>
-        <span>{{
-          t(data?.connected ? 'messaging.connected' : 'messaging.disconnected')
-        }}</span>
+    <div class="surface px-4 pb-4 pt-2">
+      <div class="flex flex-wrap items-center justify-between gap-x-3">
+        <div class="flex flex-wrap items-center gap-x-2">
+          <h2 class="text-base font-semibold">Telegram</h2>
+          <span class="text-xs text-[var(--color-muted)]">{{
+            t(data?.connected ? 'messaging.connected' : 'messaging.disconnected')
+          }}</span>
+        </div>
+        <UButton
+          color="primary"
+          variant="ghost"
+          icon="i-lucide-book-open"
+          class="min-h-11 shrink-0"
+          @click="instructionsOpen = true"
+        >{{ t('messaging.instructions.button') }}</UButton>
       </div>
-      <template v-if="data?.url">
-        <p>{{ data.botName }} · @{{ data.botUsername }}</p>
+      <div v-if="data?.url" class="mb-2 flex flex-wrap items-center gap-x-3">
+        <p class="break-all text-sm">{{ data.botName }} · @{{ data.botUsername }}</p>
         <UButton
           :to="data.url"
           target="_blank"
           color="neutral"
           variant="outline"
           icon="i-lucide-external-link"
+          class="min-h-11"
           >{{ t('messaging.openBot') }}</UButton
         >
-      </template>
-      <div class="flex flex-wrap items-center justify-between gap-2">
-        <p class="text-sm text-[var(--color-muted)]">
-          {{ t('messaging.botHelp') }}
-        </p>
-        <UButton
-          color="neutral"
-          variant="outline"
-          icon="i-lucide-book-open"
-          class="min-h-11 shrink-0"
-          @click="instructionsOpen = true"
-          >{{ t('messaging.instructions.button') }}</UButton
-        >
       </div>
-      <form class="space-y-3" @submit.prevent="connect">
-        <UFormField :label="t('messaging.token')"
-          ><UInput
+      <form class="mt-1" @submit.prevent="connect">
+        <div class="flex gap-2">
+          <UInput
             v-model="token"
             type="password"
             autocomplete="off"
-            class="w-full"
+            class="min-w-0 flex-1"
+            :ui="{ base: 'min-h-11' }"
+            :placeholder="t('messaging.token')"
+            :aria-label="t('messaging.token')"
+            aria-describedby="telegram-token-help"
             :disabled="pending"
             required
             maxlength="200"
-        /></UFormField>
-        <div class="flex flex-wrap gap-2">
+          />
           <UButton
             type="submit"
+            class="min-h-11 shrink-0"
             :loading="pending"
             :disabled="!token.trim() || pending"
-            >{{ t('messaging.connect') }}</UButton
-          >
-          <UButton
-            v-if="data?.connected"
-            color="neutral"
-            variant="outline"
-            :disabled="pending"
-            @click="confirmDisconnect = true"
-            >{{ t('messaging.disconnect') }}</UButton
-          >
+          >{{ t('messaging.connect') }}</UButton>
         </div>
+        <p id="telegram-token-help" class="mt-2 text-xs text-[var(--color-muted)]">
+          {{ t('messaging.botHelp') }}
+        </p>
       </form>
+      <UButton
+        v-if="data?.connected"
+        color="neutral"
+        variant="outline"
+        class="mt-2 min-h-11"
+        :disabled="pending"
+        @click="confirmDisconnect = true"
+      >{{ t('messaging.disconnect') }}</UButton>
     </div>
     <TelegramInstructionsModal v-model:open="instructionsOpen" />
     <ConfirmActionModal
