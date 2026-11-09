@@ -41,10 +41,11 @@ const moreOpen = ref(false);
 const logoutPending = ref(false);
 const mobileNavigationReady = ref(false);
 const notificationsReady = ref(false);
+const isAdministrator = computed(() => user.value?.roles.includes("administrator") ?? false);
 const isSpecialistNavigation = computed(() =>
   Boolean(
     user.value?.roles.includes("specialist") &&
-      !user.value.roles.includes("administrator"),
+      !isAdministrator.value,
   ),
 );
 const { isLoading: isPageLoading } = useLoadingIndicator({
@@ -119,7 +120,7 @@ const managerPrimary = computed<NavItem[]>(() => [
 ]);
 const messagingItems = computed<NavItem[]>(() => user.value?.messagingEnabled ? [{ to: '/messages', label: t('messaging.title'), icon: 'i-lucide-messages-square' }] : []);
 const settings = computed<NavItem[]>(() => [
-  ...(user.value?.messagingEnabled ? [{ to: '/settings/messaging', label: t('messaging.title'), icon: 'i-lucide-messages-square' }] : []),
+  ...(user.value?.messagingEnabled ? [{ to: '/settings/messaging', label: t('messaging.settings'), icon: 'i-lucide-messages-square' }] : []),
   { to: "/settings/site", label: t("siteSettings.title"), icon: "i-lucide-globe" },
   { to: "/settings/users", label: t("nav.users"), icon: "i-lucide-users" },
   {
@@ -133,14 +134,19 @@ const settings = computed<NavItem[]>(() => [
     icon: "i-lucide-concierge-bell",
   },
 ]);
+const settingsMenuItems = computed(() =>
+  settings.value.map((item) => ({ ...item, exact: true })),
+);
+const isSettingsPage = computed(() =>
+  settings.value.some((item) => route.path === item.to),
+);
 
 const groups = computed(() => {
-  if (user.value?.roles.includes("administrator"))
+  if (isAdministrator.value)
     return [
       { label: t("nav.work"), items: [...work.value, ...messagingItems.value, problems.value, expenses.value] },
       { label: t("nav.objects"), items: objects.value },
       { label: t("nav.reports"), items: reports.value },
-      { label: t("nav.settings"), items: settings.value },
     ];
   if (usesManagerOnlyNavigation(user.value))
     return [{ label: "", items: managerPrimary.value }];
@@ -169,7 +175,12 @@ const groups = computed(() => {
     },
   ];
 });
-const allItems = computed(() => groups.value.flatMap((group) => group.items));
+const mobileGroups = computed(() =>
+  isAdministrator.value
+    ? [...groups.value, { label: t("nav.settings"), items: settings.value }]
+    : groups.value,
+);
+const allItems = computed(() => mobileGroups.value.flatMap((group) => group.items));
 const mobilePrimary = computed(() => {
   if (usesManagerOnlyNavigation(user.value)) return allItems.value;
   if (isSpecialistNavigation.value) return specialistWork.value;
@@ -273,6 +284,37 @@ async function logout() {
           </div>
         </section>
       </nav>
+      <div v-if="isAdministrator" class="mt-2 shrink-0">
+        <UDropdownMenu
+          :items="settingsMenuItems"
+          :modal="false"
+          :content="{ side: 'top', align: 'start', sideOffset: 6, collisionPadding: 8 }"
+          :ui="{
+            content: 'hidden min-w-56 rounded-[14px] lg:flex',
+            item: 'min-h-11 items-center cursor-pointer aria-[current=page]:before:bg-accented',
+          }"
+        >
+          <template #default="{ open }">
+            <UTooltip :text="$t('nav.settings')" :disabled="!sidebarCollapsed || open" :content="sidebarTooltipContent">
+              <button
+                type="button"
+                class="nav-item w-full text-start"
+                :class="{ 'nav-item--active': isSettingsPage || open }"
+                :aria-label="$t('nav.settings')"
+              >
+                <UIcon name="i-lucide-settings" class="size-5 shrink-0" aria-hidden="true" />
+                <template v-if="!sidebarCollapsed">
+                  <span>{{ $t("nav.settings") }}</span>
+                  <UIcon :name="open ? 'i-lucide-chevron-down' : 'i-lucide-chevron-up'" class="ms-auto size-4 shrink-0" aria-hidden="true" />
+                </template>
+              </button>
+            </UTooltip>
+          </template>
+          <template #item-trailing="{ active: isCurrent }">
+            <UIcon v-if="isCurrent" name="i-lucide-check" class="ms-auto size-4 shrink-0 text-primary" aria-hidden="true" />
+          </template>
+        </UDropdownMenu>
+      </div>
       <UserMenu :collapsed="sidebarCollapsed" :name="user?.name" :role-label="roleLabel" :logout-pending="logoutPending" @logout="logout" />
     </aside>
 
@@ -366,8 +408,8 @@ async function logout() {
     <ReleaseAnnouncement :home-href="homeHref" :blocked="moreOpen" />
     <UDrawer v-model:open="moreOpen" :title="$t('common.menu')">
       <template #body>
-        <nav v-if="groups.length" class="grid gap-6">
-          <section v-for="group in groups" :key="group.label">
+        <nav v-if="mobileGroups.length" class="grid gap-6">
+          <section v-for="group in mobileGroups" :key="group.label">
             <p v-if="group.label" class="nav-group-label">{{ group.label }}</p>
             <div :class="group.label ? 'mt-2 grid gap-2' : 'grid gap-2'">
               <NuxtLink
