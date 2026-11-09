@@ -2,6 +2,17 @@ import type { AppLocale } from '@contracts/crm'
 
 export type SessionUser = { messagingEnabled?: boolean, id: string, organizationId: string, isSuperuser?: boolean, inSystem?: boolean, organizationName?: string, organizationStatus?: 'active' | 'blocked', contextRevision?: string, platformSessionId?: string, sessionVersion?: number, name: string, email: string, roles: Array<'administrator' | 'manager' | 'cleaner' | 'specialist'>, locale: AppLocale }
 export function useCurrentUser() { return useUserSession().user as Ref<SessionUser | null> }
+export function useCurrentUserScope() {
+  const user = useCurrentUser()
+  return computed(() => {
+    const current = user.value
+    if (!current) return null
+    return JSON.stringify([
+      current.id, current.platformSessionId, current.organizationId,
+      current.contextRevision, current.inSystem, current.roles
+    ])
+  })
+}
 export function canAccessWorkSection(user: Pick<SessionUser, 'roles'> | null | undefined) {
   return Boolean(user?.roles.some(role => role === 'administrator' || role === 'cleaner' || role === 'specialist'))
 }

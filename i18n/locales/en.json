@@ -459,6 +459,8 @@
     "photo": "Property photo",
     "photoHint": "Add multiple JPG, PNG, or WebP photos, up to 8 MB each.",
     "photoFormatError": "Only JPG, PNG, and WebP are supported.",
+    "photoUploadFailed": "The apartment was saved. Some photos failed to upload.",
+    "retryPhotoUpload": "Retry upload",
     "photoUploadPartial": "The apartment was saved, but some photos could not be uploaded. Add them again.",
     "deletePhoto": "Delete photo?",
     "deletePhotoDescription": "This photo will be permanently deleted.",

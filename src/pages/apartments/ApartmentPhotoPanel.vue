@@ -167,7 +167,7 @@ function movePhoto(index: number, direction: number) {
       </figure>
       <figure v-for="(preview, index) in previews" :key="preview.url" class="apartment-photo-panel__item apartment-photo-panel__item--pending">
         <img :src="preview.url" :alt="preview.file.name" class="apartment-photo-panel__image">
-        <UButton color="error" variant="solid" icon="i-lucide-x" size="sm" class="apartment-photo-panel__remove min-h-11 min-w-11 active:scale-[0.96] transition-transform" :aria-label="`${t('common.delete')}: ${preview.file.name}`" @click="emit('removePending', index)" />
+        <UButton color="error" variant="solid" icon="i-lucide-x" size="sm" class="apartment-photo-panel__remove min-h-11 min-w-11 active:scale-[0.96] transition-transform" :disabled="busy" :aria-label="`${t('common.delete')}: ${preview.file.name}`" @click="emit('removePending', index)" />
       </figure>
       </TransitionGroup>
     </div>

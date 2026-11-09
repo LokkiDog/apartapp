@@ -7,7 +7,7 @@ import {
   type ApartmentFormManager,
   type ApartmentFormType
 } from '#fsd/features/manage-apartment'
-import { useCurrentUser } from '#fsd/shared/auth'
+import { useCurrentUser, useCurrentUserScope } from '#fsd/shared/auth'
 import { DeleteConfirmModal, PageHeader } from '#fsd/shared/ui'
 import ApartmentPhotoPanel, { type ApartmentPhotoAttachment } from './ApartmentPhotoPanel.vue'
 import ApartmentPublicationPanel from './ApartmentPublicationPanel.vue'
@@ -23,6 +23,7 @@ type Attachment = ApartmentPhotoAttachment
 const route = useRoute()
 const apartmentId = String(route.params.id)
 const currentUser = useCurrentUser()
+const userScope = useCurrentUserScope()
 const { t } = useI18n()
 const publicationOpen = ref(false)
 const isAdministrator = computed(() => Boolean(currentUser.value?.roles.includes('administrator')))
@@ -39,14 +40,14 @@ const [
   { data: types, status: typesStatus, error: typesError },
   { data: photos, status: photosStatus, refresh: refreshPhotos }
 ] = await Promise.all([
-  useAsyncData(`apartment-edit-${apartmentId}`, () => currentUser.value ? $fetch<ApartmentRecord>(`/api/apartments/${apartmentId}`) : Promise.resolve(null), { server: false, default: () => null, watch: [currentUser] }),
-  useAsyncData('apartment-form-hotels', () => isAdministrator.value ? $fetch<ApartmentFormHotel[]>('/api/hotels') : Promise.resolve([]), { server: false, default: () => [], watch: [currentUser] }),
-  useAsyncData('apartment-form-users', () => isAdministrator.value ? $fetch<ApartmentFormManager[]>('/api/users') : Promise.resolve([]), { server: false, default: () => [], watch: [currentUser] }),
-  useAsyncData('apartment-form-types', () => isAdministrator.value ? $fetch<ApartmentFormType[]>('/api/apartment-types') : Promise.resolve([]), { server: false, default: () => [], watch: [currentUser] }),
-  useAsyncData(`apartment-photos-${apartmentId}`, () => isAdministrator.value || isApartmentOwner.value ? $fetch<Attachment[]>('/api/attachments', { query: { entityType: 'apartment', entityId: apartmentId } }) : Promise.resolve([]), { server: false, default: () => [], watch: [currentUser] })
+  useAsyncData(`apartment-edit-${apartmentId}`, () => currentUser.value ? $fetch<ApartmentRecord>(`/api/apartments/${apartmentId}`) : Promise.resolve(null), { server: false, default: () => null, watch: [userScope] }),
+  useAsyncData('apartment-form-hotels', () => isAdministrator.value ? $fetch<ApartmentFormHotel[]>('/api/hotels') : Promise.resolve([]), { server: false, default: () => [], watch: [userScope] }),
+  useAsyncData('apartment-form-users', () => isAdministrator.value ? $fetch<ApartmentFormManager[]>('/api/users') : Promise.resolve([]), { server: false, default: () => [], watch: [userScope] }),
+  useAsyncData('apartment-form-types', () => isAdministrator.value ? $fetch<ApartmentFormType[]>('/api/apartment-types') : Promise.resolve([]), { server: false, default: () => [], watch: [userScope] }),
+  useAsyncData(`apartment-photos-${apartmentId}`, () => isAdministrator.value || isApartmentOwner.value ? $fetch<Attachment[]>('/api/attachments', { query: { entityType: 'apartment', entityId: apartmentId } }) : Promise.resolve([]), { server: false, default: () => [], watch: [userScope] })
 ])
 
-const loading = computed(() => [apartmentStatus.value, hotelsStatus.value, usersStatus.value, typesStatus.value, photosStatus.value].some(status => status === 'idle' || status === 'pending'))
+const loading = computed(() => [apartmentStatus.value, hotelsStatus.value, usersStatus.value, typesStatus.value].some(status => status === 'idle' || status === 'pending'))
 const loadError = computed(() => apartmentError.value || hotelsError.value || usersError.value || typesError.value)
 
 const initialValue = computed<Partial<ApartmentInput>>(() => apartment.value ? {

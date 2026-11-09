@@ -19,7 +19,7 @@ const props = withDefaults(defineProps<{
   hotels: ApartmentFormHotel[]
   managers: ApartmentFormManager[]
   apartmentTypes: ApartmentFormType[]
-  afterCreate?: (apartmentId: string) => Promise<string | undefined>
+  afterCreate?: (apartmentId: string) => Promise<void>
 }>(), {
   apartmentId: undefined,
   initialValue: () => ({})
@@ -59,6 +59,7 @@ function moveChecklistItem(index: number, direction: -1 | 1) {
 }
 
 async function save(event: FormSubmitEvent<ApartmentInput>) {
+  if (!canSubmit.value) return
   pending.value = true
   error.value = ''
   try {
@@ -67,7 +68,8 @@ async function save(event: FormSubmitEvent<ApartmentInput>) {
       await $fetch(`/api/apartments/${props.apartmentId}`, { method: 'PATCH', body: event.data })
     } else {
       const apartment = await $fetch<{ id: string }>('/api/apartments', { method: 'POST', body: event.data })
-      await navigateTo(await props.afterCreate?.(apartment.id) ?? '/apartments')
+      if (props.afterCreate) await props.afterCreate(apartment.id)
+      else await navigateTo('/apartments')
       return
     }
     await navigateTo('/apartments')

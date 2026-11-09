@@ -459,6 +459,8 @@
     "photo": "תמונת הנכס",
     "photoHint": "אפשר להוסיף כמה תמונות JPG, PNG או WebP, עד 8MB לכל תמונה.",
     "photoFormatError": "נתמכים רק JPG, PNG ו-WebP.",
+    "photoUploadFailed": "הדירה נשמרה. חלק מהתמונות לא הועלו.",
+    "retryPhotoUpload": "ניסיון העלאה נוסף",
     "photoUploadPartial": "הדירה נשמרה, אך חלק מהתמונות לא הועלו. הוסיפו אותן שוב.",
     "deletePhoto": "למחוק תמונה?",
     "deletePhotoDescription": "התמונה תימחק לצמיתות.",
