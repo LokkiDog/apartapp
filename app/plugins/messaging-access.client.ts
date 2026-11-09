@@ -37,9 +37,6 @@ export default defineNuxtPlugin((nuxtApp) => {
       pending = false
     }
   }
-  const timer = setInterval(() => {
-    void refreshAccess()
-  }, 5000)
   const visibility = () => {
     if (document.visibilityState === 'visible') void refreshAccess()
   }
@@ -49,7 +46,6 @@ export default defineNuxtPlugin((nuxtApp) => {
   })
   if (import.meta.hot)
     import.meta.hot.dispose(() => {
-      clearInterval(timer)
       document.removeEventListener('visibilitychange', visibility)
     })
 })
