@@ -1448,6 +1448,15 @@
     "invalidAddress": "Укажите адрес сайта без пути, например https://aparts-bansko.com"
   },
   "messaging": {
+    "line": {
+      "pending": "Ожидает проверки",
+      "credentialsHelp": "Включите Messaging API для LINE Official Account и скопируйте данные канала.",
+      "webhookHelp": "В LINE Developers вставьте адрес в Webhook URL, нажмите Verify, включите Use webhook и Webhook redelivery.",
+      "check": "Проверить статус",
+      "open": "Открыть LINE",
+      "disconnectTitle": "Отключить LINE?",
+      "disconnectHelp": "Приём и отправка LINE остановятся. История сохранится. Подключите тот же аккаунт, чтобы продолжить переписку."
+    },
     "instructions": {
       "button": "Инструкция",
       "title": "Как создать Telegram-бота",
@@ -1484,7 +1493,7 @@
     "retry": "Повторить",
     "loading": "Загрузка…",
     "noConversations": "Диалогов пока нет",
-    "startHelp": "Диалог появится, когда гость напишет вашему боту.",
+    "startHelp": "Диалог появится, когда гость напишет в Telegram или LINE.",
     "connectHelp": "Подключите Telegram в настройках сообщений.",
     "more": "Ещё диалоги",
     "older": "Предыдущие сообщения",

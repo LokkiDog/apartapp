@@ -1448,6 +1448,15 @@
     "invalidAddress": "Enter a website address without a path, such as https://aparts-bansko.com"
   },
   "messaging": {
+    "line": {
+      "pending": "Awaiting verification",
+      "credentialsHelp": "Enable the Messaging API for your LINE Official Account and copy the channel credentials.",
+      "webhookHelp": "In LINE Developers, paste the Webhook URL, click Verify, and enable Use webhook and Webhook redelivery.",
+      "check": "Check status",
+      "open": "Open LINE",
+      "disconnectTitle": "Disconnect LINE?",
+      "disconnectHelp": "LINE will stop sending and receiving messages. History is kept. Reconnect the same account to resume."
+    },
     "instructions": {
       "button": "Instructions",
       "title": "Create a Telegram bot",
@@ -1484,7 +1493,7 @@
     "retry": "Retry",
     "loading": "Loading…",
     "noConversations": "No conversations yet",
-    "startHelp": "Conversations appear when guests message your bot.",
+    "startHelp": "A conversation appears when a guest messages you on Telegram or LINE.",
     "connectHelp": "Connect Telegram in messaging settings.",
     "more": "More conversations",
     "older": "Earlier messages",

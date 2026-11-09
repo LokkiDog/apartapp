@@ -1,9 +1,10 @@
 import { randomBytes } from 'node:crypto'
 import { createError } from 'h3'
-import { and, eq } from 'drizzle-orm'
+import { and, eq, inArray } from 'drizzle-orm'
 import { db } from '../../infrastructure/database/client'
 import {
   messagingConnections,
+  messagingConversations,
   messagingMessages,
   messagingOutbox,
   organizations,
@@ -16,7 +17,7 @@ import { telegramRequest } from './telegram'
 export async function getConnection(actor: Actor) {
   await assertMessagingAccess(actor)
   const connection = await db.query.messagingConnections.findFirst({
-    where: eq(messagingConnections.organizationId, actor.organizationId),
+    where: connectionScope(actor.organizationId, 'telegram'),
   })
   return {
     connected: connection?.connected ?? false,
@@ -60,7 +61,7 @@ export async function connectTelegram(actor: Actor, token: string) {
       const [existing] = await tx
         .select()
         .from(messagingConnections)
-        .where(eq(messagingConnections.organizationId, actor.organizationId))
+        .where(connectionScope(actor.organizationId, 'telegram'))
       if (existing && existing.botId !== String(bot.id))
         throw createError({
           statusCode: 409,
@@ -128,33 +129,13 @@ export async function disconnectTelegram(actor: Actor) {
     const [connection] = await tx
       .select()
       .from(messagingConnections)
-      .where(eq(messagingConnections.organizationId, actor.organizationId))
+      .where(connectionScope(actor.organizationId, 'telegram'))
     if (!connection) return
     await tx
       .update(messagingConnections)
       .set({ connected: false, updatedAt: new Date() })
       .where(eq(messagingConnections.id, connection.id))
-    await tx
-      .delete(messagingOutbox)
-      .where(eq(messagingOutbox.organizationId, actor.organizationId))
-    await tx
-      .update(messagingMessages)
-      .set({ status: 'unknown' })
-      .where(
-        and(
-          eq(messagingMessages.organizationId, actor.organizationId),
-          eq(messagingMessages.status, 'sending'),
-        ),
-      )
-    await tx
-      .update(messagingMessages)
-      .set({ status: 'canceled' })
-      .where(
-        and(
-          eq(messagingMessages.organizationId, actor.organizationId),
-          eq(messagingMessages.status, 'pending'),
-        ),
-      )
+    await cancelConnectionQueue(tx, actor.organizationId, connection.id)
     // Local disconnect remains effective even when Telegram is unreachable.
     try {
       await telegramRequest(
@@ -167,4 +148,34 @@ export async function disconnectTelegram(actor: Actor) {
     }
   })
   return getConnection(actor)
+}
+
+export function connectionScope(organizationId: string, channel: 'telegram' | 'line') {
+  return and(
+    eq(messagingConnections.organizationId, organizationId),
+    eq(messagingConnections.channel, channel),
+  )
+}
+
+type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0]
+
+export async function cancelConnectionQueue(tx: Transaction, organizationId: string, connectionId: string) {
+  const conversations = tx.select({ id: messagingConversations.id })
+    .from(messagingConversations)
+    .where(and(
+      eq(messagingConversations.organizationId, organizationId),
+      eq(messagingConversations.connectionId, connectionId),
+    ))
+  const messages = and(
+    eq(messagingMessages.organizationId, organizationId),
+    inArray(messagingMessages.conversationId, conversations),
+  )
+  await tx.delete(messagingOutbox).where(and(
+    eq(messagingOutbox.organizationId, organizationId),
+    inArray(messagingOutbox.messageId, tx.select({ id: messagingMessages.id }).from(messagingMessages).where(messages)),
+  ))
+  await tx.update(messagingMessages).set({ status: 'unknown' })
+    .where(and(messages, eq(messagingMessages.status, 'sending')))
+  await tx.update(messagingMessages).set({ status: 'canceled' })
+    .where(and(messages, eq(messagingMessages.status, 'pending')))
 }

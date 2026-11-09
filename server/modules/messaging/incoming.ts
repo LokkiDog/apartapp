@@ -60,7 +60,7 @@ export async function receiveTelegramUpdate(
   const connection = await db.query.messagingConnections.findFirst({
     where: eq(messagingConnections.id, connectionId),
   })
-  if (!connection || !verifyWebhookSecret(secret, connection.webhookSecret))
+  if (!connection || connection.channel !== 'telegram' || !verifyWebhookSecret(secret, connection.webhookSecret))
     throw createError({ statusCode: 403, statusMessage: 'Forbidden' })
   const update = incomingSchema.parse(body)
   await db.transaction(async (tx) => {
@@ -106,66 +106,98 @@ export async function receiveTelegramUpdate(
         .join(' ') ||
       message.chat.username ||
       String(message.chat.id)
-    const [contact] = await tx
-      .insert(messagingContacts)
-      .values({
-        organizationId: connection.organizationId,
-        connectionId,
-        externalId: String(message.chat.id),
-        name,
-        username: message.chat.username ?? '',
-      })
-      .onConflictDoUpdate({
-        target: [messagingContacts.connectionId, messagingContacts.externalId],
-        set: {
-          name,
-          username: message.chat.username ?? '',
-          updatedAt: new Date(),
-        },
-      })
-      .returning()
-    const [conversation] = await tx
-      .insert(messagingConversations)
-      .values({
-        organizationId: connection.organizationId,
-        connectionId,
-        contactId: contact!.id,
-      })
-      .onConflictDoUpdate({
-        target: messagingConversations.contactId,
-        set: { updatedAt: new Date() },
-      })
-      .returning()
-    const [saved] = await tx
-      .insert(messagingMessages)
-      .values({
-        organizationId: connection.organizationId,
-        conversationId: conversation!.id,
-        direction: 'incoming',
-        text: content.text,
-        unsupported: content.unsupported,
-        status: 'sent',
-        externalId: String(message.message_id),
-        createdAt: new Date(message.date * 1000),
-      })
-      .onConflictDoNothing()
-      .returning()
-    if (!saved) return
-    if (content.file)
-      await tx.insert(messagingAttachments).values({
-        ...content.file,
-        size: Math.min(content.file.size, 2147483647),
-        organizationId: connection.organizationId,
-        messageId: saved.id,
-      })
-    await tx
-      .update(messagingConversations)
-      .set({
-        unread: sql`${messagingConversations.unread} + 1`,
-        lastMessageAt: sql`greatest(${messagingConversations.lastMessageAt}, ${new Date(message.date * 1000).toISOString()}::timestamptz)`,
-        updatedAt: new Date(),
-      })
-      .where(eq(messagingConversations.id, conversation!.id))
+    await saveIncomingMessage(tx, {
+      organizationId: connection.organizationId,
+      connectionId,
+      externalContactId: String(message.chat.id),
+      externalMessageId: String(message.message_id),
+      createdAt: new Date(message.date * 1000),
+      name,
+      username: message.chat.username ?? '',
+      content,
+    })
   })
   return { ok: true }
+}
+
+type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0]
+type IncomingContent = {
+  text: string
+  unsupported: boolean
+  file?: Pick<typeof messagingAttachments.$inferInsert, 'name' | 'mimeType' | 'size' | 'externalFileId' | 'storageKey' | 'available'> | null
+}
+
+export async function saveIncomingMessage(tx: Transaction, {
+  organizationId, connectionId, externalContactId, externalMessageId, name, username, createdAt, content,
+}: {
+  organizationId: string
+  connectionId: string
+  externalContactId: string
+  externalMessageId: string
+  name: string
+  username: string
+  createdAt: Date
+  content: IncomingContent
+}) {
+  const [contact] = await tx
+    .insert(messagingContacts)
+    .values({
+      organizationId,
+      connectionId,
+      externalId: externalContactId,
+      name,
+      username,
+    })
+    .onConflictDoUpdate({
+      target: [messagingContacts.connectionId, messagingContacts.externalId],
+      set: {
+        name,
+        username,
+        updatedAt: new Date(),
+      },
+    })
+    .returning()
+  const [conversation] = await tx
+    .insert(messagingConversations)
+    .values({
+      organizationId,
+      connectionId,
+      contactId: contact!.id,
+    })
+    .onConflictDoUpdate({
+      target: messagingConversations.contactId,
+      set: { updatedAt: new Date() },
+    })
+    .returning()
+  const [saved] = await tx
+    .insert(messagingMessages)
+    .values({
+      organizationId,
+      conversationId: conversation!.id,
+      direction: 'incoming',
+      text: content.text,
+      unsupported: content.unsupported,
+      status: 'sent',
+      externalId: externalMessageId,
+      createdAt,
+    })
+    .onConflictDoNothing()
+    .returning()
+  if (!saved) return false
+  if (content.file)
+    await tx.insert(messagingAttachments).values({
+      ...content.file,
+      size: Math.min(content.file.size, 2147483647),
+      organizationId,
+      messageId: saved.id,
+    })
+  await tx
+    .update(messagingConversations)
+    .set({
+      unread: sql`${messagingConversations.unread} + 1`,
+      lastMessageAt: sql`greatest(${messagingConversations.lastMessageAt}, ${createdAt.toISOString()}::timestamptz)`,
+      updatedAt: new Date(),
+    })
+    .where(eq(messagingConversations.id, conversation!.id))
+  return true
 }

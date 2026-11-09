@@ -1448,6 +1448,15 @@
     "invalidAddress": "יש להזין כתובת אתר ללא נתיב, למשל https://aparts-bansko.com"
   },
   "messaging": {
+    "line": {
+      "pending": "ממתין לאימות",
+      "credentialsHelp": "הפעילו את Messaging API בחשבון LINE Official Account והעתיקו את פרטי הערוץ.",
+      "webhookHelp": "ב־LINE Developers הדביקו את כתובת Webhook URL, לחצו על Verify והפעילו Use webhook ו־Webhook redelivery.",
+      "check": "בדיקת מצב",
+      "open": "פתיחת LINE",
+      "disconnectTitle": "לנתק את LINE?",
+      "disconnectHelp": "השליחה והקבלה ב־LINE ייפסקו. ההיסטוריה תישמר. חברו שוב את אותו חשבון כדי להמשיך."
+    },
     "instructions": {
       "button": "הוראות",
       "title": "יצירת בוט ב־Telegram",
@@ -1484,7 +1493,7 @@
     "retry": "ניסיון חוזר",
     "loading": "טוען…",
     "noConversations": "אין שיחות עדיין",
-    "startHelp": "שיחה תופיע כשאורח ישלח הודעה לבוט.",
+    "startHelp": "שיחה תופיע כאשר אורח ישלח הודעה ב־Telegram או ב־LINE.",
     "connectHelp": "חברו Telegram בהגדרות ההודעות.",
     "more": "שיחות נוספות",
     "older": "הודעות קודמות",

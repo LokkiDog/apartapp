@@ -787,15 +787,19 @@ export const apartmentPublicationPhotos = pgTable('apartment_publication_photos'
 export const messagingConnections = pgTable('messaging_connections', {
   id: uuid('id').primaryKey().defaultRandom(),
   organizationId: uuid('organization_id').notNull().references(() => organizations.id),
-  channel: text('channel').notNull().default('telegram'),
-  botId: text('bot_id').notNull().unique(),
+  channel: text('channel').$type<import('../../../shared/contracts/messaging').MessagingChannel>().notNull().default('telegram'),
+  botId: text('bot_id').notNull(),
   botName: text('bot_name').notNull(),
   botUsername: text('bot_username').notNull(),
   encryptedToken: text('encrypted_token').notNull(),
   webhookSecret: text('webhook_secret').notNull(),
+  verificationPending: boolean('verification_pending').notNull().default(false),
   connected: boolean('connected').notNull().default(false),
   ...timestamps
-}, table => [uniqueIndex('messaging_org_channel_idx').on(table.organizationId, table.channel)])
+}, table => [
+  uniqueIndex('messaging_org_channel_idx').on(table.organizationId, table.channel),
+  uniqueIndex('messaging_channel_bot_idx').on(table.channel, table.botId),
+])
 
 export const messagingContacts = pgTable('messaging_contacts', {
   id: uuid('id').primaryKey().defaultRandom(),

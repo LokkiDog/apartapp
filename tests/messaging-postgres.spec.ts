@@ -7,7 +7,7 @@ import {
   it,
   vi,
 } from 'vitest'
-import { randomUUID } from 'node:crypto'
+import { createHmac, randomUUID } from 'node:crypto'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -491,6 +491,96 @@ describe.skipIf(!url)('guest messaging PostgreSQL boundaries', () => {
     expect(
       (await inbox.listMessages(actor, id, undefined, 50)).items,
     ).toHaveLength(2)
+  })
+
+  it('accepts signed LINE text and media once, isolates tenants, and disconnects only LINE', async () => {
+    const line = await import('../server/modules/messaging/line-connection')
+    const { receiveLineWebhook } = await import('../server/modules/messaging/line-incoming')
+    const secret = 'b'.repeat(32)
+    const destination = 'U' + 'c'.repeat(32)
+    const userId = 'U' + 'd'.repeat(32)
+    let deliveredText: string | undefined
+    let failFileOnce = true
+    fetchMock.mockImplementation(async (url: string, init: RequestInit) => {
+      if (url.endsWith('/bot/info'))
+        return Response.json({ userId: destination, displayName: 'Test LINE', basicId: '@test' })
+      if (url.includes('/profile/')) return Response.json({ displayName: 'LINE Guest' })
+      if (url.endsWith('/pdf/content') && failFileOnce) {
+        failFileOnce = false
+        return new Response(null, { status: 503 })
+      }
+      if (url.endsWith('/pdf/content')) return new Response('pdf', { headers: { 'content-type': 'application/pdf' } })
+      if (url.endsWith('/image/content')) return new Response('photo', { headers: { 'content-type': 'image/jpeg' } })
+      if (url.endsWith('/push')) {
+        deliveredText = JSON.parse(String(init.body)).messages[0].text
+        return new Response('{}', { headers: { 'x-line-request-id': 'line-accepted' } })
+      }
+      return Response.json({ ok: true, result: { message_id: 55 } })
+    })
+
+    const setup = await line.connectLine(actor, 'test-access-token', secret)
+    expect(setup).toMatchObject({ pending: true, connected: false, botName: 'Test LINE' })
+    expect(JSON.stringify(setup)).not.toContain(secret)
+    await expect(line.connectLine(other, 'other-token', secret)).rejects.toMatchObject({ statusCode: 409 })
+    const id = setup.webhookUrl!.split('/').at(-2)!
+    const deliver = (events: unknown[], target = destination) => {
+      const raw = Buffer.from(JSON.stringify({ destination: target, events }))
+      const signature = createHmac('sha256', secret).update(raw).digest('base64')
+      return receiveLineWebhook(id, signature, raw)
+    }
+    const event = (message: { id: string; type: string; [key: string]: unknown }) => ({
+      type: 'message', mode: 'active', timestamp: Date.now(), webhookEventId: message.id,
+      source: { type: 'user', userId }, message,
+    })
+    const text = event({ id: 'text', type: 'text', text: 'Booking question' })
+    await deliver([text])
+    expect((await inbox.listConversations(actor)).items).toHaveLength(0)
+    await expect(receiveLineWebhook(id, 'wrong', Buffer.from('{}'))).rejects.toMatchObject({ statusCode: 403 })
+    await expect(deliver([], userId)).rejects.toMatchObject({ statusCode: 403 })
+    await deliver([])
+    expect(await line.getLineConnection(actor)).toMatchObject({ pending: false, connected: true })
+    const events = [
+      text,
+      event({ id: 'image', type: 'image', contentProvider: { type: 'line' } }),
+      event({ id: 'pdf', type: 'file', fileName: 'booking.pdf', fileSize: 3 }),
+      event({ id: 'huge', type: 'file', fileName: 'huge.pdf', fileSize: 21 * 1024 * 1024 }),
+    ]
+    await expect(deliver(events)).rejects.toMatchObject({ statusCode: 502 })
+    await deliver(events)
+    await deliver(events)
+    const [chat] = (await inbox.listConversations(actor)).items
+    expect(chat).toMatchObject({ channel: 'line', name: 'LINE Guest', unread: 4 })
+    expect((await inbox.listConversations(other)).items).toHaveLength(0)
+    await expect(inbox.listMessages(other, chat!.id, undefined, 50)).rejects.toMatchObject({ statusCode: 404 })
+
+    const history = await inbox.listMessages(actor, chat!.id, undefined, 50)
+    expect(history.items.map((item) => item.text)).toContain('Booking question')
+    const files = history.items.flatMap((item) => item.attachments)
+    for (const [name, content] of [['photo.jpg', 'photo'], ['booking.pdf', 'pdf']]) {
+      const file = files.find((attachment) => attachment.name === name)!
+      expect((await inbox.getMessageAttachment(actor, file.id)).content.toString()).toBe(content)
+      await expect(inbox.getMessageAttachment(other, file.id)).rejects.toMatchObject({ statusCode: 404 })
+    }
+    expect(files.find((file) => file.name === 'huge.pdf')?.available).toBe(false)
+    await expect(inbox.enqueueMessage(actor, chat!.id, { requestId: randomUUID(), text: '' }, {
+      name: 'reply.pdf', mimeType: 'application/pdf', data: Buffer.from('pdf'),
+    })).rejects.toMatchObject({ statusCode: 422 })
+    const reply = await inbox.enqueueMessage(actor, chat!.id, { requestId: randomUUID(), text: 'LINE reply' })
+    await outbox.processMessagingOutbox()
+    expect(deliveredText).toBe('LINE reply')
+    expect((await inbox.listMessages(actor, chat!.id, undefined, 50)).items.find((item) => item.id === reply.id)?.status).toBe('sent')
+
+    await incoming.receiveTelegramUpdate(botConnection.id, botConnection.webhookSecret, update())
+    const telegramId = (await inbox.listConversations(actor)).items.find((item) => item.channel === 'telegram')!.id
+    const pendingTelegram = await inbox.enqueueMessage(actor, telegramId, { requestId: randomUUID(), text: 'Telegram reply' })
+    const pendingLine = await inbox.enqueueMessage(actor, chat!.id, { requestId: randomUUID(), text: 'Stop LINE' })
+    await line.disconnectLine(actor)
+    await deliver([])
+    expect(await line.getLineConnection(actor)).toMatchObject({ pending: false, connected: false })
+    expect(await telegram.getConnection(actor)).toMatchObject({ connected: true })
+    await outbox.processMessagingOutbox()
+    expect((await inbox.listMessages(actor, chat!.id, undefined, 50)).items.find((item) => item.id === pendingLine.id)?.status).toBe('canceled')
+    expect((await inbox.listMessages(actor, telegramId, undefined, 50)).items.find((item) => item.id === pendingTelegram.id)?.status).toBe('sent')
   })
 
   it('permits linking only a stay belonging to the same company', async () => {

@@ -2,6 +2,7 @@
 import type { MessagingConnection } from '@contracts/messaging'
 import { useCurrentUser } from '#fsd/shared/auth'
 import { ConfirmActionModal, PageHeader } from '#fsd/shared/ui'
+import LineConnectionSettings from './LineConnectionSettings.vue'
 import TelegramInstructionsModal from './TelegramInstructionsModal.vue'
 const { t } = useI18n()
 const user = useCurrentUser()
@@ -162,6 +163,7 @@ async function disconnect() {
         @click="confirmDisconnect = true"
       >{{ t('messaging.disconnect') }}</UButton>
     </div>
+    <LineConnectionSettings :key="identity" />
     <TelegramInstructionsModal v-model:open="instructionsOpen" />
     <ConfirmActionModal
       v-model:open="confirmDisconnect"

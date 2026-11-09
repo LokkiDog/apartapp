@@ -45,6 +45,7 @@ function conversationQuery(actor: Actor) {
   return db
     .select({
       id: messagingConversations.id,
+      channel: messagingConnections.channel,
       name: messagingContacts.name,
       username: messagingContacts.username,
       unread: messagingConversations.unread,
@@ -61,6 +62,13 @@ function conversationQuery(actor: Actor) {
       and(
         eq(messagingContacts.id, messagingConversations.contactId),
         eq(messagingContacts.organizationId, actor.organizationId),
+      ),
+    )
+    .innerJoin(
+      messagingConnections,
+      and(
+        eq(messagingConnections.id, messagingConversations.connectionId),
+        eq(messagingConnections.organizationId, actor.organizationId),
       ),
     )
     .leftJoin(
@@ -296,8 +304,10 @@ export async function enqueueMessage(
       if (!connection?.connected)
         throw createError({
           statusCode: 409,
-          statusMessage: 'Telegram отключён',
+          statusMessage: 'Канал сообщений отключён',
         })
+      if (file && connection.channel === 'line')
+        throw createError({ statusCode: 422, statusMessage: 'В LINE можно отправлять только текст' })
       const [message] = await tx
         .insert(messagingMessages)
         .values({
