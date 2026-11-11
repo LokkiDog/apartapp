@@ -8,7 +8,6 @@ import {
   createFormValidator,
   formatDate,
   formatDateTime,
-  formatEuro,
   useSubmitFormValidation,
 } from "#fsd/shared/lib";
 import { useCurrentUser } from "#fsd/shared/auth";

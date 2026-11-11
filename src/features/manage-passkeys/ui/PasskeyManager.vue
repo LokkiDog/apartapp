@@ -49,7 +49,7 @@ async function remove() {
   <div>
     <div class="space-y-4">
       <p class="text-sm leading-6 text-[var(--color-muted)]">{{ t('passkeys.description') }}</p>
-      <UAlert v-if="loadError" color="error" :description="t('passkeys.loadError')"><template #actions><UButton color="neutral" variant="soft" class="min-h-11 cursor-pointer" @click="refresh()">{{ t('passkeys.retry') }}</UButton></template></UAlert>
+      <UAlert v-if="loadError" color="error" orientation="horizontal" :description="t('passkeys.loadError')"><template #actions><UButton color="error" variant="ghost" class="min-h-11 cursor-pointer" @click="refresh()">{{ t('passkeys.retry') }}</UButton></template></UAlert>
       <p v-else-if="status === 'idle' || status === 'pending'" class="text-sm text-[var(--color-muted)]">{{ t('passkeys.loading') }}</p>
       <ul v-else-if="keys.length" class="divide-y divide-[var(--color-line)]">
         <li v-for="key in keys" :key="key.id" class="flex items-center justify-between gap-3 py-3">

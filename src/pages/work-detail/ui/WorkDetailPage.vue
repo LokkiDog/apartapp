@@ -3,7 +3,7 @@ import type { Cleaning } from '#fsd/entities/cleaning'
 import { HotelLocationMap } from '#fsd/entities/hotel'
 import type { Task } from '#fsd/entities/task'
 import { useCurrentUser } from '#fsd/shared/auth'
-import { formatDate, formatDateTime, formatEuro } from '#fsd/shared/lib'
+import { formatDate, formatDateTime, useMoneyFormat } from '#fsd/shared/lib'
 import { useI18n } from 'vue-i18n'
 import { ConfirmActionModal, DeleteConfirmModal, EmptyState, MoneyInput, PageHeader, StatusBadge } from '#fsd/shared/ui'
 import { WorkProgressForm } from '#fsd/features/work-progress'
@@ -17,6 +17,7 @@ type WorkAttachment = { id: string; fileName: string; mimeType: string }
 
 const props = defineProps<{ kind: WorkKind }>()
 const { t, locale } = useI18n()
+const { formatMoney } = useMoneyFormat()
 const toast = useToast()
 const taskToastUi = {
   root: 'task-save-toast mx-auto min-h-10 w-fit max-w-full items-center gap-2 rounded-[10px] px-3 py-2 shadow-[var(--shadow-surface)] ring-0',
@@ -347,8 +348,8 @@ function requestComplete() {
         <div v-if="props.kind === 'cleaning'" class="work-detail-summary__cleaning-fields">
           <div class="min-w-0 space-y-2.5 sm:space-y-5">
             <div><p class="detail-label">{{ t('work.apartment') }}</p><p class="font-semibold">{{ work.apartment.name }}</p></div>
-            <div v-if="cleaning?.tariffSnapshot?.ownerTotalEur !== undefined"><p class="detail-label">{{ t('work.cost') }}</p><p class="font-semibold tabular-nums">{{ formatEuro(cleaning.tariffSnapshot.ownerTotalEur) }}</p></div>
-            <div v-if="cleaning?.tariffSnapshot?.cleanerPoolEur !== undefined"><p class="detail-label">{{ t('work.payout') }}</p><p class="font-semibold tabular-nums">{{ formatEuro(cleaning.tariffSnapshot.cleanerPoolEur) }}</p></div>
+            <div v-if="cleaning?.tariffSnapshot?.ownerTotalEur !== undefined"><p class="detail-label">{{ t('work.cost') }}</p><p class="font-semibold tabular-nums">{{ formatMoney(cleaning.tariffSnapshot.ownerTotalEur) }}</p></div>
+            <div v-if="cleaning?.tariffSnapshot?.cleanerPoolEur !== undefined"><p class="detail-label">{{ t('work.payout') }}</p><p class="font-semibold tabular-nums">{{ formatMoney(cleaning.tariffSnapshot.cleanerPoolEur) }}</p></div>
           </div>
           <div class="min-w-0 space-y-2.5 sm:space-y-5">
             <div v-if="cleaning?.apartment.instructions.trim()">
@@ -377,16 +378,16 @@ function requestComplete() {
         <div class="cash-task-card__summary">
           <div class="cash-task-card__stat">
             <span>{{ t('cash.expected') }}</span>
-            <strong>{{ formatEuro(task.cash.expectedAmountEur) }}</strong>
+            <strong>{{ formatMoney(task.cash.expectedAmountEur) }}</strong>
           </div>
           <div v-if="task.cash.collectedAt" class="cash-task-card__stat">
             <span>{{ t('cash.collected') }}</span>
-            <strong>{{ formatEuro(task.cash.collectedAmountEur ?? 0) }}</strong>
+            <strong>{{ formatMoney(task.cash.collectedAmountEur ?? 0) }}</strong>
             <small v-if="task.cash.collectedAmountEur !== task.cash.expectedAmountEur">{{ t('cash.difference') }}</small>
           </div>
           <div v-if="task.cash.receivedAt" class="cash-task-card__stat">
             <span>{{ t('cash.received') }}</span>
-            <strong>{{ formatEuro(task.cash.receivedAmountEur ?? 0) }}</strong>
+            <strong>{{ formatMoney(task.cash.receivedAmountEur ?? 0) }}</strong>
             <small v-if="task.cash.receivedAmountEur !== task.cash.collectedAmountEur">{{ t('cash.difference') }}</small>
           </div>
         </div>

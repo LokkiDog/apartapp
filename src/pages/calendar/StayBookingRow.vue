@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { DropdownMenuItem } from '@nuxt/ui'
 import type { Stay } from '#fsd/entities/stay'
-import { formatDate, formatEuro, getFormatLocale } from '#fsd/shared/lib'
+import { formatDate, useMoneyFormat, getFormatLocale } from '#fsd/shared/lib'
 import { useCurrentUser } from '#fsd/shared/auth'
 import StayServiceIcons from './StayServiceIcons.vue'
 import { stayCleaningHref, stayCleaningPresentation } from './model/stay-cleaning'
@@ -16,6 +16,7 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{ open: [stay: Stay]; edit: [stay: Stay]; delete: [stay: Stay] }>()
 const { t } = useI18n()
+const { formatMoney } = useMoneyFormat()
 const user = useCurrentUser()
 
 function guestBreakdownLabel(stay: Stay) {
@@ -33,7 +34,7 @@ function commentLabel(stay: Stay) {
 }
 
 function cashLabel(stay: Stay) {
-  return typeof stay.cashAmountEur === 'number' && stay.cashAmountEur > 0 ? `${t('calendarExtra.cashShort')}: ${formatEuro(stay.cashAmountEur)}` : ''
+  return typeof stay.cashAmountEur === 'number' && stay.cashAmountEur > 0 ? `${t('calendarExtra.cashShort')}: ${formatMoney(stay.cashAmountEur)}` : ''
 }
 
 function menuItems(stay: Stay): DropdownMenuItem[][] {

@@ -358,11 +358,10 @@ function formattedTime(value: string) {
     <UAlert
       v-if="error || inboxError"
       color="error"
+      orientation="horizontal"
       :description="error || t('common.error')"
       ><template #actions
-        ><UButton
-          color="error"
-          variant="soft"
+        ><UButton color="error" variant="ghost"
           @click="retryInbox"
           >{{ t('messaging.retry') }}</UButton
         ></template
@@ -621,9 +620,10 @@ function formattedTime(value: string) {
           ><UAlert
             v-if="staysError || error"
             color="error"
+            orientation="horizontal"
             :description="error || t('common.error')"
             ><template #actions
-              ><UButton @click="loadStays()">{{
+              ><UButton color="error" variant="ghost" @click="loadStays()">{{
                 t('messaging.retry')
               }}</UButton></template
             ></UAlert

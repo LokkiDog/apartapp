@@ -35,7 +35,7 @@ export function useReleaseAnnouncement() {
       const result = await $fetch<ReleaseAnnouncementState>('/api/users/me/release-announcement', { method: 'POST', body: { version }, retry: false })
       if (user.value?.id === ownerId) state.value = { ...result, ownerId }
     } catch {
-      if (user.value?.id === ownerId) toast.add({ title: t('releaseAnnouncement.saveError'), color: 'warning' })
+      if (user.value?.id === ownerId) toast.add({ title: t('releaseAnnouncement.saveError'), color: 'error' })
     }
   }
   async function markLatestSeen() { if (latest.value) await markSeen(latest.value.version) }

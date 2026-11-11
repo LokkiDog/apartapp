@@ -55,7 +55,7 @@ function apply() {
     <template #body>
       <div class="space-y-4" :aria-busy="loading">
         <p class="break-words text-sm text-[var(--color-muted)]">{{ name }}</p>
-        <UAlert v-if="errorKey" color="warning" variant="soft" :description="t(errorKey)" />
+        <UAlert v-if="errorKey" color="error" role="alert" :description="t(errorKey)" />
         <p v-if="loading" role="status" class="text-sm text-[var(--color-muted)]">{{ t('services.translating') }}</p>
         <UFormField v-for="language in translationLocales" :key="language" :label="languageNames[language]">
           <UInput v-model="draft[language]" :aria-label="languageNames[language]" :lang="language" :dir="language === 'he' ? 'rtl' : 'ltr'" :maxlength="240" :disabled="loading" class="w-full" />

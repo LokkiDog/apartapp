@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { formatEuroInput, parseEuroInput } from '#fsd/shared/lib'
+import { formatEuroInput, parseEuroInput, useMoneyFormat } from '#fsd/shared/lib'
 
 const props = withDefaults(defineProps<{
   modelValue: number | null
@@ -10,6 +10,7 @@ const props = withDefaults(defineProps<{
 }>(), { placeholder: '0', emptyValue: null, disabled: false, required: false })
 
 const emit = defineEmits<{ 'update:modelValue': [value: number | null] }>()
+const { currencySymbol } = useMoneyFormat()
 const raw = ref(formatEuroInput(props.modelValue))
 const invalid = ref(false)
 const clearedZeroOnFocus = ref(false)
@@ -73,6 +74,6 @@ function blur() {
     @update:model-value="update"
     @blur="blur"
   >
-    <template #trailing><span class="text-sm font-medium text-[var(--color-muted)]">€</span></template>
+    <template #trailing><span class="text-sm font-medium text-[var(--color-muted)]">{{ currencySymbol }}</span></template>
   </UInput>
 </template>

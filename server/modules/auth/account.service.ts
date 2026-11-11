@@ -46,7 +46,7 @@ export async function inviteUser(input: InviteInput) {
   return { id: invitation.user.id, email: invitation.user.email }
 }
 
-export async function resendInvitation(actor: Actor, userId: string) {
+export async function resendInvitation(actor: Actor, userId: string, onDeliveryFailure?: () => Promise<void>) {
   requireRole(actor, 'administrator')
   const token = randomBytes(32).toString('base64url')
   const issued = await db.transaction(async tx => {
@@ -75,6 +75,7 @@ export async function resendInvitation(actor: Actor, userId: string) {
   try {
     await sendAccountLink({ to: issued.user.email, name: issued.user.name, type: 'invitation', token, locale: issued.user.locale })
   } catch (cause) {
+    await onDeliveryFailure?.()
     await db.delete(authTokens).where(eq(authTokens.id, issued.tokenRecord.id))
     throw cause
   }

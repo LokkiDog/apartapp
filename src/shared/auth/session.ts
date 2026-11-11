@@ -1,6 +1,7 @@
+import type { Currency } from '@contracts/currency'
 import type { AppLocale } from '@contracts/crm'
 
-export type SessionUser = { messagingEnabled?: boolean, id: string, organizationId: string, isSuperuser?: boolean, inSystem?: boolean, organizationName?: string, organizationStatus?: 'active' | 'blocked', contextRevision?: string, platformSessionId?: string, sessionVersion?: number, name: string, email: string, roles: Array<'administrator' | 'manager' | 'cleaner' | 'specialist'>, locale: AppLocale }
+export type SessionUser = { messagingEnabled?: boolean, id: string, organizationId: string, isSuperuser?: boolean, inSystem?: boolean, organizationName?: string, organizationStatus?: 'active' | 'blocked', contextRevision?: string, platformSessionId?: string, sessionVersion?: number, name: string, email: string, roles: Array<'administrator' | 'manager' | 'cleaner' | 'specialist'>, locale: AppLocale, currency?: Currency }
 export function useCurrentUser() { return useUserSession().user as Ref<SessionUser | null> }
 export function useCurrentUserScope() {
   const user = useCurrentUser()

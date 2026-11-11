@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { DropdownMenuItem } from '@nuxt/ui'
-import { createFormValidator, formatEuro, useSubmitFormValidation } from '#fsd/shared/lib'
+import { createFormValidator, useMoneyFormat, useSubmitFormValidation } from '#fsd/shared/lib'
 import { MoneyInput, PageHeader, EmptyState, StatusBadge, DeleteConfirmModal } from '#fsd/shared/ui'
 import { useCurrentUser } from '#fsd/shared/auth'
 import { useI18n } from 'vue-i18n'
@@ -12,6 +12,7 @@ import { specialServiceInputSchema } from '@contracts/crm'
 
 const currentUser = useCurrentUser()
 const { t, locale } = useI18n()
+const { formatMoney } = useMoneyFormat()
 if (!currentUser.value?.roles.includes('administrator')) await navigateTo('/')
 type Service = { id: string; name: string; nameTranslations?: NameTranslations; iconName: SpecialServiceIconName; priceEur: number; managerSharePercent: number; active: boolean }
 const { data: services, refresh, status } = await useAsyncData('settings-services', () => currentUser.value ? $fetch<Service[]>('/api/special-services') : Promise.resolve([]), { server: false, default: () => [], watch: [currentUser] })
@@ -40,7 +41,7 @@ function serviceMenuItems(service: Service): DropdownMenuItem[][] { return [[{ l
     <div v-else-if="services?.length" class="grid gap-4 md:grid-cols-2">
       <article v-for="service in services" :key="service.id" class="surface service-card">
         <div class="service-card__header"><div class="service-card__icon"><UIcon :name="service.iconName" class="size-5" /></div><div class="service-card__content"><div class="flex min-w-0 flex-wrap items-start justify-between gap-x-3 gap-y-1.5"><h2 class="min-w-0 flex-1 truncate text-xl font-semibold leading-tight">{{ localizedName(service.name, service.nameTranslations, locale) }}</h2><StatusBadge class="shrink-0" :label="service.active ? t('services.active') : t('services.disabled')" :tone="service.active ? 'success' : 'neutral'" /></div><p class="m-0 text-sm leading-5 text-[var(--color-muted)]">{{ t('services.managerShare') }} — {{ service.managerSharePercent }}%</p></div></div>
-        <div class="service-card__footer"><p class="service-card__price"><strong class="tabular-nums">{{ formatEuro(service.priceEur) }}</strong></p><div class="service-card__actions"><UDropdownMenu :items="serviceMenuItems(service)" :content="{ align: 'end' }" :modal="false"><UButton color="neutral" variant="ghost" icon="i-lucide-ellipsis-vertical" :aria-label="t('services.actions')" class="min-h-11 min-w-11 active:scale-[0.96] transition-transform" /></UDropdownMenu></div></div>
+        <div class="service-card__footer"><p class="service-card__price"><strong class="tabular-nums">{{ formatMoney(service.priceEur) }}</strong></p><div class="service-card__actions"><UDropdownMenu :items="serviceMenuItems(service)" :content="{ align: 'end' }" :modal="false"><UButton color="neutral" variant="ghost" icon="i-lucide-ellipsis-vertical" :aria-label="t('services.actions')" class="min-h-11 min-w-11 active:scale-[0.96] transition-transform" /></UDropdownMenu></div></div>
       </article>
     </div>
     <EmptyState v-else icon="i-lucide-concierge-bell" :title="t('services.emptyTitle')" :description="t('services.emptyDescription')" />

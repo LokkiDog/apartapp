@@ -62,7 +62,7 @@ describe('manager expense report categories', () => {
       month: '2026-08',
       lines,
       categoryVisibility: { cleaning: true, inventory: true, task: false, other: false }
-    })
+    }, 'THB')
     const serialized = JSON.stringify(definition)
 
     expect(serialized).toContain('Отчёт по расходам')
@@ -72,7 +72,7 @@ describe('manager expense report categories', () => {
     expect(serialized).toContain('Расходники')
     expect(serialized).not.toContain('Дополнительные работы')
     expect(serialized).not.toContain('Ремонт')
-    expect(serialized).toContain('85,00')
+    expect(serialized).toContain('85,00\u00a0THB')
     expect(managerExpensePdfFileName({ apartmentName: 'L102 / Belvedere', month: '2026-08', lines, categoryVisibility: createManagerExpenseCategoryVisibility() })).toBe('rashody-L102-Belvedere-2026-08.pdf')
   })
 })

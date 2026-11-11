@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { localizedName } from '#shared/utils/localized-name'
 import type { Stay } from '#fsd/entities/stay'
-import { formatEuro } from '#fsd/shared/lib'
+import { useMoneyFormat } from '#fsd/shared/lib'
 import { compactStayServices } from './model/stay-service-icons'
 import { useI18n } from 'vue-i18n'
 
@@ -13,6 +13,7 @@ const props = withDefaults(defineProps<{
   max?: number
 }>(), { cashAmountEur: null, cashTaskState: 'none', compact: true, max: 3 })
 const { t, locale } = useI18n()
+const { formatMoney } = useMoneyFormat()
 
 const services = computed(() => props.services ?? [])
 const hasCash = computed(() => typeof props.cashAmountEur === 'number' && props.cashAmountEur > 0)
@@ -21,7 +22,7 @@ const visibleServices = computed(() => props.compact ? compacted.value.visible :
 const hiddenCount = computed(() => props.compact ? compacted.value.hiddenCount : 0)
 const label = computed(() => services.value.map(service => localizedName(service.nameSnapshot, service.nameTranslationsSnapshot, locale.value)).join(', '))
 const cashStateLabel = computed(() => ({ none: t('cash.noTask'), pending: t('cash.toCollect'), collected: t('cash.collected') })[props.cashTaskState ?? 'none'])
-const cashLabel = computed(() => hasCash.value ? `${t('calendar.cash')}: ${formatEuro(props.cashAmountEur!)}. ${cashStateLabel.value}` : '')
+const cashLabel = computed(() => hasCash.value ? `${t('calendar.cash')}: ${formatMoney(props.cashAmountEur!)}. ${cashStateLabel.value}` : '')
 const compactLabel = computed(() => [label.value ? `${t('calendar.extraServices')}: ${label.value}` : '', cashLabel.value].filter(Boolean).join('. '))
 </script>
 
@@ -30,7 +31,7 @@ const compactLabel = computed(() => [label.value ? `${t('calendar.extraServices'
     <template v-if="compact">
       <span v-for="service in visibleServices" :key="service.id" class="stay-service-icon" :title="localizedName(service.nameSnapshot, service.nameTranslationsSnapshot, locale)" aria-hidden="true"><UIcon :name="service.iconNameSnapshot" class="size-3.5" /></span>
       <span v-if="hiddenCount" class="stay-service-icons__more" :title="label">+{{ hiddenCount }}</span>
-      <span v-if="hasCash" class="stay-service-icon stay-service-icon--cash" :class="`stay-service-icon--cash-${cashTaskState}`" aria-hidden="true"><UIcon name="i-lucide-euro" class="size-3.5" /></span>
+      <span v-if="hasCash" class="stay-service-icon stay-service-icon--cash" :class="`stay-service-icon--cash-${cashTaskState}`" aria-hidden="true"><UIcon name="i-lucide-banknote" class="size-3.5" /></span>
     </template>
     <template v-else>
       <span v-for="service in visibleServices" :key="service.id" class="stay-service-list__item"><span class="stay-service-list__icon"><UIcon :name="service.iconNameSnapshot" class="size-3.5" /></span><span>{{ localizedName(service.nameSnapshot, service.nameTranslationsSnapshot, locale) }}</span></span>

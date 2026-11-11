@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { localizedName } from '#shared/utils/localized-name'
 import type { Stay } from '#fsd/entities/stay'
-import { formatDate, formatEuro } from '#fsd/shared/lib'
+import { formatDate, useMoneyFormat } from '#fsd/shared/lib'
 import StayServiceIcons from './StayServiceIcons.vue'
 import { stayCleaningHref, stayCleaningPresentation } from './model/stay-cleaning'
 import { useI18n } from 'vue-i18n'
@@ -15,6 +15,7 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{ 'update:open': [value: boolean]; edit: [stay: Stay]; saved: [] }>()
 const { t, locale } = useI18n()
+const { formatMoney } = useMoneyFormat()
 const adultCount = ref(1)
 const childCount = ref(0)
 const savingGuests = ref(false)
@@ -70,7 +71,7 @@ async function saveGuests() {
             <UFormField :label="t('calendar.children')"><UInput v-model.number="childCount" type="number" min="0" max="50" class="w-full" /></UFormField>
           </div>
           <UButton :loading="savingGuests" @click="saveGuests">{{ t('common.save') }}</UButton>
-          <p v-if="guestError" role="alert" class="text-sm text-error">{{ guestError }}</p>
+          <UAlert v-if="guestError" color="error" role="alert" :description="guestError" />
         </section>
 
         <section v-if="stay.guestName || stay.guestPhone || stay.guestComment || stay.specialRequests" class="stay-details__section">
@@ -88,13 +89,13 @@ async function saveGuests() {
           <div class="stay-details__services">
             <div v-for="service in stay.services" :key="service.id" class="stay-details__service">
               <span class="flex min-w-0 items-center gap-2"><StayServiceIcons :services="[service]" /><span class="truncate">{{ localizedName(service.nameSnapshot, service.nameTranslationsSnapshot, locale) }}</span></span>
-              <strong v-if="showServicePrices">{{ formatEuro(service.priceEurSnapshot) }}</strong>
+              <strong v-if="showServicePrices">{{ formatMoney(service.priceEurSnapshot) }}</strong>
             </div>
           </div>
         </section>
 
         <section v-if="stay.cashAmountEur !== null && stay.cashAmountEur !== undefined" class="stay-details__section stay-details__cash">
-          <span>{{ t('calendar.cash') }}</span><strong>{{ formatEuro(stay.cashAmountEur) }}</strong>
+          <span>{{ t('calendar.cash') }}</span><strong>{{ formatMoney(stay.cashAmountEur) }}</strong>
         </section>
 
         <NuxtLink

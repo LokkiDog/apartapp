@@ -1,3 +1,4 @@
+import type { Currency } from '@contracts/currency'
 import { and, eq } from 'drizzle-orm'
 import { db } from '../database/client'
 import { apartmentManagers, apartments, users } from '../database/schema'
@@ -14,6 +15,7 @@ export interface Actor {
   name: string
   roles: UserRole[]
   locale: 'ru' | 'en' | 'he'
+  currency?: Currency
   isSuperuser?: boolean
   inSystem?: boolean
   organizationName?: string

@@ -2,7 +2,7 @@
 import type { DropdownMenuItem } from '@nuxt/ui'
 import { ApartmentSelect, matchesApartmentSearch } from '#fsd/entities/apartment'
 import { useCurrentUser } from '#fsd/shared/auth'
-import { formatEuro } from '#fsd/shared/lib'
+import { useMoneyFormat } from '#fsd/shared/lib'
 import { EmptyState, MonthInput, PageHeader, StatusBadge } from '#fsd/shared/ui'
 import { downloadManagerExpensePdf } from './lib/manager-expense-pdf'
 import { createManagerExpenseCategoryVisibility, managerExpenseCategories, managerExpenseReportTotal, updateManagerExpenseCategoryVisibility, type ManagerExpenseCategory, type ManagerExpenseCategoryVisibility, type ManagerExpenseLine } from './model/manager-expense-report'
@@ -15,6 +15,7 @@ type Report = { apartment: { id: string, name: string, managerNames: string[] },
 type Summary = { apartmentId: string, apartmentName: string, hotelName: string, managerNames: string[], materialized: boolean, published: boolean, totalEur: number }
 const user = useCurrentUser()
 const { t, locale } = useI18n()
+const { currency, formatMoney } = useMoneyFormat()
 const route = useRoute()
 const month = ref(typeof route.query.month === 'string' && /^\d{4}-(0[1-9]|1[0-2])$/.test(route.query.month) ? route.query.month : new Date().toISOString().slice(0, 7))
 const selectedApartmentId = ref(typeof route.query.apartmentId === 'string' ? route.query.apartmentId : '')
@@ -81,7 +82,7 @@ const hasUnsavedChanges = computed(() => {
   const draft = { categoryVisibility: draftCategoryVisibility.value, lines: draftLines.value.map(({ category, description, occurredOn, amountEur, position, included, problemId }) => ({ category, description, occurredOn, amountEur, position, included, problemId })) }
   return JSON.stringify(saved) !== JSON.stringify(draft)
 })
-const addItems = computed<DropdownMenuItem[][]>(() => [managerExpenseCategories.map(category => ({ label: categoryLabels[category], icon: category === 'cleaning' ? 'i-lucide-broom' : category === 'inventory' ? 'i-lucide-package' : category === 'task' ? 'i-lucide-wrench' : 'i-lucide-receipt-euro', onSelect: () => addLine(category) }))])
+const addItems = computed<DropdownMenuItem[][]>(() => [managerExpenseCategories.map(category => ({ label: categoryLabels[category], icon: category === 'cleaning' ? 'i-lucide-broom' : category === 'inventory' ? 'i-lucide-package' : category === 'task' ? 'i-lucide-wrench' : 'i-lucide-receipt', onSelect: () => addLine(category) }))])
 
 function selectApartment(id: string) {
   selectedApartmentId.value = id
@@ -131,7 +132,7 @@ async function downloadPdf() {
   if (!report.value || (isAdministrator.value && hasUnsavedChanges.value)) return
   pdfPending.value = true; error.value = ''
   try {
-    await downloadManagerExpensePdf({ apartmentName: report.value.apartment.name, month: report.value.month, lines: report.value.lines, categoryVisibility: report.value.categoryVisibility })
+    await downloadManagerExpensePdf({ apartmentName: report.value.apartment.name, month: report.value.month, lines: report.value.lines, categoryVisibility: report.value.categoryVisibility }, currency.value)
   } catch (cause: any) { error.value = cause?.message ?? t('common.error') }
   finally { pdfPending.value = false }
 }
@@ -161,7 +162,7 @@ onMounted(() => {
         <aside class="manager-expense-picker surface min-w-0 overflow-hidden">
           <button ref="apartmentPickerButton" type="button" class="manager-expense-report-option flex min-h-18 w-full items-center gap-3 px-4 py-3 text-left lg:hidden" :aria-expanded="apartmentPickerOpen" aria-controls="manager-expense-apartment-list" @click="apartmentPickerOpen = !apartmentPickerOpen">
             <span v-if="selectedSummary" class="min-w-0 flex-1">
-              <span class="flex min-w-0 items-baseline justify-between gap-3"><strong class="min-w-0 truncate">{{ selectedSummary.hotelName }} · {{ selectedSummary.apartmentName }}</strong><strong class="shrink-0 tabular-nums">{{ formatEuro(selectedSummary.totalEur) }}</strong></span>
+              <span class="flex min-w-0 items-baseline justify-between gap-3"><strong class="min-w-0 truncate">{{ selectedSummary.hotelName }} · {{ selectedSummary.apartmentName }}</strong><strong class="shrink-0 tabular-nums">{{ formatMoney(selectedSummary.totalEur) }}</strong></span>
               <span class="mt-0.5 flex min-w-0 items-baseline justify-between gap-3"><span class="min-w-0 truncate text-sm text-[var(--color-muted)]">{{ selectedSummary.managerNames.join(', ') || t('statementExtra.managersMissing') }}</span><span class="shrink-0 text-xs" :class="selectedSummary.published ? 'text-[var(--color-primary)]' : 'text-[var(--color-muted)]'">{{ selectedSummary.published ? t('statementExtra.accessOpen') : t('statementExtra.draft') }}</span></span>
             </span>
             <span v-else class="min-w-0 flex-1 font-semibold">{{ t('scope.chooseApartments') }}</span>
@@ -176,7 +177,7 @@ onMounted(() => {
             </div>
             <div v-if="filteredReports.length" class="manager-expense-picker__options divide-y divide-[var(--color-line)]">
               <button v-for="item in filteredReports" :key="item.apartmentId" type="button" class="manager-expense-report-option flex min-h-18 w-full flex-col justify-center px-4 py-3 text-left" :aria-pressed="selectedApartmentId === item.apartmentId" aria-controls="manager-expense-report-detail" @click="selectApartment(item.apartmentId)">
-                <span class="flex w-full min-w-0 items-baseline justify-between gap-3"><strong class="min-w-0 truncate">{{ item.hotelName }} · {{ item.apartmentName }}</strong><strong class="shrink-0 text-right tabular-nums">{{ formatEuro(item.totalEur) }}</strong></span>
+                <span class="flex w-full min-w-0 items-baseline justify-between gap-3"><strong class="min-w-0 truncate">{{ item.hotelName }} · {{ item.apartmentName }}</strong><strong class="shrink-0 text-right tabular-nums">{{ formatMoney(item.totalEur) }}</strong></span>
                 <span class="mt-0.5 flex w-full min-w-0 items-baseline justify-between gap-3"><span class="min-w-0 truncate text-sm text-[var(--color-muted)]">{{ item.managerNames.join(', ') || t('statementExtra.managersMissing') }}</span><span class="shrink-0 text-right text-xs" :class="item.published ? 'text-[var(--color-primary)]' : 'text-[var(--color-muted)]'">{{ item.published ? t('statementExtra.accessOpen') : t('statementExtra.draft') }}</span></span>
               </button>
             </div>
@@ -209,7 +210,7 @@ onMounted(() => {
     <div v-else class="manager-expense-manager-view grid gap-4 sm:gap-5">
       <ApartmentSelect v-if="reports.length > 1" v-model="selectedApartmentId" :apartments="apartmentChoices" class="w-full sm:w-80" />
       <ManagerExpenseReportPreview v-if="report" :key="`${report.apartment.id}-${report.month}`" :lines="report.lines" :total-eur="report.totalEur" :category-visibility="report.categoryVisibility" />
-      <EmptyState v-else-if="!loading" icon="i-lucide-receipt-euro"  :title="t('statementExtra.unavailable')" :description="t('statementExtra.unavailableDescription')" />
+      <EmptyState v-else-if="!loading" icon="i-lucide-receipt"  :title="t('statementExtra.unavailable')" :description="t('statementExtra.unavailableDescription')" />
     </div>
     <UModal v-model:open="resetOpen" :title="t('statementExtra.rebuildQuestion')"><template #body><div class="space-y-5"><p>{{ t('statementExtra.rebuildDescription') }}</p><div class="form-actions"><UButton color="neutral" variant="ghost" @click="resetOpen = false">{{ t('common.cancel') }}</UButton><UButton color="error" :loading="pending" @click="action('reset')">{{ t('statementExtra.rebuild') }}</UButton></div></div></template></UModal>
   </section>

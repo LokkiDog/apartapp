@@ -54,19 +54,19 @@ async function sync() {
       <template #body>
         <form :id="`booking-integration-${apartmentId}`" class="space-y-4" @submit.prevent="save()">
           <p class="text-sm text-[var(--color-muted)]">{{ t('icalImport.hint') }}</p>
-          <UAlert v-if="loadError" color="error" variant="soft" :title="t('common.error')">
-            <template #actions><UButton type="button" color="error" variant="soft" class="min-h-11" :loading="loading" @click="refresh()">{{ t('integrations.retry') }}</UButton></template>
+          <UAlert v-if="loadError" color="error" orientation="horizontal" variant="soft" :title="t('common.error')">
+            <template #actions><UButton color="error" variant="ghost" type="button" class="min-h-11" :loading="loading" @click="refresh()">{{ t('integrations.retry') }}</UButton></template>
           </UAlert>
           <UFormField :label="t('integrations.calendarUrl')">
             <UInput v-model="url" type="url" class="w-full" :placeholder="t('icalImport.urlPlaceholder')" autocomplete="off" :disabled="busy || loading || Boolean(loadError)" />
           </UFormField>
-          <p v-if="feed?.lastError" role="alert" class="text-sm text-error">{{ feed.lastError }}</p>
+          <UAlert v-if="feed?.lastError" color="error" role="alert" :description="feed.lastError" />
           <p v-else-if="feed?.lastSyncedAt" class="text-sm text-[var(--color-muted)]">{{ t('icalImport.lastSync') }}: {{ new Date(feed.lastSyncedAt).toLocaleString() }}</p>
           <div v-if="feed?.enabled" class="flex flex-wrap gap-2">
             <UButton type="button" color="neutral" variant="soft" icon="i-lucide-refresh-cw" class="min-h-11" :loading="busy" :disabled="busy || loading || Boolean(loadError)" @click="sync">{{ t('icalImport.syncNow') }}</UButton>
             <UButton type="button" color="neutral" variant="ghost" class="min-h-11" :disabled="busy || loading || Boolean(loadError)" @click="save('')">{{ t('icalImport.disconnect') }}</UButton>
           </div>
-          <p v-if="message" role="alert" class="text-sm text-error">{{ message }}</p>
+          <UAlert v-if="message" color="error" role="alert" :description="message" />
         </form>
       </template>
       <template #footer>

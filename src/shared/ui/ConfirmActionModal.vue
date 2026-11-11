@@ -10,7 +10,7 @@ const emit = defineEmits<{ confirm: [] }>()
     <template #body>
       <div class="space-y-5">
         <p class="text-sm leading-6 text-[var(--color-muted)]">{{ description }}</p>
-        <UAlert v-if="error" color="error" variant="soft" :description="error" />
+        <UAlert v-if="error" color="error" variant="soft" :description="error" role="alert" />
         <div class="form-actions">
           <UButton color="neutral" variant="ghost" :disabled="loading" @click="open = false">{{ t('common.cancel') }}</UButton>
           <UButton icon="i-lucide-circle-check" :loading="loading" @click="!loading && emit('confirm')">{{ confirmLabel }}</UButton>

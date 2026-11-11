@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import type { LineConnection } from '@contracts/messaging'
 import { ConfirmActionModal } from '#fsd/shared/ui'
+import LineInstructionsModal from './LineInstructionsModal.vue'
+import MessagingIntegrationRow from './MessagingIntegrationRow.vue'
 
+const expanded = defineModel<boolean>('expanded', { required: true })
 const { t } = useI18n()
 const endpoint = '/api/messaging/line/connection'
 const connection = ref<LineConnection | null>(null)
@@ -10,7 +13,15 @@ const secret = ref('')
 const saving = ref(false)
 const checking = ref(false)
 const confirmDisconnect = ref(false)
+const instructionsOpen = ref(false)
 const error = ref('')
+const loadError = ref(false)
+const status = computed(() => {
+  if (loadError.value) return t('messaging.integrationLoadError')
+  if (!connection.value) return t('messaging.loading')
+  if (connection.value.connected) return t('messaging.connected')
+  return t(connection.value.pending ? 'messaging.line.pending' : 'messaging.disconnected')
+})
 const copied = ref(false)
 let disposed = false
 
@@ -20,9 +31,15 @@ async function check() {
   error.value = ''
   try {
     const result = await $fetch<LineConnection>(endpoint)
-    if (!disposed && !saving.value) connection.value = result
+    if (!disposed) {
+      connection.value = result
+      loadError.value = false
+    }
   } catch {
-    if (!disposed) error.value = t('common.error')
+    if (!disposed) {
+      if (connection.value) error.value = t('messaging.integrationLoadError')
+      else loadError.value = true
+    }
   } finally {
     checking.value = false
   }
@@ -63,28 +80,34 @@ async function copyWebhook() {
 </script>
 
 <template>
-  <section class="surface space-y-2 px-4 pb-4 pt-2" aria-labelledby="line-settings-heading">
-    <header class="flex min-h-11 flex-wrap items-center justify-between gap-x-3">
-      <div class="flex flex-wrap items-center gap-x-2">
-        <h2 id="line-settings-heading" class="text-base font-semibold">LINE</h2>
-        <span v-if="connection" class="text-xs text-[var(--color-muted)]">
-          {{ t(connection.connected ? 'messaging.connected' : connection.pending ? 'messaging.line.pending' : 'messaging.disconnected') }}
-        </span>
-      </div>
+  <MessagingIntegrationRow
+    v-model:expanded="expanded"
+    name="LINE"
+    icon="i-lucide-message-square"
+    :status="status"
+    :tone="loadError ? 'error' : connection?.connected ? 'success' : undefined"
+  >
+    <template v-if="!connection" #action>
       <UButton
-        to="https://developers.line.biz/console/"
-        target="_blank"
-        rel="noopener noreferrer"
+        v-if="loadError"
+        color="primary"
         variant="ghost"
-        icon="i-lucide-external-link"
+        icon="i-lucide-rotate-cw"
         class="min-h-11"
-      >LINE Developers</UButton>
-    </header>
-    <UAlert v-if="error && !confirmDisconnect" color="error" :description="error" />
-    <UButton v-if="!connection && !checking" variant="soft" class="min-h-11" @click="check">
-      {{ t('messaging.retry') }}
-    </UButton>
+        :loading="checking"
+        @click="check"
+      >{{ t('messaging.retry') }}</UButton>
+    </template>
     <template v-if="connection">
+      <UAlert v-if="error && !confirmDisconnect" color="error" role="alert" icon="i-lucide-circle-alert" :description="error" />
+      <UButton
+        color="primary"
+        variant="ghost"
+        icon="i-lucide-book-open"
+        class="min-h-11"
+        @click="instructionsOpen = true"
+      >{{ t('messaging.instructions.button') }}</UButton>
+      <LineInstructionsModal v-model:open="instructionsOpen" />
       <p v-if="connection.botName" class="text-sm">
         {{ connection.botName }} · {{ connection.botUsername }}
       </p>
@@ -173,5 +196,5 @@ async function copyWebhook() {
       :error="error"
       @confirm="save('DELETE')"
     />
-  </section>
+  </MessagingIntegrationRow>
 </template>

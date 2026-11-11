@@ -7,7 +7,7 @@ const activeOwner = shallowRef<symbol | null>(null)
 <script setup lang="ts">
 import { localizedName } from '#shared/utils/localized-name'
 import type { Stay } from '#fsd/entities/stay'
-import { formatDate, formatEuro } from '#fsd/shared/lib'
+import { formatDate, useMoneyFormat } from '#fsd/shared/lib'
 import { stayCleaningPresentation } from './model/stay-cleaning'
 import StayServiceIcons from './StayServiceIcons.vue'
 import { useI18n } from 'vue-i18n'
@@ -42,6 +42,7 @@ const props = withDefaults(defineProps<{
 })
 const emit = defineEmits<{ edit: [stay: Stay] }>()
 const { t, locale } = useI18n()
+const { formatMoney } = useMoneyFormat()
 
 const owner = Symbol('stay-calendar-popover')
 const isOpen = computed({
@@ -119,7 +120,7 @@ function editStay() {
 
           <div v-if="showFinancialDetails && (stay.services?.length || stay.cashAmountEur !== null && stay.cashAmountEur !== undefined)" class="stay-calendar-popover__notes">
             <p v-if="stay.services?.length"><strong>{{ t('calendar.extraServices') }}:</strong> {{ stay.services.map(service => localizedName(service.nameSnapshot, service.nameTranslationsSnapshot, locale)).join(', ') }}</p>
-            <p v-if="stay.cashAmountEur !== null && stay.cashAmountEur !== undefined"><strong>{{ t('calendar.cash') }}:</strong> {{ formatEuro(stay.cashAmountEur) }}</p>
+            <p v-if="stay.cashAmountEur !== null && stay.cashAmountEur !== undefined"><strong>{{ t('calendar.cash') }}:</strong> {{ formatMoney(stay.cashAmountEur) }}</p>
           </div>
 
           <div class="grid gap-2"><UButton v-if="canEdit" block color="neutral" variant="soft" icon="i-lucide-pencil" @click="editStay">{{ t('calendar.editBooking') }}</UButton><UButton v-if="canManageCleaning" block color="primary" variant="soft" icon="i-lucide-broom" :to="hasCleaning ? `/cleanings/${encodeURIComponent(stay.cleaning!.id)}` : `/work?stayId=${encodeURIComponent(stay.id)}`">{{ hasCleaning ? t('work.open') : t('common.assignCleaning') }}</UButton></div>

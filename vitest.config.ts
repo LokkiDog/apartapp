@@ -6,6 +6,8 @@ export default defineConfig({
   plugins: [vue({ template: { transformAssetUrls: { includeAbsolute: false } } })],
   resolve: {
     alias: {
+      '#fsd': fileURLToPath(new URL('./src', import.meta.url)),
+
       '#shared': fileURLToPath(new URL('./guest/shared', import.meta.url)),
       '@contracts': fileURLToPath(new URL('./shared/contracts', import.meta.url))
     }

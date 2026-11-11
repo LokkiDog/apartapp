@@ -11,6 +11,10 @@ export const telegramConnectionSchema = z
   })
   .strict()
 export type MessagingChannel = 'telegram' | 'line'
+export const messagingSetupEvents: Record<MessagingChannel, string> = {
+  telegram: 'messaging_setup_telegram',
+  line: 'messaging_setup_line',
+}
 export const lineConnectionSchema = z.object({
   token: z.string().trim().min(1).max(2048),
   secret: z.string().trim().regex(/^[a-f0-9]{32}$/i),

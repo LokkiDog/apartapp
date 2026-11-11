@@ -60,7 +60,7 @@ async function save() {
       <UButton v-if="push.canSubscribe.value" color="neutral" variant="soft" icon="i-lucide-bell-ring" :loading="push.pending.value" :disabled="push.pending.value" @click="push.subscribe">{{ t('notifications.enablePush') }}</UButton>
       <UButton v-else-if="push.canUnsubscribe.value" color="neutral" variant="soft" icon="i-lucide-bell-off" :loading="push.pending.value" :disabled="push.pending.value" @click="push.unsubscribe">{{ t('notifications.disablePush') }}</UButton>
     </div>
-    <UAlert v-if="loadError" color="error" :description="t('notificationSettings.loadError')"><template #actions><UButton color="neutral" variant="soft" @click="refresh()">{{ t('notifications.retry') }}</UButton></template></UAlert>
+    <UAlert v-if="loadError" color="error" orientation="horizontal" :description="t('notificationSettings.loadError')"><template #actions><UButton color="error" variant="ghost" @click="refresh()">{{ t('notifications.retry') }}</UButton></template></UAlert>
     <div v-if="!rows.length && !loadError" class="space-y-3"><USkeleton v-for="item in 4" :key="item" class="h-11 w-full rounded-lg" /></div>
     <div v-for="group in groups" :key="group.category" class="min-w-0">
       <table class="notification-preferences-table w-full table-fixed border-collapse text-sm">

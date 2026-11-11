@@ -74,7 +74,7 @@ const specialistWork = computed<NavItem[]>(() => [
 const expenses = computed<NavItem>(() => ({
   to: "/expenses",
   label: t("nav.expenses"),
-  icon: "i-lucide-receipt-euro",
+  icon: "i-lucide-receipt",
 }));
 const problems = computed<NavItem>(() => ({
   to: "/problems",
@@ -126,7 +126,7 @@ const settings = computed<NavItem[]>(() => [
   {
     to: "/settings/apartment-types",
     label: t("nav.apartmentTypes"),
-    icon: "i-lucide-badge-euro",
+    icon: "i-lucide-coins",
   },
   {
     to: "/settings/services",
