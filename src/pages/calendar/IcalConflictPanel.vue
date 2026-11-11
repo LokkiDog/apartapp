@@ -1,12 +1,13 @@
 <script setup lang="ts">
 const { public: { brand } } = useRuntimeConfig()
 import { StatusBadge } from '#fsd/shared/ui'
-import { formatDate } from '#fsd/shared/lib'
+import { formatDate, useMoneyFormat } from '#fsd/shared/lib'
 import { useI18n } from 'vue-i18n'
 
 const props = defineProps<{ isAdministrator: boolean; focusId?: string }>()
 const emit = defineEmits<{ resolved: [] }>()
 const { t } = useI18n()
+const { formatMoney } = useMoneyFormat()
 type CleaningSummary = { id: string; status: string; scheduledOn: string; cleaners: string[]; problems: { id: string; description: string; resolvedAt: string | null }[]; attachments: string[]; inventoryReports: { name: string; usedQuantity: string }[]; cashTask: { id: string; title: string; status: string; expectedAmountEur: string; collectedAmountEur: string | null; receivedAmountEur: string | null; receivedAt: string | null } | null; financial: { type: string; amountEur: number; occurredOn: string; description: string }[]; inventoryMovements: { type: string; quantity: string }[] } | null
 type Conflict = { id: string; status: 'open' | 'needs_admin'; apartmentName: string; importedStay: { id: string; checkInOn: string; checkOutOn: string; icalSummary: string | null; adultCount: number | null; childCount: number | null; cleaning: CleaningSummary }; existingStay: { id: string; checkInOn: string; checkOutOn: string; guestName: string; adultCount: number | null; childCount: number | null; cleaning: CleaningSummary } }
 const conflicts = ref<Conflict[]>([])
@@ -38,8 +39,8 @@ watch(() => props.isAdministrator, load)
         <p class="font-medium">{{ entry.label }} · {{ entry.cleaning ? cleaningStatusLabel(entry.cleaning.status) : t('icalImport.noCleaning') }}</p>
         <template v-if="entry.cleaning">
           <p>{{ t('icalImport.cleaners') }}: {{ entry.cleaning.cleaners.join(', ') || '—' }} · {{ t('icalImport.problems') }}: {{ entry.cleaning.problems.length }} · {{ t('icalImport.attachments') }}: {{ entry.cleaning.attachments.join(', ') || '—' }}</p>
-          <p>{{ t('icalImport.inventory') }}: {{ entry.cleaning.inventoryReports.map(item => `${item.name} × ${item.usedQuantity}`).join(', ') || '—' }} · {{ t('icalImport.cashTask') }}: {{ entry.cleaning.cashTask ? `${entry.cleaning.cashTask.title} · ${entry.cleaning.cashTask.status} · €${entry.cleaning.cashTask.expectedAmountEur}` : '—' }}</p>
-          <ul v-if="entry.cleaning.financial.length" class="mt-1 list-inside list-disc text-[var(--color-muted)]"><li v-for="(row, index) in entry.cleaning.financial" :key="`${row.type}-${index}`">{{ row.description }} · €{{ row.amountEur }} · {{ row.occurredOn }}</li></ul>
+          <p>{{ t('icalImport.inventory') }}: {{ entry.cleaning.inventoryReports.map(item => `${item.name} × ${item.usedQuantity}`).join(', ') || '—' }} · {{ t('icalImport.cashTask') }}: {{ entry.cleaning.cashTask ? `${entry.cleaning.cashTask.title} · ${entry.cleaning.cashTask.status} · ${formatMoney(Number(entry.cleaning.cashTask.expectedAmountEur))}` : '—' }}</p>
+          <ul v-if="entry.cleaning.financial.length" class="mt-1 list-inside list-disc text-[var(--color-muted)]"><li v-for="(row, index) in entry.cleaning.financial" :key="`${row.type}-${index}`">{{ row.description }} · {{ formatMoney(row.amountEur) }} · {{ row.occurredOn }}</li></ul>
           <ul v-if="entry.cleaning.problems.length" class="mt-1 list-inside list-disc text-[var(--color-muted)]"><li v-for="problem in entry.cleaning.problems" :key="problem.id">{{ problem.description }}</li></ul>
         </template>
       </div>
@@ -51,7 +52,7 @@ watch(() => props.isAdministrator, load)
         <UButton color="neutral" variant="ghost" :loading="busy === conflict.id" :disabled="Boolean(busy)" @click="resolve(conflict, 'keep_aparts')">{{ t('icalImport.keepAparts', { brand: brand.shortName }) }}</UButton>
       </div>
       <p v-if="conflict.status === 'open'" class="text-xs text-[var(--color-muted)]">{{ t('icalImport.bookingStaysActive', { brand: brand.shortName }) }}</p>
-      <p v-if="error" role="alert" class="text-sm text-error">{{ error }}</p>
+      <UAlert v-if="error" color="error" role="alert" :description="error" />
     </article>
   </section>
 </template>

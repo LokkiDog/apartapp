@@ -1,3 +1,5 @@
+import { systemNotificationEvents } from '@contracts/system-notifications'
+import { activeSystemRecipients, publishSystemNotification } from '../../infrastructure/notification/system'
 import { randomUUID } from 'node:crypto'
 import { and, desc, eq } from 'drizzle-orm'
 import { db } from '../../infrastructure/database/client'
@@ -18,6 +20,21 @@ async function findClient(id: string) {
   if (!client) throw createError({ statusCode: 404, statusMessage: 'Клиент не найден' })
   return client
 }
+async function notifyInvitationFailure(client: { id: string; name: string }, email: string) {
+  try {
+    await db.transaction(async tx => {
+      await publishSystemNotification(tx, await activeSystemRecipients(tx), {
+        eventKey: systemNotificationEvents.invitationFailed,
+        sourceOrganizationId: client.id,
+        title: 'Не удалось отправить приглашение',
+        body: `${client.name}: приглашение администратора для ${email} не отправлено.`
+      })
+    })
+  } catch {
+    console.error('Failed to record system invitation delivery notification', { organizationId: client.id })
+  }
+}
+
 export async function listClients(actor: Actor) {
   assertSuperuser(actor)
   const clients = await db.query.organizations.findMany({ orderBy: [desc(organizations.createdAt)] })
@@ -34,7 +51,12 @@ export async function createClient(actor: Actor, input: z.infer<typeof clientInp
     return { client, invitation }
   })
   let invitationSent = true
-  try { await deliverInvitation(result.invitation) } catch { invitationSent = false }
+  try {
+    await deliverInvitation(result.invitation)
+  } catch {
+    invitationSent = false
+    await notifyInvitationFailure(result.client, result.invitation.user.email)
+  }
   return { ...result.client, invitationSent }
 }
 export async function updateClient(actor: Actor, id: string, input: z.infer<typeof clientUpdateSchema>) {
@@ -69,22 +91,27 @@ export async function updateClient(actor: Actor, id: string, input: z.infer<type
 }
 export async function inviteClientAdministrator(actor: Actor, id: string, input: z.infer<typeof administratorInputSchema>) {
   assertSuperuser(actor)
-  await findClient(id)
+  const client = await findClient(id)
   const invitation = await db.transaction(async tx => {
     const invitation = await createInvitation(tx, { organizationId: id, name: input.name, email: input.email, roles: ['administrator'] })
     await tx.insert(platformAuditLogs).values({ actorId: actor.id, organizationId: id, action: 'client.administrator_invited', payload: { userId: invitation.user.id } })
     return invitation
   })
   let invitationSent = true
-  try { await deliverInvitation(invitation) } catch { invitationSent = false }
+  try {
+    await deliverInvitation(invitation)
+  } catch {
+    invitationSent = false
+    await notifyInvitationFailure(client, invitation.user.email)
+  }
   return { id: invitation.user.id, invitationSent }
 }
 export async function resendClientInvitation(actor: Actor, id: string, userId: string) {
   assertSuperuser(actor)
-  await findClient(id)
+  const client = await findClient(id)
   const user = await db.query.users.findFirst({ where: and(eq(users.id, userId), eq(users.organizationId, id)) })
   if (!user?.roles.includes('administrator')) throw createError({ statusCode: 404, statusMessage: 'Администратор не найден' })
-  const result = await resendInvitation({ ...actor, organizationId: id, roles: ['administrator'] }, userId)
+  const result = await resendInvitation({ ...actor, organizationId: id, roles: ['administrator'] }, userId, () => notifyInvitationFailure(client, user.email))
   await db.insert(platformAuditLogs).values({ actorId: actor.id, organizationId: id, action: 'client.invitation_resent', payload: { userId } })
   return result
 }

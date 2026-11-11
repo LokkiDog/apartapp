@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { DashboardCleaning, DashboardResponse, DashboardTask } from '@contracts/dashboard'
-import { formatDate, formatEuro } from '#fsd/shared/lib'
+import { formatDate, useMoneyFormat } from '#fsd/shared/lib'
 import { canAccessWorkSection, useCurrentUser } from '#fsd/shared/auth'
 import { EmptyState, MetricTile, StatusBadge } from '#fsd/shared/ui'
 import { useNotificationState } from '#fsd/features/manage-notifications'
@@ -10,6 +10,7 @@ import { useI18n } from 'vue-i18n'
 const currentUser = useCurrentUser()
 const notificationState = useNotificationState()
 const { t, locale } = useI18n()
+const { formatMoney } = useMoneyFormat()
 const isAdministrator = computed(() => Boolean(currentUser.value?.roles.includes('administrator')))
 const isSpecialist = computed(() => Boolean(currentUser.value?.roles.includes('specialist') && !isAdministrator.value))
 const isWorkerView = computed(() => Boolean(currentUser.value?.roles.includes('cleaner') && !isAdministrator.value) || isSpecialist.value)
@@ -84,7 +85,7 @@ function dashboardWorkHref(work: DashboardCleaning | DashboardTask) { return 'du
       <NuxtLink v-if="canViewWork" to="/work" class="dashboard-metric-link"><MetricTile :label="t('dashboard.cleanings')" :value="summary.cleanings.count" icon="i-lucide-broom" /></NuxtLink>
       <NuxtLink v-if="canViewWork" to="/work?tab=tasks" class="dashboard-metric-link"><MetricTile :label="t('dashboard.tasks')" :value="openTaskCount" icon="i-lucide-clipboard-check" /></NuxtLink>
       <NuxtLink v-if="isAdministrator" to="/problems" class="dashboard-metric-link"><MetricTile :label="t('dashboard.problems')" :value="dashboardProblemCount" icon="i-lucide-triangle-alert" :tone="dashboardProblemCount ? 'danger' : 'neutral'" /></NuxtLink>
-      <MetricTile v-if="isCleanerView" :label="t('dashboard.pool')" :value="formatEuro(cleanerPool)" icon="i-lucide-wallet" />
+      <MetricTile v-if="isCleanerView" :label="t('dashboard.pool')" :value="formatMoney(cleanerPool)" icon="i-lucide-wallet" />
     </div>
 
     <div class="grid gap-5" :class="{ 'xl:grid-cols-[1.25fr_.75fr]': canViewWork }">

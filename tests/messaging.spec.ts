@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { randomBytes } from 'node:crypto'
+import { randomBytes, randomUUID } from 'node:crypto'
 import {
   telegramMessageContent,
   telegramRequest,
@@ -9,6 +9,7 @@ import {
   encryptBotToken,
   verifyWebhookSecret,
 } from '../server/modules/messaging/secrets'
+import { downloadLineFile, pushLineMessage, verifyLineSignature } from '../server/modules/messaging/line'
 import { clientUpdateSchema } from '../shared/contracts/platform'
 import { MAX_MESSAGE_FILE_BYTES } from '../shared/contracts/messaging'
 
@@ -99,5 +100,41 @@ describe('Telegram transport and secrets', () => {
     expect(
       clientUpdateSchema.safeParse({ messagingEnabled: 'true' }).success,
     ).toBe(false)
+  })
+})
+
+describe('LINE Messaging API transport', () => {
+  it('checks the exact webhook bytes against an independent HMAC fixture', () => {
+    const raw = Buffer.from('{"destination":"U8e742f61d673b39c7fff3cecb7536ef0","events":[]}')
+    const signature = 'CaQfo/vpROry+7UB85x+gtiNTkKSZx76mCFrzUgf1Tg='
+    const secret = 'line-test-secret'
+    expect(verifyLineSignature(raw, signature, secret)).toBe(true)
+    expect(verifyLineSignature(Buffer.concat([raw, Buffer.from(' ')]), signature, secret)).toBe(false)
+  })
+
+  it('preserves the retry key after a lost response and recognizes LINE acceptance', async () => {
+    const keys: (string | null)[] = []
+    const retryKey = randomUUID()
+    const fetch = vi.fn(async (_url: string, init: RequestInit) => {
+      keys.push(new Headers(init.headers).get('x-line-retry-key'))
+      if (keys.length === 1) throw new Error('network lost after sending')
+      return new Response(null, { status: 409, headers: { 'x-line-accepted-request-id': 'accepted' } })
+    })
+    vi.stubGlobal('fetch', fetch)
+    await expect(pushLineMessage('token', 'guest', 'Hello', retryKey)).rejects.toMatchObject({ outcome: 'retry' })
+    await expect(pushLineMessage('token', 'guest', 'Hello', retryKey)).resolves.toBe('accepted')
+    expect(keys).toEqual([retryKey, retryKey])
+  })
+
+  it('caps a streamed file even when LINE does not send a content length', async () => {
+    const file = new ReadableStream({
+      start(controller) {
+        controller.enqueue(new Uint8Array(MAX_MESSAGE_FILE_BYTES))
+        controller.enqueue(new Uint8Array(1))
+        controller.close()
+      },
+    })
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(file)))
+    await expect(downloadLineFile('token', 'file')).resolves.toBeNull()
   })
 })

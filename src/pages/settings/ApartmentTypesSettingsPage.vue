@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import Decimal from 'decimal.js'
 import type { DropdownMenuItem } from '@nuxt/ui'
-import { createFormValidator, formatEuro, useSubmitFormValidation } from '#fsd/shared/lib'
+import { createFormValidator, useMoneyFormat, useSubmitFormValidation } from '#fsd/shared/lib'
 import { MoneyInput, PageHeader, EmptyState, DeleteConfirmModal } from '#fsd/shared/ui'
 import { useCurrentUser } from '#fsd/shared/auth'
 import { useI18n } from 'vue-i18n'
@@ -9,6 +9,7 @@ import { apartmentTypeInputSchema } from '@contracts/crm'
 
 const currentUser = useCurrentUser()
 const { t } = useI18n()
+const { formatMoney } = useMoneyFormat()
 if (!currentUser.value?.roles.includes('administrator')) await navigateTo('/')
 type Consumable = { id: string; name: string; category: string; unit: string }
 type AutoWriteOff = { consumableId: string; quantity: number }
@@ -57,26 +58,26 @@ async function removeType() { if (!typeToDelete.value) return; deletePending.val
           <div class="catalog-card__content"><h2 class="break-words text-xl font-semibold leading-tight">{{ type.name }}</h2></div>
         </header>
         <div class="catalog-card__body">
-        <dl class="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4"><div><dt class="text-[var(--color-muted)]">{{ t('apartmentTypes.cleaning') }}</dt><dd class="mt-1 font-semibold tabular-nums">{{ formatEuro(type.cleanerPoolEur) }}</dd></div><div><dt class="text-[var(--color-muted)]">{{ t('apartmentTypes.laundry') }}</dt><dd class="mt-1 font-semibold tabular-nums">{{ formatEuro(type.laundryEur) }}</dd></div><div><dt class="text-[var(--color-muted)]">{{ t('apartmentTypes.service') }}</dt><dd class="mt-1 font-semibold tabular-nums">{{ formatEuro(type.serviceEur) }}</dd></div><div><dt class="text-[var(--color-muted)]">{{ t('apartmentTypes.defaultLinenGuests') }}</dt><dd class="mt-1 font-semibold tabular-nums">{{ type.defaultLinenGuestCount }}</dd></div></dl>
+        <dl class="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4"><div><dt class="text-[var(--color-muted)]">{{ t('apartmentTypes.cleaning') }}</dt><dd class="mt-1 font-semibold tabular-nums">{{ formatMoney(type.cleanerPoolEur) }}</dd></div><div><dt class="text-[var(--color-muted)]">{{ t('apartmentTypes.laundry') }}</dt><dd class="mt-1 font-semibold tabular-nums">{{ formatMoney(type.laundryEur) }}</dd></div><div><dt class="text-[var(--color-muted)]">{{ t('apartmentTypes.service') }}</dt><dd class="mt-1 font-semibold tabular-nums">{{ formatMoney(type.serviceEur) }}</dd></div><div><dt class="text-[var(--color-muted)]">{{ t('apartmentTypes.defaultLinenGuests') }}</dt><dd class="mt-1 font-semibold tabular-nums">{{ type.defaultLinenGuestCount }}</dd></div></dl>
         <div class="mt-5 border-t border-[var(--color-line)] pt-4"><p class="text-sm font-semibold">{{ t('apartmentTypes.checklist') }}</p><ul v-if="type.defaultChecklist?.length" class="mt-2 space-y-1 text-sm text-[var(--color-muted)]"><li v-for="(item, index) in type.defaultChecklist" :key="`${type.id}-${index}`" class="flex items-start gap-2"><span class="mt-1 text-[var(--color-primary)]">{{ index + 1 }}.</span><span>{{ item }}</span></li></ul><p v-else class="mt-2 text-sm text-[var(--color-muted)]">{{ t('apartmentTypes.noItems') }}</p></div>
         <div class="mt-5 border-t border-[var(--color-line)] pt-4"><p class="text-sm font-semibold">{{ t('apartmentTypes.autoWriteOff') }}</p><p class="mt-1 text-sm text-[var(--color-muted)]">{{ type.autoWriteOffs?.length ? type.autoWriteOffs.map(rule => `${consumables?.find(item => item.id === rule.consumableId)?.name ?? ''}: ${rule.quantity} ${consumables?.find(item => item.id === rule.consumableId)?.unit ?? ''}`).join(' · ') : t('apartmentTypes.autoWriteOffNone') }}</p></div>
         </div>
         <footer class="catalog-card__footer">
-          <div><p class="text-xs text-[var(--color-muted)]">{{ t('apartmentTypes.total') }}</p><strong class="tabular-nums">{{ formatEuro(type.ownerTotalEur) }}</strong></div>
+          <div><p class="text-xs text-[var(--color-muted)]">{{ t('apartmentTypes.total') }}</p><strong class="tabular-nums">{{ formatMoney(type.ownerTotalEur) }}</strong></div>
           <UDropdownMenu :items="typeMenuItems(type)" :content="{ align: 'end' }" :modal="false">
             <UButton color="neutral" variant="ghost" icon="i-lucide-ellipsis-vertical" :aria-label="`${t('apartmentTypes.edit')}: ${type.name}`" class="min-h-11 min-w-11" />
           </UDropdownMenu>
         </footer>
       </article>
     </div>
-    <EmptyState v-else icon="i-lucide-badge-euro" :title="t('apartmentTypes.emptyTitle')" :description="t('apartmentTypes.emptyDescription')" />
+    <EmptyState v-else icon="i-lucide-coins" :title="t('apartmentTypes.emptyTitle')" :description="t('apartmentTypes.emptyDescription')" />
 
     <USlideover v-model:open="open" :title="typeToEdit ? t('apartmentTypes.edit') : t('apartmentTypes.new')" :modal="true" :overlay="true">
       <template #body>
         <UForm :key="validation.formKey.value" id="apartment-type-form" :state="form" :validate="validate" :validate-on="validation.validateOn.value" novalidate class="form-grid" @error="validation.onError" @submit="save">
           <UFormField name="name" :label="t('apartmentTypes.name')"><UInput v-model="form.name" placeholder="Studio" /></UFormField>
           <UFormField name="defaultLinenGuestCount" :label="t('apartmentTypes.defaultLinenGuests')" :description="t('apartmentTypes.defaultLinenGuestsHint')"><UInput v-model.number="form.defaultLinenGuestCount" type="number" min="1" max="50" class="w-full tabular-nums" /></UFormField>
-          <div class="rounded-xl bg-[var(--color-primary-soft)] px-4 py-3"><p class="text-sm text-[var(--color-muted)]">{{ t('apartmentTypes.total') }}</p><p class="mt-1 text-xl font-semibold tabular-nums text-[var(--color-ink)]">{{ formatEuro(totalEur) }}</p></div>
+          <div class="rounded-xl bg-[var(--color-primary-soft)] px-4 py-3"><p class="text-sm text-[var(--color-muted)]">{{ t('apartmentTypes.total') }}</p><p class="mt-1 text-xl font-semibold tabular-nums text-[var(--color-ink)]">{{ formatMoney(totalEur) }}</p></div>
           <div class="grid grid-cols-3 gap-4"><UFormField name="cleanerPoolEur" :label="t('apartmentTypes.cleaning')"><MoneyInput v-model="form.cleanerPoolEur" :empty-value="0" /></UFormField><UFormField name="laundryEur" :label="t('apartmentTypes.laundry')"><MoneyInput v-model="form.laundryEur" :empty-value="0" /></UFormField><UFormField name="serviceEur" :label="t('apartmentTypes.service')"><MoneyInput v-model="form.serviceEur" :empty-value="0" /></UFormField></div>
           <section><div class="mb-2 flex items-start justify-between gap-3"><div><p class="font-semibold">{{ t('common.checklist') }}</p><p class="text-sm text-[var(--color-muted)]">{{ t('common.checklistHint') }}</p></div><UButton type="button" color="neutral" variant="ghost" size="sm" icon="i-lucide-plus" @click="addChecklistItem">{{ t('common.add') }}</UButton></div><div class="space-y-2"><div v-for="(item, index) in form.defaultChecklist" :key="index" class="checklist-edit-row"><span class="grid size-8 shrink-0 place-items-center text-sm tabular-nums text-[var(--color-muted)]">{{ index + 1 }}</span><UFormField :name="`defaultChecklist.${index}`" class="min-w-0 flex-1"><UInput v-model="form.defaultChecklist[index]" class="w-full" :placeholder="t('common.action')" /></UFormField><div class="checklist-edit-actions"><UButton type="button" color="neutral" variant="ghost" size="sm" icon="i-lucide-chevron-up" :disabled="index === 0" :aria-label="t('common.action')" @click="moveChecklistItem(index, -1)" /><UButton type="button" color="neutral" variant="ghost" size="sm" icon="i-lucide-chevron-down" :disabled="index === form.defaultChecklist.length - 1" :aria-label="t('common.action')" @click="moveChecklistItem(index, 1)" /><UButton type="button" color="neutral" variant="ghost" size="sm" icon="i-lucide-x" :aria-label="t('common.removeItem')" @click="removeChecklistItem(index)" /></div></div></div></section>
           <p class="text-sm text-[var(--color-muted)]">{{ t('apartmentTypes.checklistNote') }}</p>

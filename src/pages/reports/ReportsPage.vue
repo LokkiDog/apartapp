@@ -4,7 +4,7 @@ import type { Apartment } from '#fsd/entities/apartment'
 import type { Hotel } from '#fsd/entities/hotel'
 import { isPropertyScopeReady, PropertyScopeFilter, type PropertyScope } from '#fsd/features/select-property-scope'
 import { useCurrentUser } from '#fsd/shared/auth'
-import { formatDate, formatEuro } from '#fsd/shared/lib'
+import { formatDate, useMoneyFormat } from '#fsd/shared/lib'
 import { DateRangeInput, EmptyState, MetricTile, PageHeader, StatusBadge } from '#fsd/shared/ui'
 import { downloadReportCsv, type ReportTab } from './lib/report-csv'
 import { useI18n } from 'vue-i18n'
@@ -13,6 +13,7 @@ type Preset = 'week' | 'month' | 'next7' | 'next30' | 'custom'
 
 const user = useCurrentUser()
 const { t, locale } = useI18n()
+const { currency, formatMoney } = useMoneyFormat()
 if (!user.value?.roles.includes('administrator')) await navigateTo('/')
 
 const pad = (value: number) => String(value).padStart(2, '0')
@@ -107,7 +108,7 @@ await generate()
 <template>
   <section class="page-wrap space-y-6">
     <PageHeader :title="t('reports.title')">
-      <template #actions><UButton v-if="report" color="neutral" variant="outline" icon="i-lucide-download" @click="downloadReportCsv(report, activeTab, locale as 'ru' | 'en' | 'he')">{{ t('reports.downloadCsv') }}</UButton></template>
+      <template #actions><UButton v-if="report" color="neutral" variant="outline" icon="i-lucide-download" @click="downloadReportCsv(report, activeTab, locale as 'ru' | 'en' | 'he', currency)">{{ t('reports.downloadCsv') }}</UButton></template>
     </PageHeader>
 
     <form class="surface report-filters" :class="{ 'report-filters--compact': filters.scope === 'all' }" @submit.prevent="generate">
@@ -141,7 +142,7 @@ await generate()
           <MetricTile :label="t('reports.cleaningsInPeriod')" :value="report.summary.scheduledCleanings" icon="i-lucide-broom" />
           <MetricTile :label="t('reports.positionsToBuy')" :value="report.summary.procurementPositions" icon="i-lucide-shopping-cart" :tone="report.summary.procurementPositions ? 'warning' : 'neutral'" />
           <MetricTile :label="t('reports.problems')" :value="report.summary.problems" icon="i-lucide-circle-alert" :tone="report.summary.problems ? 'danger' : 'neutral'" />
-          <MetricTile :label="t('reports.operatingExpenses')" :value="formatEuro(report.summary.operatingExpensesEur)" icon="i-lucide-receipt-euro" />
+          <MetricTile :label="t('reports.operatingExpenses')" :value="formatMoney(report.summary.operatingExpensesEur)" icon="i-lucide-receipt" />
         </div>
         <div class="grid gap-6 xl:grid-cols-2">
           <section class="surface overflow-hidden">
@@ -178,9 +179,9 @@ await generate()
       </div>
 
       <div v-else class="space-y-6">
-        <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><MetricTile :label="t('reports.operatingExpenses')" :value="formatEuro(report.finance.operatingExpensesEur)" icon="i-lucide-receipt-euro" /><MetricTile :label="t('reports.extraServices')" :value="formatEuro(report.finance.guestServicesEur)" icon="i-lucide-concierge-bell" /><MetricTile :label="t('reports.cleaning')" :value="formatEuro(report.finance.cleaningComponents.cleanerPoolEur)" icon="i-lucide-broom" /><MetricTile :label="t('reports.laundryService')" :value="formatEuro(report.finance.cleaningComponents.laundryEur + report.finance.cleaningComponents.serviceEur)" icon="i-lucide-washing-machine" /></div>
-        <div class="grid gap-6 xl:grid-cols-2"><section class="surface overflow-hidden"><div class="report-section-heading"><div><h2>{{ t('reports.byCategories') }}</h2><p>{{ t('reports.operationsStructure') }}</p></div></div><div class="divide-y divide-[var(--color-line)] px-5 sm:px-6"><div v-for="row in report.finance.byType" :key="row.id" class="report-compact-row"><span>{{ row.label }}</span><strong class="tabular-nums">{{ formatEuro(row.amountEur) }}</strong></div></div></section><section class="surface overflow-hidden"><div class="report-section-heading"><div><h2>{{ t('reports.byHotels') }}</h2><p>{{ t('reports.allOperations') }}</p></div></div><div class="divide-y divide-[var(--color-line)] px-5 sm:px-6"><div v-for="row in report.finance.byHotel" :key="row.id" class="report-compact-row"><span>{{ row.label }}</span><strong class="tabular-nums">{{ formatEuro(row.amountEur) }}</strong></div></div></section></div>
-        <section class="surface overflow-hidden"><div class="report-section-heading"><div><h2>{{ t('reports.allOperations') }}</h2><p>{{ report.finance.entries.length }} {{ t('reports.operationsStructure').toLocaleLowerCase() }}</p></div></div><div v-if="report.finance.entries.length" class="report-finance-table"><div class="report-finance-head"><span>{{ t('reports.dateAndCategory') }}</span><span>{{ t('reports.property') }}</span><span>{{ t('reports.managers') }}</span><span>{{ t('reports.amount') }}</span></div><div v-for="entry in report.finance.entries" :key="entry.id" class="report-finance-row"><div><p class="font-medium">{{ formatDate(entry.occurredOn) }}</p><p>{{ financeTypeLabels[entry.type] ?? entry.type }}</p></div><div><p class="font-medium">{{ entry.apartmentName }}</p><p>{{ entry.hotelName }}</p></div><div><p class="font-medium">{{ entry.managerNames.join(', ') || t('work.notAssigned') }}</p><p>{{ entry.description }}</p></div><strong>{{ formatEuro(entry.amountEur) }}</strong></div></div><EmptyState v-else icon="i-lucide-receipt" :title="t('reports.noOperations')" :description="t('reports.noOperationsDescription')" /></section>
+        <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><MetricTile :label="t('reports.operatingExpenses')" :value="formatMoney(report.finance.operatingExpensesEur)" icon="i-lucide-receipt" /><MetricTile :label="t('reports.extraServices')" :value="formatMoney(report.finance.guestServicesEur)" icon="i-lucide-concierge-bell" /><MetricTile :label="t('reports.cleaning')" :value="formatMoney(report.finance.cleaningComponents.cleanerPoolEur)" icon="i-lucide-broom" /><MetricTile :label="t('reports.laundryService')" :value="formatMoney(report.finance.cleaningComponents.laundryEur + report.finance.cleaningComponents.serviceEur)" icon="i-lucide-washing-machine" /></div>
+        <div class="grid gap-6 xl:grid-cols-2"><section class="surface overflow-hidden"><div class="report-section-heading"><div><h2>{{ t('reports.byCategories') }}</h2><p>{{ t('reports.operationsStructure') }}</p></div></div><div class="divide-y divide-[var(--color-line)] px-5 sm:px-6"><div v-for="row in report.finance.byType" :key="row.id" class="report-compact-row"><span>{{ row.label }}</span><strong class="tabular-nums">{{ formatMoney(row.amountEur) }}</strong></div></div></section><section class="surface overflow-hidden"><div class="report-section-heading"><div><h2>{{ t('reports.byHotels') }}</h2><p>{{ t('reports.allOperations') }}</p></div></div><div class="divide-y divide-[var(--color-line)] px-5 sm:px-6"><div v-for="row in report.finance.byHotel" :key="row.id" class="report-compact-row"><span>{{ row.label }}</span><strong class="tabular-nums">{{ formatMoney(row.amountEur) }}</strong></div></div></section></div>
+        <section class="surface overflow-hidden"><div class="report-section-heading"><div><h2>{{ t('reports.allOperations') }}</h2><p>{{ report.finance.entries.length }} {{ t('reports.operationsStructure').toLocaleLowerCase() }}</p></div></div><div v-if="report.finance.entries.length" class="report-finance-table"><div class="report-finance-head"><span>{{ t('reports.dateAndCategory') }}</span><span>{{ t('reports.property') }}</span><span>{{ t('reports.managers') }}</span><span>{{ t('reports.amount', { currency }) }}</span></div><div v-for="entry in report.finance.entries" :key="entry.id" class="report-finance-row"><div><p class="font-medium">{{ formatDate(entry.occurredOn) }}</p><p>{{ financeTypeLabels[entry.type] ?? entry.type }}</p></div><div><p class="font-medium">{{ entry.apartmentName }}</p><p>{{ entry.hotelName }}</p></div><div><p class="font-medium">{{ entry.managerNames.join(', ') || t('work.notAssigned') }}</p><p>{{ entry.description }}</p></div><strong>{{ formatMoney(entry.amountEur) }}</strong></div></div><EmptyState v-else icon="i-lucide-receipt" :title="t('reports.noOperations')" :description="t('reports.noOperationsDescription')" /></section>
       </div>
     </template>
   </section>

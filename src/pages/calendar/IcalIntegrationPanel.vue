@@ -43,8 +43,8 @@ watch(() => props.apartmentId, load, { immediate: true })
           <UButton v-if="feed?.enabled" color="neutral" variant="ghost" :disabled="busy" @click="save('')">{{ t('icalImport.disconnect') }}</UButton>
         </div>
       </div>
-      <p v-if="feed?.lastError" class="text-sm text-error">{{ feed.lastError }}</p>
+      <UAlert v-if="feed?.lastError" color="error" :description="feed.lastError" />
       <p v-else-if="feed?.lastSyncedAt" class="text-xs text-[var(--color-muted)]">{{ t('icalImport.lastSync') }}: {{ new Date(feed.lastSyncedAt).toLocaleString() }}</p>
-        <p v-if="message" role="alert" class="text-sm text-error">{{ message }}</p>
+        <UAlert v-if="message" color="error" role="alert" :description="message" />
   </section>
 </template>

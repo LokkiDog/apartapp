@@ -120,6 +120,25 @@ describe.skipIf(!url)('platform PostgreSQL integration', () => {
     expect((await db.query.users.findFirst({ where: eq(tables.users.id, foreign!.id) }))!.name).toBe('Foreign')
     expect(await auth.requirePrincipal(event(), false)).toMatchObject({ name: 'New Name', roles: [role], platformSessionId: principal.platformSessionId })
   })
+  it('persists the profile currency across sessions for the selected account only', async () => {
+    const { user, principal, other } = await fixture()
+    const [foreign] = await db.insert(tables.users).values({
+      organizationId: other.id, name: 'Other', email: 'other@example.com', passwordHash: 'hash', status: 'active'
+    }).returning()
+    expect(principal.currency).toBe('EUR')
+    await expect(profiles.updateOwnCurrency(principal, { currency: 'GBP' })).rejects.toMatchObject({ statusCode: 400 })
+    await expect(profiles.updateOwnCurrency(principal, { currency: 'USD', userId: foreign!.id })).rejects.toMatchObject({ statusCode: 400 })
+    await expect(profiles.updateOwnCurrency({ ...principal, organizationId: other.id }, { currency: 'USD' })).rejects.toMatchObject({ statusCode: 404 })
+    await expect(profiles.updateOwnCurrency(principal, { currency: 'THB' })).resolves.toEqual({ currency: 'THB' })
+
+    const [newSession] = await db.insert(tables.platformSessions).values({
+      userId: user.id, organizationId: user.organizationId, expiresAt: auth.sessionExpiry()
+    }).returning()
+    sessionUser = { id: user.id, platformSessionId: newSession!.id, sessionVersion: auth.SESSION_VERSION }
+    expect(await auth.requirePrincipal(event(), false)).toMatchObject({ currency: 'THB' })
+    expect(await db.query.users.findFirst({ where: eq(tables.users.id, foreign!.id) })).toMatchObject({ currency: 'EUR' })
+  })
+
   it('edits the superuser profile independently of client context', async () => {
     const { user, principal, other } = await fixture(true)
     await profiles.updateOwnProfile({ ...principal, organizationId: other.id }, { name: 'Support Admin' })
@@ -432,6 +451,118 @@ describe.skipIf(!url)('platform PostgreSQL integration', () => {
         expect(text.includes('/notifications')).toBe(channels.crm)
       }
     } finally { realtime.unregisterNotificationPeer(user.id, { id: 'channel-test', send: received }) }
+  })
+
+  it('keeps one open messaging setup request and emails the platform superuser across organizations', async () => {
+    const { principal, client, other, user } = await fixture()
+    const [superuser] = await db.insert(tables.users).values({
+      organizationId: other.id, name: 'Platform admin', email: 'platform@example.com',
+      passwordHash: 'hashed:password123', status: 'active', roles: ['administrator'], isSuperuser: true,
+    }).returning()
+    await db.update(tables.organizations).set({ messagingEnabled: true }).where(eq(tables.organizations.id, client.id))
+    const requests = await import('../server/modules/messaging/setup-requests')
+    const results = await Promise.all([
+      requests.requestMessagingSetup(principal, 'line'),
+      requests.requestMessagingSetup(principal, 'line'),
+    ])
+    expect(results.map(result => result.alreadyRequested).sort()).toEqual([false, true])
+
+    const inbox = await requests.listMessagingSetupRequests(superuser!.id)
+    expect(inbox).toHaveLength(1)
+    expect(inbox[0]).toMatchObject({ organizationId: client.id })
+    expect(inbox[0]!.body).toContain(user.email)
+    await requests.acknowledgeMessagingSetupRequest(user.id, inbox[0]!.id)
+    expect(await requests.listMessagingSetupRequests(user.id)).toEqual([])
+    expect(await requests.listMessagingSetupRequests(superuser!.id)).toEqual(inbox)
+
+    const queue = await import('../server/infrastructure/notification/email-queue')
+    await queue.processNotificationEmails()
+    expect(sendNotificationEmail).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+      to: superuser!.email,
+      text: expect.stringContaining('https://aparts.example/system/clients'),
+    }))
+
+    await requests.acknowledgeMessagingSetupRequest(superuser!.id, inbox[0]!.id)
+    expect(await requests.listMessagingSetupRequests(superuser!.id)).toEqual([])
+  })
+
+  it('shares setup notifications across both views and applies each superuser email preference at delivery', async () => {
+    const { principal, client, other, user } = await fixture()
+    const admins = await db.insert(tables.users).values(['first', 'second'].map(name => ({
+      organizationId: other.id, name, email: `${name}@example.com`, passwordHash: 'hash',
+      status: 'active' as const, isSuperuser: true
+    }))).returning()
+    const [first, second] = admins
+    const system = await import('../server/infrastructure/notification/system')
+    const requests = await import('../server/modules/messaging/setup-requests')
+    const queue = await import('../server/infrastructure/notification/email-queue')
+    const unread = (await import('../server/api/system/notifications/unread.get')).default
+    await expect(unread(event())).rejects.toMatchObject({ statusCode: 403 })
+    await db.update(tables.organizations).set({ messagingEnabled: true }).where(eq(tables.organizations.id, client.id))
+    await requests.requestMessagingSetup(principal, 'telegram')
+    expect(await requests.requestMessagingSetup(principal, 'telegram')).toEqual({ alreadyRequested: true })
+
+    const [item] = (await system.listSystemNotifications(first!.id)).items
+    expect(item).toMatchObject({ company: client.name, organizationId: client.id, readAt: null })
+    expect((await requests.listMessagingSetupRequests(first!.id))[0]?.id).toBe(item!.id)
+    await expect(system.readSystemNotification(second!.id, item!.id)).rejects.toMatchObject({ statusCode: 404 })
+    await system.readSystemNotification(first!.id, item!.id)
+    expect(await requests.listMessagingSetupRequests(first!.id)).toEqual([])
+    const [secondItem] = await requests.listMessagingSetupRequests(second!.id)
+    await requests.acknowledgeMessagingSetupRequest(second!.id, secondItem!.id)
+    expect(await system.countUnreadSystemNotifications(second!.id)).toBe(0)
+    expect((await system.listSystemNotifications(second!.id)).items[0]?.readAt).toBeInstanceOf(Date)
+    expect((await system.listSystemNotifications(user.id)).items).toEqual([])
+
+    await system.setSystemEmailPreference(first!.id, 'setup', false)
+    await queue.processNotificationEmails()
+    expect(sendNotificationEmail).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ to: second!.email }))
+    expect(await system.getSystemEmailPreferences(first!.id)).toEqual({ setup: false, registration: false, invitationFailure: false })
+  })
+
+  it('notifies on confirmed registrations and invitation delivery failures only', async () => {
+    const { principal, user } = await fixture(true)
+    const system = await import('../server/infrastructure/notification/system')
+    const queue = await import('../server/infrastructure/notification/email-queue')
+    await system.setSystemEmailPreference(user.id, 'registration', true)
+    await openRegistration()
+    await registration.registerCompany(registrationInput)
+    expect((await system.listSystemNotifications(user.id)).items).toEqual([])
+    await registration.confirmRegistration(lastToken())
+    const input = { name: 'Invited Company', timezone: 'Europe/Sofia', administratorName: 'Admin', email: 'invite@example.com' }
+    const company = await platform.createClient(principal, input)
+    await expect(platform.createClient(principal, input)).rejects.toMatchObject({ statusCode: 409 })
+    expect((await system.listSystemNotifications(user.id)).items).toHaveLength(1)
+    vi.mocked(sendAccountLink).mockRejectedValueOnce(new Error('SMTP unavailable'))
+    const invited = await platform.inviteClientAdministrator(principal, company.id, { name: 'Backup', email: 'backup@example.com' })
+    expect(invited.invitationSent).toBe(false)
+    await expect(platform.resendClientInvitation(principal, company.id, invited.id)).rejects.toMatchObject({ statusCode: 429 })
+    await db.update(tables.authTokens).set({ createdAt: new Date(0) }).where(eq(tables.authTokens.userId, invited.id))
+    vi.mocked(sendAccountLink).mockRejectedValueOnce(new Error('SMTP unavailable'))
+    await expect(platform.resendClientInvitation(principal, company.id, invited.id)).rejects.toThrow('SMTP unavailable')
+    const { items } = await system.listSystemNotifications(user.id)
+    expect(items).toHaveLength(3)
+    expect(items.filter(item => item.organizationId === company.id)).toHaveLength(2)
+    expect(items.find(item => item.company === registrationInput.companyName)).toMatchObject({ title: 'Новая компания' })
+    expect(JSON.stringify(items)).not.toContain(vi.mocked(sendAccountLink).mock.calls.at(-1)![0].token)
+    await queue.processNotificationEmails()
+    expect(sendNotificationEmail).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ to: user.email, subject: 'Новая компания' }))
+  })
+
+  it('pages notification history without skipping rows with the same timestamp', async () => {
+    const { user, client } = await fixture(true)
+    const system = await import('../server/infrastructure/notification/system')
+    await db.insert(tables.notifications).values(Array.from({ length: 31 }, (_, i) => ({
+      organizationId: client.id, sourceOrganizationId: client.id, userId: user.id, type: 'manual' as const,
+      crmVisible: false, eventKey: 'system.client_registered', title: String(i), body: '', createdAt: new Date(0)
+    })))
+    const first = await system.listSystemNotifications(user.id)
+    expect(first.items).toHaveLength(30)
+    expect(first.nextCursor).toBeTruthy()
+    const last = await system.listSystemNotifications(user.id, first.nextCursor!)
+    expect(last.items).toHaveLength(1)
+    expect(last.nextCursor).toBeNull()
+    expect(new Set([...first.items, ...last.items].map(item => item.id)).size).toBe(31)
   })
 
   it('retries failed email delivery, limits attempts, prevents parallel sends and rechecks opt-outs', async () => {

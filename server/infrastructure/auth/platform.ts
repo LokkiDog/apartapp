@@ -29,7 +29,7 @@ export async function requirePrincipal(event: Event, renew = true): Promise<Acto
   const { inSystem } = resolvePlatformAccess(user, context.organizationId, organization?.status)
   const actor: Actor = {
     id: user.id, organizationId: organization?.id ?? user.organizationId,
-    email: user.email, name: user.name, locale: user.locale,
+    email: user.email, name: user.name, locale: user.locale, currency: user.currency,
     roles: user.isSuperuser ? (inSystem ? [] : ['administrator']) : user.roles,
     isSuperuser: user.isSuperuser, inSystem, organizationName: organization?.name,
     organizationStatus: organization?.status, messagingEnabled: organization?.messagingEnabled ?? false,

@@ -5,7 +5,7 @@ import type { Cleaning } from "#fsd/entities/cleaning";
 import type { Stay } from "#fsd/entities/stay";
 import {
   createFormValidator,
-  formatEuro,
+  useMoneyFormat,
   useSubmitFormValidation,
 } from "#fsd/shared/lib";
 import { DateInput, GroupedUserMultiSelect, MoneyInput } from "#fsd/shared/ui";
@@ -47,6 +47,7 @@ const emit = defineEmits<{
   submit: [draft: CleaningDraft];
 }>();
 const { t } = useI18n();
+const { formatMoney } = useMoneyFormat();
 const linked = ref(
   Boolean(props.initialStayId || props.editingCleaning?.stayId),
 );
@@ -366,7 +367,7 @@ function submit() {
           /></UFormField>
         <UFormField v-if="needsCashAssignee" name="cashAssigneeId" :label="t('cash.responsible')" required>
           <USelect :model-value="form.cashAssigneeId ?? undefined" :items="cashAssigneeOptions" class="w-full" @update:model-value="form.cashAssigneeId = $event || null" />
-          <template #hint><span class="tabular-nums">{{ formatEuro(selectedStay?.cashAmountEur ?? 0) }}</span></template>
+          <template #hint><span class="tabular-nums">{{ formatMoney(selectedStay?.cashAmountEur ?? 0) }}</span></template>
         </UFormField>
         <UFormField name="assignmentComment" :label="t('work.assignmentComment')" class="col-span-full w-full">
           <UTextarea v-model="form.assignmentComment" class="w-full" :maxlength="2000" />
@@ -389,14 +390,14 @@ function submit() {
                 {{ t("work.assignee") }}
                 <span
                   class="font-semibold tabular-nums text-base text-[var(--color-ink)]"
-                  >{{ formatEuro(form.cleanerPoolEur) }}</span
+                  >{{ formatMoney(form.cleanerPoolEur) }}</span
                 >
               </p>
               <p class="whitespace-nowrap">
                 {{ t("common.total") }}
                 <span
                   class="font-semibold tabular-nums text-base text-[var(--color-ink)]"
-                  >{{ formatEuro(tariffTotal) }}</span
+                  >{{ formatMoney(tariffTotal) }}</span
                 >
               </p>
             </div>

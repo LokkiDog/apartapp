@@ -170,7 +170,7 @@ onBeforeUnmount(() => { clearPhotoPreviews(); clearProblemPhotoPreviews() })
     </section>
 
     <section v-if="kind === 'task'" class="progress-section">
-      <div class="progress-section__heading"><div><h2>{{ t('work.cost') }}</h2></div><UIcon name="i-lucide-euro" class="size-5 text-[var(--color-primary)]" /></div>
+      <div class="progress-section__heading"><div><h2>{{ t('work.cost') }}</h2></div><UIcon name="i-lucide-banknote" class="size-5 text-[var(--color-primary)]" /></div>
       <UFormField name="ownerCostEur" :label="t('work.cost')" :error="false" class="w-full"><MoneyInput v-model="ownerCostEur" :disabled="!editable" class="w-full tabular-nums" /></UFormField>
     </section>
 

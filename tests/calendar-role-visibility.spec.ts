@@ -8,7 +8,7 @@ describe('calendar role visibility', () => {
 
     expect(calendar).toContain("const showFinancialDetails = computed(() => Boolean(user.value?.roles.includes('administrator')))")
     expect(calendar).toContain(':show-service-prices="showFinancialDetails"')
-    expect(calendar).toContain('<span v-if="showFinancialDetails" class="font-semibold tabular-nums">{{ formatEuro(service.priceEur) }}</span>')
-    expect(details).toContain('<strong v-if="showServicePrices">{{ formatEuro(service.priceEurSnapshot) }}</strong>')
+    expect(calendar).toContain('<span v-if="showFinancialDetails" class="font-semibold tabular-nums">{{ formatMoney(service.priceEur) }}</span>')
+    expect(details).toContain('<strong v-if="showServicePrices">{{ formatMoney(service.priceEurSnapshot) }}</strong>')
   })
 })

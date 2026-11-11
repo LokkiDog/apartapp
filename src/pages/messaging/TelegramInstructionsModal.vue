@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import RequestMessagingSetupButton from './RequestMessagingSetupButton.vue'
 import createBotScreen from './assets/botfather-create.svg'
 import usernameScreen from './assets/botfather-username.svg'
 import tokenScreen from './assets/botfather-token.svg'
@@ -18,28 +19,29 @@ const steps = [
     v-model:open="open"
     :title="t('messaging.instructions.title')"
     :description="t('messaging.instructions.description')"
-    :scrollable="true"
-    :ui="{ content: 'sm:max-w-2xl' }"
+    :ui="{
+      content: 'sm:max-w-2xl',
+      header: 'shrink-0',
+      body: 'min-h-0 overscroll-contain',
+      footer: 'shrink-0',
+    }"
   >
     <template #body>
-      <UButton
-        to="https://t.me/BotFather"
-        target="_blank"
-        rel="noopener noreferrer"
-        color="neutral"
-        variant="outline"
-        icon="i-lucide-external-link"
-        class="min-h-11 mb-5"
-        >{{ t('messaging.instructions.openBotFather') }}</UButton
-      >
       <ol class="space-y-5">
         <li v-for="(step, index) in steps" :key="step.key" class="space-y-2">
           <h3 class="font-semibold">
             {{ index + 1 }}. {{ t(`messaging.instructions.${step.key}Title`) }}
           </h3>
-          <p class="text-sm leading-6 text-[var(--color-muted)]">
-            {{ t(`messaging.instructions.${step.key}Text`) }}
-          </p>
+          <i18n-t :keypath="`messaging.instructions.${step.key}Text`" tag="p" class="text-sm leading-6 text-[var(--color-muted)]">
+            <template v-if="step.key === 'create'" #botFather>
+              <a
+                href="https://t.me/BotFather"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="font-bold text-[var(--color-primary-strong)] underline underline-offset-2 hover:text-[var(--color-primary)]"
+              >@BotFather</a>
+            </template>
+          </i18n-t>
           <figure
             v-if="step.image"
             class="overflow-hidden rounded-xl border border-[var(--color-line)]"
@@ -59,19 +61,17 @@ const steps = [
         {{ t('messaging.instructions.exampleNote') }}
       </p>
       <p class="mt-3 text-sm">{{ t('messaging.instructions.tokenPrivacy') }}</p>
-      <UButton
-        to="https://core.telegram.org/bots/features#creating-a-new-bot"
+      <a
+        href="https://core.telegram.org/bots/features#creating-a-new-bot"
         target="_blank"
         rel="noopener noreferrer"
-        color="neutral"
-        variant="link"
-        class="mt-2 min-h-11 px-0"
-        >{{ t('messaging.instructions.officialGuide') }}</UButton
-      >
+        class="mt-2 inline-flex min-h-11 items-center text-sm font-bold text-[var(--color-primary-strong)] underline underline-offset-2 hover:text-[var(--color-primary)]"
+      >{{ t('messaging.instructions.officialGuide') }}</a>
     </template>
     <template #footer>
       <div class="form-actions form-actions--footer">
-        <UButton class="ms-auto min-h-11" @click="open = false">{{
+        <RequestMessagingSetupButton channel="telegram" />
+        <UButton class="ms-auto min-h-11 shrink-0" @click="open = false">{{
           t('messaging.instructions.done')
         }}</UButton>
       </div>

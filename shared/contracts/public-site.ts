@@ -22,5 +22,5 @@ export const publicSiteInputSchema = z.object({
 })
 export type PublicSiteInput = z.infer<typeof publicSiteInputSchema>
 export type PublicSite = { websiteUrl: string; hostName: string; whatsapp: string; hostPhoto: string; hostDescription: PublicBio }
-export type OwnProfile = { name: string; phone: string; publicBio: PublicBio; hasPhoto: boolean; photoVersion: string }
+export type OwnProfile = { currency: import('./currency').Currency; name: string; phone: string; publicBio: PublicBio; hasPhoto: boolean; photoVersion: string }
 export type PublicSiteSettings = { settings: PublicSiteInput; profiles: Array<{ id: string; name: string; phone: string; hasPhoto: boolean }> }

@@ -31,7 +31,6 @@ describe('stay history UI', () => {
     expect(row.match(/:cash-amount-eur="stay\.cashAmountEur" :cash-task-state="stay\.cashTaskState"/g)).toHaveLength(2)
     const icons = readFileSync('src/pages/calendar/StayServiceIcons.vue', 'utf8')
     expect(icons).toContain("typeof props.cashAmountEur === 'number' && props.cashAmountEur > 0")
-    expect(icons).toContain('name="i-lucide-euro"')
     expect(icons).toContain('stay-service-icon--cash-${cashTaskState}')
     const styles = readFileSync('src/app/styles/main.css', 'utf8')
     expect(styles).toContain('.stay-service-icon--cash-none')

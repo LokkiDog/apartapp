@@ -14,6 +14,7 @@ import {
 import { fileStorage } from '../../infrastructure/storage/local'
 import { decryptBotToken } from './secrets'
 import { telegramRequest, TelegramError } from './telegram'
+import { pushLineMessage, LineDeliveryError } from './line'
 
 export async function processMessagingOutbox() {
   // A worker may die after Telegram accepts a message. Never resend an expired lease.
@@ -214,6 +215,13 @@ export async function processMessagingOutbox() {
               .where(owned)
             return
           }
+          if (row.connection.channel === 'line' && job.attempts > 1 &&
+            Date.now() >= row.message.createdAt.getTime() + 24 * 60 * 60 * 1000) {
+            await tx.update(messagingMessages).set({ status: 'unknown' })
+              .where(eq(messagingMessages.id, job.messageId))
+            await tx.delete(messagingOutbox).where(owned)
+            return
+          }
           let body: Record<string, unknown> | FormData = {
             chat_id: row.chatId,
             text: row.message.text,
@@ -254,30 +262,34 @@ export async function processMessagingOutbox() {
             return
           }
           try {
-            const result = await telegramRequest<{ message_id: number }>(
-              token,
-              method,
-              body,
-            )
-            if (!Number.isInteger(result?.message_id))
-              throw new TelegramError('unknown')
+            let externalId: string | null
+            if (row.connection.channel === 'line') {
+              externalId = await pushLineMessage(token, row.chatId, row.message.text, row.message.id)
+            } else {
+              const result = await telegramRequest<{ message_id: number }>(token, method, body)
+              if (!Number.isInteger(result?.message_id))
+                throw new TelegramError('unknown')
+              externalId = String(result.message_id)
+            }
             await tx
               .update(messagingMessages)
               .set({
                 status: 'sent',
                 sentAt: new Date(),
-                externalId: String(result.message_id),
+                externalId,
               })
               .where(eq(messagingMessages.id, job.messageId))
             await tx.delete(messagingOutbox).where(owned)
           } catch (error) {
-            const outcome =
-              error instanceof TelegramError ? error.outcome : 'unknown'
-            if (outcome === 'retry' && job.attempts < 5) {
-              const delay = Math.max(
-                error instanceof TelegramError ? error.retryAfter : 30,
-                2 ** job.attempts,
-              )
+            const deliveryError = error instanceof TelegramError || error instanceof LineDeliveryError
+              ? error : undefined
+            const outcome = deliveryError?.outcome ?? 'unknown'
+            const delay = Math.max(deliveryError?.retryAfter ?? 30, 2 ** job.attempts)
+            const retryAt = new Date(Date.now() + delay * 1000)
+            // Use creation time as a conservative lower bound for the first LINE attempt.
+            const withinLineRetryWindow = row.connection.channel !== 'line' ||
+              retryAt.getTime() < row.message.createdAt.getTime() + 24 * 60 * 60 * 1000
+            if (outcome === 'retry' && job.attempts < 5 && withinLineRetryWindow) {
               await tx
                 .update(messagingMessages)
                 .set({ status: 'pending' })
@@ -287,13 +299,13 @@ export async function processMessagingOutbox() {
                 .set({
                   leaseUntil: null,
                   leaseToken: null,
-                  availableAt: new Date(Date.now() + delay * 1000),
+                  availableAt: retryAt,
                 })
                 .where(owned)
             } else {
               await tx
                 .update(messagingMessages)
-                .set({ status: outcome === 'unknown' ? 'unknown' : 'failed' })
+                .set({ status: outcome === 'unknown' || (outcome === 'retry' && error instanceof LineDeliveryError) ? 'unknown' : 'failed' })
                 .where(eq(messagingMessages.id, job.messageId))
               await tx.delete(messagingOutbox).where(owned)
             }

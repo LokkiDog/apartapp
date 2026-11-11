@@ -59,7 +59,7 @@ function apply() {
     <template #body>
       <div class="space-y-4" :aria-busy="loading">
         <USelect v-model="language" :items="languageOptions" :aria-label="t('publication.translationLanguage')" class="min-h-11 w-full" />
-        <UAlert v-if="errorKey" color="warning" variant="soft" :description="t(errorKey)" />
+        <UAlert v-if="errorKey" color="error" role="alert" :description="t(errorKey)" />
         <p v-if="loading" role="status" class="text-sm text-[var(--color-muted)]">{{ t('services.translating') }}</p>
         <div :lang="language" :dir="language === 'he' ? 'rtl' : 'ltr'" class="grid gap-4">
           <UFormField :label="t('publication.name')"><UInput v-model="draft[language].title" :maxlength="160" :disabled="loading" class="w-full" /></UFormField>

@@ -7,7 +7,7 @@ import type { Stay } from '#fsd/entities/stay'
 import type { Hotel } from '#fsd/entities/hotel'
 import type { DateValue } from '@internationalized/date'
 import { filterApartmentsByScope, isPropertyScopeReady, propertyScopeQuery, PropertyScopeFilter, type PropertyScopeValue } from '#fsd/features/select-property-scope'
-import { apartmentCalendarColor, createFormValidator, formatDate, formatEuro, useSubmitFormValidation } from '#fsd/shared/lib'
+import { apartmentCalendarColor, createFormValidator, formatDate, useMoneyFormat, useSubmitFormValidation } from '#fsd/shared/lib'
 import { useCurrentUser } from '#fsd/shared/auth'
 import { useNotificationState } from '#fsd/features/manage-notifications'
 import { DateRangeInput, DeleteConfirmModal, EmptyState, MoneyInput, PageHeader } from '#fsd/shared/ui'
@@ -50,6 +50,7 @@ const user = useCurrentUser()
 const route = useRoute()
 const notificationState = useNotificationState()
 const { locale } = useI18n()
+const { formatMoney } = useMoneyFormat()
 const { t } = useI18n()
 const formatLocale = computed(() => locale.value === 'he' ? 'he-IL' : locale.value === 'en' ? 'en-US' : 'ru-RU')
 const propertyScope = reactive<PropertyScopeValue>({ scope: 'all', hotelId: 'all', apartmentIds: [] })
@@ -463,7 +464,7 @@ async function saveStay() {
     <div class="bookings-content" :class="{ 'bookings-content--calendar': bookingView === 'calendar' }">
     <div v-if="status === 'pending'" class="bookings-loading grid gap-3" role="status" :aria-label="t('common.pageLoading')"><USkeleton v-for="item in 6" :key="item" class="h-20 rounded-2xl" /></div>
 
-    <EmptyState v-if="staysError" icon="i-lucide-triangle-alert" :title="t('common.error')"><template #actions><UButton @click="refresh()">{{ t('bookingWorkspace.retry') }}</UButton></template></EmptyState>
+    <UAlert v-if="staysError" color="error" orientation="horizontal" role="alert" :description="t('common.error')"><template #actions><UButton color="error" variant="ghost" @click="refresh()">{{ t('bookingWorkspace.retry') }}</UButton></template></UAlert>
     <EmptyState v-else-if="!scopeReady" icon="i-lucide-list-filter" :title="t('calendar.chooseScope')" :description="t('scope.loadErrorDescription')" />
 
     <StayBookingsPanel
@@ -694,7 +695,7 @@ async function saveStay() {
                 <UCheckbox :model-value="form.serviceIds.includes(service.id)" :value="service.id" @update:model-value="setServiceSelected(service.id, $event)" />
                 <span>{{ localizedName(service.name, service.nameTranslations, locale) }} <span v-if="!service.active" class="text-[var(--color-muted)]">({{ t('calendar.unavailable') }})</span></span>
               </span>
-              <span v-if="showFinancialDetails" class="font-semibold tabular-nums">{{ formatEuro(service.priceEur) }}</span>
+              <span v-if="showFinancialDetails" class="font-semibold tabular-nums">{{ formatMoney(service.priceEur) }}</span>
             </label>
           </div>
           <UFormField name="cashAmountEur" :label="t('calendar.cash')"><MoneyInput v-model="form.cashAmountEur" /></UFormField>

@@ -65,7 +65,7 @@ async function save() {
   <UModal v-model:open="open" :title="t('publication.configure')" :dismissible="!pending" :ui="{ content: 'sm:max-w-3xl' }">
     <template #body>
       <USkeleton v-if="status === 'pending' || status === 'idle'" class="h-52" />
-      <div v-else-if="error" class="space-y-3"><UAlert color="error" :description="t('publication.loadError')" /><UButton class="min-h-11" @click="refresh()">{{ t('publication.retry') }}</UButton></div>
+      <UAlert v-else-if="error" color="error" orientation="horizontal" role="alert" :description="t('publication.loadError')"><template #actions><UButton color="error" variant="ghost" @click="refresh()">{{ t('publication.retry') }}</UButton></template></UAlert>
       <UForm v-else-if="draft" :key="validation.formKey.value" :id="`publication-form-${apartmentId}`" :state="draft" :validate="validate" :validate-on="validation.validateOn.value" novalidate class="publication-form" @error="validation.onError" @submit="save">
         <USwitch
           v-model="draft.published"

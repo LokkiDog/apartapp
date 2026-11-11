@@ -64,10 +64,11 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="space-y-6" :aria-busy="status === 'pending'">
-    <div v-if="error" class="surface space-y-3 p-5" role="alert">
-      <p class="font-semibold">{{ t('operations.loadError') }}</p>
-      <UButton class="min-h-11" icon="i-lucide-refresh-cw" :loading="status === 'pending'" @click="refresh()">{{ t('operations.retry') }}</UButton>
-    </div>
+    <UAlert v-if="error" color="error" orientation="horizontal" role="alert" :description="t('operations.loadError')">
+      <template #actions>
+        <UButton color="error" variant="ghost" icon="i-lucide-refresh-cw" :loading="status === 'pending'" @click="refresh()">{{ t('operations.retry') }}</UButton>
+      </template>
+    </UAlert>
     <div v-else-if="!data" class="space-y-4" :aria-label="t('operations.loading')">
       <div class="operations-today-metrics"><USkeleton v-for="n in 4" :key="n" class="h-24 rounded-2xl" /></div><USkeleton class="h-48 rounded-2xl" /><USkeleton class="h-64 rounded-2xl" />
     </div>

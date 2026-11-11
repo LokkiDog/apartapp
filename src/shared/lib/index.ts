@@ -1,4 +1,5 @@
-export { formatDate, formatDateTime, formatEuro, getFormatLocale, setFormatLocale } from './format'
+export { useMoneyFormat } from './use-money-format'
+export { formatDate, formatDateTime, getFormatLocale, setFormatLocale } from './format'
 export { apartmentCalendarColor } from './calendar'
 export { formatEuroInput, parseEuroInput } from './money'
 export { useNetworkStatus } from './use-network-status'

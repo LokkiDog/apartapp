@@ -23,7 +23,8 @@ export default defineNuxtPlugin((nuxtApp) => {
       if (
         user.value?.id === identity.id &&
         user.value?.organizationId === identity.organizationId &&
-        user.value?.contextRevision === identity.contextRevision
+        user.value?.contextRevision === identity.contextRevision &&
+        user.value.messagingEnabled !== result.enabled
       )
         session.value = {
           ...session.value,

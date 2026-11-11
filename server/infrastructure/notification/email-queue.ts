@@ -1,9 +1,12 @@
 import { randomUUID } from 'node:crypto'
 import { and, eq, isNull, lte, or } from 'drizzle-orm'
+import { systemEmailCategory } from '@contracts/system-notifications'
 import { effectiveNotificationChannels } from '@contracts/notification-preferences'
+import { isClientActive } from '../auth/platform'
 import { db } from '../database/client'
 import { notificationEmailQueue, notificationPreferences, notifications, users, organizations } from '../database/schema'
 import { sendNotificationEmail } from '../mail/send'
+import { getSystemEmailPreferences } from './system'
 import { localizedNotificationBody, localizedNotificationTitle } from './localize'
 
 const retryDelays = [60_000, 300_000, 1_800_000, 3_600_000]
@@ -35,8 +38,17 @@ export async function processNotificationEmails() {
         return
       }
       const { notification, user, organization } = record
-      const [preference] = await db.select().from(notificationPreferences).where(and(eq(notificationPreferences.organizationId, notification.organizationId), eq(notificationPreferences.userId, user.id), eq(notificationPreferences.eventKey, notification.eventKey ?? '')))
-      if (user.status !== 'active' || user.organizationId !== organization.id || organization.status !== 'active' || !effectiveNotificationChannels(preference).email) {
+      const category = !notification.crmVisible ? systemEmailCategory(notification.eventKey) : undefined
+      let canDeliver: boolean
+      if (category) {
+        canDeliver = user.isSuperuser && user.status === 'active' &&
+          (await getSystemEmailPreferences(user.id))[category] &&
+          (category !== 'setup' || (notification.sourceOrganizationId !== null && await isClientActive(notification.sourceOrganizationId)))
+      } else {
+        const [preference] = await db.select().from(notificationPreferences).where(and(eq(notificationPreferences.organizationId, notification.organizationId), eq(notificationPreferences.userId, user.id), eq(notificationPreferences.eventKey, notification.eventKey ?? '')))
+        canDeliver = organization.status === 'active' && effectiveNotificationChannels(preference).email
+      }
+      if (user.status !== 'active' || user.organizationId !== organization.id || !canDeliver) {
         await db.update(notificationEmailQueue).set({ status: 'skipped', leaseUntil: null, leaseToken: null }).where(owned)
         return
       }

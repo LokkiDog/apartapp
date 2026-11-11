@@ -20,6 +20,6 @@ export async function loginUser(event: H3Event, userId: string) {
     return created
   })
   if (!context) throw createError({ statusCode: 500, statusMessage: 'Не удалось создать сессию' })
-  await refreshUserSession(event, { id: user.id, organizationId: user.organizationId, name: user.name, email: user.email, roles: user.roles, locale: user.locale, platformSessionId: context.id, sessionVersion: SESSION_VERSION })
+  await refreshUserSession(event, { id: user.id, organizationId: user.organizationId, name: user.name, email: user.email, roles: user.roles, locale: user.locale, currency: user.currency, platformSessionId: context.id, sessionVersion: SESSION_VERSION })
   return { user: await requirePrincipal(event) }
 }

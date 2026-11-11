@@ -3,7 +3,7 @@ import { clientResourceUrl } from "#fsd/shared/auth"
 import type { Apartment } from '#fsd/entities/apartment'
 import { ApartmentSelect } from '#fsd/entities/apartment'
 import { useCurrentUser } from '#fsd/shared/auth'
-import { createFormValidator, formatDate, formatDateTime, formatEuro, useSubmitFormValidation } from '#fsd/shared/lib'
+import { createFormValidator, formatDate, formatDateTime, useMoneyFormat, useSubmitFormValidation } from '#fsd/shared/lib'
 import { DateInput, DeleteConfirmModal, EmptyState, MoneyInput, PageHeader, PhotoFileInput, StatusBadge } from '#fsd/shared/ui'
 import { problemExpenseSchema, problemInputSchema } from '@contracts/problem'
 import { useI18n } from 'vue-i18n'
@@ -35,6 +35,7 @@ type Problem = {
 
 const user = useCurrentUser()
 const { t } = useI18n()
+const { formatMoney } = useMoneyFormat()
 const route = useRoute()
 if (!user.value?.roles.includes('administrator')) await navigateTo('/')
 
@@ -239,7 +240,7 @@ onBeforeUnmount(resetPhotos)
           <p class="hidden min-w-0 max-w-64 truncate text-sm text-[var(--color-muted)] sm:block">{{ problem.apartment.hotel.name }} · {{ problem.apartment.name }}</p>
           <StatusBadge :label="problem.resolvedAt ? t('problems.resolved') : t('problems.open')" :tone="problem.resolvedAt ? 'success' : 'danger'" />
           <span class="hidden shrink-0 text-xs text-[var(--color-muted)] lg:inline">{{ formatDateTime(problem.resolvedAt ?? problem.createdAt) }}</span>
-          <strong class="shrink-0 tabular-nums">{{ formatEuro(problem.totalExpenseEur) }}</strong>
+          <strong class="shrink-0 tabular-nums">{{ formatMoney(problem.totalExpenseEur) }}</strong>
         </div>
       </button>
     </div>
@@ -289,7 +290,7 @@ onBeforeUnmount(resetPhotos)
 
           <section class="problem-detail-section space-y-3">
             <div class="flex items-center justify-between gap-3"><h3 class="font-semibold">{{ t('problems.expenses') }}</h3><UButton v-if="selectedOpen" color="neutral" variant="soft" icon="i-lucide-plus" class="min-h-11" @click="openExpense()">{{ t('problems.addExpense') }}</UButton></div>
-            <p class="text-right text-sm font-semibold">{{ t('problems.total') }}: {{ formatEuro(selected.totalExpenseEur) }}</p>
+            <p class="text-right text-sm font-semibold">{{ t('problems.total') }}: {{ formatMoney(selected.totalExpenseEur) }}</p>
           </section>
         </div>
       </template>
@@ -298,7 +299,7 @@ onBeforeUnmount(resetPhotos)
     <USlideover v-model:open="taskOpen" title="Назначить" :modal="true" :overlay="true"><template #body><form id="problem-task-form" class="form-grid" @submit.prevent="saveTask"><UFormField label="Исполнитель"><USelectMenu v-model="taskForm.assigneeId" :items="taskAssigneeOptions as any" value-key="value" :search-input="{ placeholder: t('common.searchAssignee'), variant: 'none', autofocus: false }" :content="{ bodyLock: true }" :ui="{ content: 'assignee-select-menu', viewport: 'min-h-0 overflow-y-auto overscroll-contain touch-pan-y', item: 'min-h-11 items-center' }" class="w-full" /></UFormField><UFormField label="Название"><UInput v-model="taskForm.title" /></UFormField><UFormField label="Описание" class="w-full"><UTextarea v-model="taskForm.description" class="w-full" /></UFormField><UFormField label="Приоритет"><USelect v-model="taskForm.priority" :items="[{ label: 'Обычный', value: 'normal' }, { label: 'Высокий', value: 'high' }]" class="w-full" /></UFormField><UFormField label="Срок"><DateInput v-model="taskForm.dueOn" /></UFormField><UFormField label="Стоимость"><MoneyInput v-model="taskForm.ownerCostEur" /></UFormField><UFormField label="Чек-лист" class="w-full"><div class="space-y-2"><div v-for="(item, index) in taskForm.checklist" :key="index" class="flex gap-2"><UInput v-model="item.label" class="min-w-0 flex-1" /><UButton color="error" variant="ghost" icon="i-lucide-trash-2" class="min-h-11 min-w-11" @click="taskForm.checklist.splice(index, 1)" /></div><UButton type="button" color="neutral" variant="soft" @click="addChecklistItem">Добавить пункт</UButton></div></UFormField><UAlert v-if="error" color="error" variant="soft" :description="error" /></form></template><template #footer><div class="form-actions form-actions--footer"><UButton color="neutral" variant="ghost" @click="taskOpen = false">{{ t('common.cancel') }}</UButton><UButton type="submit" form="problem-task-form" :loading="pending">Создать задачу</UButton></div></template></USlideover>
     <USlideover v-model:open="expenseOpen" :title="editExpense ? t('problems.editExpense') : t('problems.addExpense')" :modal="true" :overlay="true"><template #body><UForm :key="expenseValidation.formKey.value" id="problem-expense-form" :state="expenseForm" :validate="validateExpense" :validate-on="expenseValidation.validateOn.value" novalidate class="form-grid" @error="expenseValidation.onError" @submit="saveExpense"><UFormField name="occurredOn" :label="t('expenses.date')"><DateInput v-model="expenseForm.occurredOn" /></UFormField><UFormField name="amountEur" :label="t('expenses.amount')"><MoneyInput v-model="expenseForm.amountEur" /></UFormField><UFormField name="description" :label="t('expenses.description')" class="w-full"><UTextarea v-model="expenseForm.description" class="w-full" :rows="4" /></UFormField></UForm></template><template #footer><div class="form-actions form-actions--footer"><UButton color="neutral" variant="ghost" @click="expenseOpen = false">{{ t('common.cancel') }}</UButton><UButton type="submit" form="problem-expense-form" :loading="pending">{{ t('common.save') }}</UButton></div></template></USlideover>
     <UModal v-model:open="resolveOpen" :title="t('problems.resolve')"><template #body><div class="space-y-4"><UFormField :label="t('problems.resolutionComment')"><UTextarea v-model="resolutionComment" class="w-full" :rows="4" /></UFormField><UFormField v-if="selected?.activeSolutionTask" label="Связанная задача"><USelect v-model="taskDisposition" :items="[{ label: 'Отменить задачу', value: 'cancel' }, { label: 'Удалить задачу', value: 'delete' }]" class="w-full" /></UFormField><div class="form-actions"><UButton color="neutral" variant="ghost" @click="resolveOpen = false">{{ t('common.cancel') }}</UButton><UButton :loading="pending" @click="resolve">{{ t('problems.resolve') }}</UButton></div></div></template></UModal>
-    <DeleteConfirmModal v-model:open="expenseDeleteOpen" :title="t('problems.deleteExpenseQuestion')" :description="expenseToDelete ? `${expenseToDelete.expense.description} · ${formatEuro(expenseToDelete.expense.amountEur)}` : ''" :loading="expenseDeletePending" :error="expenseDeleteError" @confirm="removeExpense" />
+    <DeleteConfirmModal v-model:open="expenseDeleteOpen" :title="t('problems.deleteExpenseQuestion')" :description="expenseToDelete ? `${expenseToDelete.expense.description} · ${formatMoney(expenseToDelete.expense.amountEur)}` : ''" :loading="expenseDeletePending" :error="expenseDeleteError" @confirm="removeExpense" />
     <DeleteConfirmModal v-model:open="deleteOpen" :title="t('problems.delete')" :description="t('problems.deleteDescription')" :loading="pending" :error="error" @confirm="removeProblem" />
   </section>
 </template>

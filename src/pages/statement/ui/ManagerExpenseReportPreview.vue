@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import Decimal from 'decimal.js'
-import { formatDate, formatEuro } from '#fsd/shared/lib'
+import { formatDate, useMoneyFormat } from '#fsd/shared/lib'
 import { createManagerExpenseCategoryVisibility, managerExpenseCategoryLines, visibleManagerExpenseCategories, type ManagerExpenseCategory as Category, type ManagerExpenseCategoryVisibility, type ManagerExpenseLine as Line } from '../model/manager-expense-report'
 import { useI18n } from 'vue-i18n'
 
@@ -14,6 +14,7 @@ const emit = defineEmits<{
   remove: [id: string]
 }>()
 const { t } = useI18n()
+const { currencySymbol, formatMoney } = useMoneyFormat()
 const labels = computed<Record<Category, string>>(() => ({ cleaning: t('work.cleanings'), inventory: t('reports.procurement'), task: t('work.tasks'), other: t('reports.finance') }))
 const categories = computed(() => visibleManagerExpenseCategories(props.categoryVisibility, props.editable))
 const managerPresentation = computed(() => !props.editable && !props.embedded)
@@ -60,7 +61,7 @@ function clearZeroAmount(event: FocusEvent) {
             @click="toggleCategory(category)"
           >
             <h2 class="min-w-0 font-semibold">{{ labels[category] }}</h2>
-            <strong class="tabular-nums">{{ formatEuro(categoryTotal(category)) }}</strong>
+            <strong class="tabular-nums">{{ formatMoney(categoryTotal(category)) }}</strong>
           </button>
         </div>
         <div v-show="showCategoryLines(category)" :id="`${categoryId}-${category}`" class="manager-expense-lines">
@@ -68,7 +69,9 @@ function clearZeroAmount(event: FocusEvent) {
             <form v-if="editable && editingLineId === line.id" class="manager-expense-editor" :class="{ 'manager-expense-editor--cleaning': category === 'cleaning' }" @submit.prevent="emit('close')">
               <UInput v-if="category !== 'cleaning'" class="manager-expense-editor__description w-full" :model-value="line.description" :placeholder="t('hotels.name')" autofocus @update:model-value="value => emit('update', line.id, { description: value })" />
               <UInput class="w-full" :model-value="line.occurredOn ?? ''" type="date" @update:model-value="value => emit('update', line.id, { occurredOn: value || null })" />
-              <UInput class="w-full" :model-value="line.amountEur" type="number" step="0.01" @focus="clearZeroAmount" @update:model-value="value => emit('update', line.id, { amountEur: Number(value) || 0 })" />
+              <UInput class="w-full" :model-value="line.amountEur" type="number" step="0.01" @focus="clearZeroAmount" @update:model-value="value => emit('update', line.id, { amountEur: Number(value) || 0 })">
+                <template #trailing><span class="text-sm text-[var(--color-muted)]">{{ currencySymbol }}</span></template>
+              </UInput>
               <div class="manager-expense-editor__actions flex gap-1"><UButton type="submit" color="neutral" variant="ghost" icon="i-lucide-check" :aria-label="t('common.save')" class="min-h-11 min-w-11" /><UButton type="button" color="error" variant="ghost" icon="i-lucide-trash-2" :aria-label="t('common.delete')" class="min-h-11 min-w-11" @click="emit('remove', line.id)" /></div>
             </form>
             <div
@@ -91,15 +94,15 @@ function clearZeroAmount(event: FocusEvent) {
                     <span v-if="line.problemId && !line.included">{{ t('problems.open') }}</span>
                   </span>
                 </span>
-                <span class="manager-expense-row__amount tabular-nums">{{ formatEuro(line.amountEur) }}</span>
+                <span class="manager-expense-row__amount tabular-nums">{{ formatMoney(line.amountEur) }}</span>
               </button>
             </div>
           </template>
         </div>
       </section>
-      <section v-if="managerPresentation" class="manager-expense-total flex items-center justify-between gap-4 px-5 sm:px-6"><span class="text-sm text-[var(--color-muted)]">{{ t('reports.currentTotal') }}</span><strong class="text-2xl tracking-[-0.03em] tabular-nums">{{ formatEuro(totalEur) }}</strong></section>
+      <section v-if="managerPresentation" class="manager-expense-total flex items-center justify-between gap-4 px-5 sm:px-6"><span class="text-sm text-[var(--color-muted)]">{{ t('reports.currentTotal') }}</span><strong class="text-2xl tracking-[-0.03em] tabular-nums">{{ formatMoney(totalEur) }}</strong></section>
     </div>
-    <section v-if="!managerPresentation" :class="embedded ? 'flex items-center justify-between gap-4 px-5 py-5 sm:px-6' : 'manager-expense-total surface flex items-center justify-between gap-4 p-5 sm:p-6'"><span class="text-sm text-[var(--color-muted)]">{{ t('reports.currentTotal') }}</span><strong class="text-2xl tracking-[-0.03em] tabular-nums">{{ formatEuro(totalEur) }}</strong></section>
+    <section v-if="!managerPresentation" :class="embedded ? 'flex items-center justify-between gap-4 px-5 py-5 sm:px-6' : 'manager-expense-total surface flex items-center justify-between gap-4 p-5 sm:p-6'"><span class="text-sm text-[var(--color-muted)]">{{ t('reports.currentTotal') }}</span><strong class="text-2xl tracking-[-0.03em] tabular-nums">{{ formatMoney(totalEur) }}</strong></section>
   </div>
 </template>
 

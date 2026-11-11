@@ -1,4 +1,5 @@
 import type { NameTranslations } from '../../../shared/utils/localized-name'
+import { currencies, defaultCurrency } from '@contracts/currency'
 import { relations, sql } from 'drizzle-orm'
 import {
   boolean,
@@ -24,6 +25,7 @@ const timestamps = {
 
 export const userRoleEnum = pgEnum('user_role', ['administrator', 'manager', 'cleaner', 'specialist'])
 export const appLocaleEnum = pgEnum('app_locale', ['ru', 'en', 'he'])
+export const appCurrencyEnum = pgEnum('app_currency', currencies)
 export const userStatusEnum = pgEnum('user_status', ['invited', 'active', 'blocked', 'archived'])
 export const hotelStatusEnum = pgEnum('hotel_status', ['active', 'archived'])
 export const apartmentStatusEnum = pgEnum('apartment_status', ['active', 'inactive', 'archived'])
@@ -61,6 +63,7 @@ export const users = pgTable('users', {
   profilePhotoKey: text('profile_photo_key'),
   publicBio: jsonb('public_bio').$type<import('../../../shared/contracts/public-site').PublicBio>().notNull().default(sql`'{"ru":"","en":"","he":"","bg":""}'::jsonb`),
   locale: appLocaleEnum('locale').notNull().default('ru'),
+  currency: appCurrencyEnum('currency').notNull().default(defaultCurrency),
   roles: userRoleEnum('roles').array().notNull().default(sql`ARRAY['manager']::user_role[]`),
   status: userStatusEnum('status').notNull().default('invited'),
   isSuperuser: boolean('is_superuser').notNull().default(false),
@@ -487,6 +490,7 @@ export const financialEntries = pgTable('financial_entries', {
 export const notifications = pgTable('notifications', {
   id: uuid('id').primaryKey().defaultRandom(),
   organizationId: uuid('organization_id').notNull().references(() => organizations.id),
+  sourceOrganizationId: uuid('source_organization_id').references(() => organizations.id, { onDelete: 'cascade' }),
   userId: uuid('user_id').notNull().references(() => users.id),
   type: notificationTypeEnum('type').notNull(),
   eventKey: text('event_key'),
@@ -497,7 +501,9 @@ export const notifications = pgTable('notifications', {
   readAt: timestamp('read_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 }, table => [
-  index('notification_user_created_idx').on(table.organizationId, table.userId, table.createdAt)
+  index('notification_user_created_idx').on(table.organizationId, table.userId, table.createdAt),
+  index('notification_source_organization_idx').on(table.sourceOrganizationId, table.eventKey).where(sql`source_organization_id is not null`),
+  index('notification_system_user_created_idx').on(table.userId, table.createdAt.desc(), table.id.desc()).where(sql`not crm_visible`)
 ])
 
 export const managerExpenseReports = pgTable('manager_expense_reports', {
@@ -744,6 +750,15 @@ export const registrationAttempts = pgTable('registration_attempts', {
   resetsAt: timestamp('resets_at', { withTimezone: true }).notNull()
 })
 
+export const systemNotificationEmailPreferences = pgTable('system_notification_email_preferences', {
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  category: text('category').$type<import('@contracts/system-notifications').SystemEmailCategory>().notNull(),
+  enabled: boolean('enabled').notNull()
+}, table => [
+  primaryKey({ columns: [table.userId, table.category] }),
+  check('system_notification_email_category_check', sql`${table.category} in ('setup', 'registration', 'invitationFailure')`)
+])
+
 export const notificationPreferences = pgTable('notification_preferences', {
   organizationId: uuid('organization_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
   userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
@@ -787,15 +802,19 @@ export const apartmentPublicationPhotos = pgTable('apartment_publication_photos'
 export const messagingConnections = pgTable('messaging_connections', {
   id: uuid('id').primaryKey().defaultRandom(),
   organizationId: uuid('organization_id').notNull().references(() => organizations.id),
-  channel: text('channel').notNull().default('telegram'),
-  botId: text('bot_id').notNull().unique(),
+  channel: text('channel').$type<import('../../../shared/contracts/messaging').MessagingChannel>().notNull().default('telegram'),
+  botId: text('bot_id').notNull(),
   botName: text('bot_name').notNull(),
   botUsername: text('bot_username').notNull(),
   encryptedToken: text('encrypted_token').notNull(),
   webhookSecret: text('webhook_secret').notNull(),
+  verificationPending: boolean('verification_pending').notNull().default(false),
   connected: boolean('connected').notNull().default(false),
   ...timestamps
-}, table => [uniqueIndex('messaging_org_channel_idx').on(table.organizationId, table.channel)])
+}, table => [
+  uniqueIndex('messaging_org_channel_idx').on(table.organizationId, table.channel),
+  uniqueIndex('messaging_channel_bot_idx').on(table.channel, table.botId),
+])
 
 export const messagingContacts = pgTable('messaging_contacts', {
   id: uuid('id').primaryKey().defaultRandom(),

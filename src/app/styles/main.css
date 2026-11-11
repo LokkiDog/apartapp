@@ -3,6 +3,9 @@
 @import "tailwindcss";
 @import "@nuxt/ui";
 
+@source "../..";
+@source "../../../app";
+
 :root {
   color-scheme: light;
   --color-canvas: #f4f7f5;

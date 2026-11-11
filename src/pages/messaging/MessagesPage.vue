@@ -358,11 +358,10 @@ function formattedTime(value: string) {
     <UAlert
       v-if="error || inboxError"
       color="error"
+      orientation="horizontal"
       :description="error || t('common.error')"
       ><template #actions
-        ><UButton
-          color="error"
-          variant="soft"
+        ><UButton color="error" variant="ghost"
           @click="retryInbox"
           >{{ t('messaging.retry') }}</UButton
         ></template
@@ -412,7 +411,7 @@ function formattedTime(value: string) {
             {{ conversation.apartmentName }} · {{ conversation.checkInOn }}
           </p>
           <p v-else class="text-sm text-[var(--color-muted)]">
-            Telegram<span v-if="conversation.username">
+            {{ conversation.channel === 'line' ? 'LINE' : 'Telegram' }}<span v-if="conversation.username">
               · @{{ conversation.username }}</span
             >
           </p>
@@ -443,9 +442,13 @@ function formattedTime(value: string) {
                 icon="i-lucide-arrow-left"
                 class="md:hidden"
                 :aria-label="t('messaging.back')"
-              /><strong class="truncate">{{
-                selected?.name || t('messaging.guest')
-              }}</strong>
+              />
+              <div class="min-w-0">
+                <strong class="block truncate">{{ selected?.name || t('messaging.guest') }}</strong>
+                <span v-if="selected" class="text-xs text-[var(--color-muted)]">
+                  {{ selected.channel === 'line' ? 'LINE' : 'Telegram' }}
+                </span>
+              </div>
             </div>
             <UButton
               color="neutral"
@@ -552,7 +555,7 @@ function formattedTime(value: string) {
               class="w-full"
             />
             <div class="flex flex-wrap items-center gap-2">
-              <label class="messaging-upload"
+              <label v-if="selected?.channel === 'telegram'" class="messaging-upload"
                 ><UIcon name="i-lucide-paperclip" />{{ t('messaging.file')
                 }}<input
                   ref="fileInput"
@@ -617,9 +620,10 @@ function formattedTime(value: string) {
           ><UAlert
             v-if="staysError || error"
             color="error"
+            orientation="horizontal"
             :description="error || t('common.error')"
             ><template #actions
-              ><UButton @click="loadStays()">{{
+              ><UButton color="error" variant="ghost" @click="loadStays()">{{
                 t('messaging.retry')
               }}</UButton></template
             ></UAlert

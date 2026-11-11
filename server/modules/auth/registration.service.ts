@@ -1,3 +1,5 @@
+import { systemNotificationEvents } from '@contracts/system-notifications'
+import { activeSystemRecipients, publishSystemNotification } from '../../infrastructure/notification/system'
 import { createHash, randomBytes } from 'node:crypto'
 import { and, eq, sql } from 'drizzle-orm'
 import { db } from '../../infrastructure/database/client'
@@ -67,6 +69,12 @@ export async function confirmRegistration(token: string) {
     const [user] = await tx.insert(users).values({ organizationId: client.id, email: pending.email, name: pending.name, passwordHash: pending.passwordHash, roles: ['administrator'], status: 'active' }).returning()
     if (!user) throw new Error('Administrator creation failed')
     await tx.insert(platformAuditLogs).values({ actorId: user.id, organizationId: client.id, action: 'client.registered' })
+    await publishSystemNotification(tx, await activeSystemRecipients(tx), {
+      eventKey: systemNotificationEvents.clientRegistered,
+      sourceOrganizationId: client.id,
+      title: 'Новая компания',
+      body: `${client.name} завершила самостоятельную регистрацию.`
+    })
     return { ok: true }
   })
 }

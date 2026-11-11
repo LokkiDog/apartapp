@@ -1,6 +1,35 @@
+const errorNoticeRoot = 'gap-2 bg-[var(--tone-danger-bg)] p-2 px-3 text-[color:var(--tone-danger-ink)]'
+
 export default defineAppConfig({
   ui: {
     colors: { primary: 'emerald', neutral: 'slate' },
+    alert: {
+      compoundVariants: [
+        {
+          color: 'error',
+          class: {
+            root: errorNoticeRoot,
+            title: 'break-words leading-5',
+            description: 'break-words leading-5 opacity-100'
+          }
+        },
+        {
+          color: 'error',
+          orientation: 'horizontal',
+          class: { root: 'flex-wrap gap-y-0', wrapper: 'flex-[1_1_12rem]' }
+        }
+      ]
+    },
+    toast: {
+      compoundVariants: [{
+        color: 'error',
+        class: {
+          root: errorNoticeRoot,
+          title: 'break-words leading-5 text-[color:var(--tone-danger-ink)]',
+          description: 'break-words leading-5 text-[color:var(--tone-danger-ink)]'
+        }
+      }]
+    },
     button: { slots: { base: 'min-h-11 rounded-[10px] font-semibold cursor-pointer disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[background-color,color,box-shadow,scale] duration-150 ease-out active:scale-[0.96]' } },
     input: { slots: { root: 'w-full', base: 'min-h-11 rounded-[10px] bg-white text-[var(--color-ink)] ring-[var(--color-line)] focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]' } },
     select: { slots: { base: 'w-full h-11 min-h-11 rounded-[10px] bg-white text-[var(--color-ink)] ring-[var(--color-line)] hover:bg-white focus:bg-white focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]' } },

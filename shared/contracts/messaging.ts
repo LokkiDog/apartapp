@@ -10,6 +10,20 @@ export const telegramConnectionSchema = z
       .max(200),
   })
   .strict()
+export type MessagingChannel = 'telegram' | 'line'
+export const messagingSetupEvents: Record<MessagingChannel, string> = {
+  telegram: 'messaging_setup_telegram',
+  line: 'messaging_setup_line',
+}
+export const lineConnectionSchema = z.object({
+  token: z.string().trim().min(1).max(2048),
+  secret: z.string().trim().regex(/^[a-f0-9]{32}$/i),
+}).strict()
+export interface LineConnection extends MessagingConnection {
+  pending: boolean
+  webhookUrl: string | null
+}
+
 export const messageInputSchema = z
   .object({
     requestId: z.uuid(),
@@ -32,6 +46,7 @@ export interface MessagingConnection {
   url: string | null
 }
 export interface MessagingConversation {
+  channel: MessagingChannel
   id: string
   name: string
   username: string

@@ -82,7 +82,7 @@ const notificationAppearance: Record<NotificationType, { icon: string; className
   work_rescheduled: { icon: 'i-lucide-calendar-clock', className: 'bg-[#fff4d7] text-[#9a5b10]' },
   work_canceled: { icon: 'i-lucide-circle-x', className: 'bg-[#f1f3f2] text-[#647a70]' },
   problem: { icon: 'i-lucide-circle-alert', className: 'bg-[#ffebec] text-[#b63843]' },
-  manager_expense_report_published: { icon: 'i-lucide-receipt-euro', className: 'bg-[#e8f1f7] text-[#356882]' },
+  manager_expense_report_published: { icon: 'i-lucide-receipt', className: 'bg-[#e8f1f7] text-[#356882]' },
   cleaning_changed: { icon: 'i-lucide-broom', className: 'bg-[var(--color-primary-soft)] text-[var(--color-primary)]' },
   task_resolved: { icon: 'i-lucide-circle-check', className: 'bg-[#e8f1f7] text-[#356882]' },
   task_returned: { icon: 'i-lucide-rotate-ccw', className: 'bg-[#fff4d7] text-[#9a5b10]' },
@@ -250,8 +250,8 @@ watch(notificationState.revision, () => {
       </div>
 
       <template v-else>
-        <UAlert v-if="visibleError" color="error" variant="soft" icon="i-lucide-circle-alert" :description="visibleError">
-          <template #actions><UButton color="error" variant="soft" size="sm" icon="i-lucide-refresh-cw" @click="retry">{{ t('notifications.retry') }}</UButton></template>
+        <UAlert v-if="visibleError" color="error" orientation="horizontal" variant="soft" icon="i-lucide-circle-alert" :description="visibleError">
+          <template #actions><UButton color="error" variant="ghost" size="sm" icon="i-lucide-refresh-cw" @click="retry">{{ t('notifications.retry') }}</UButton></template>
         </UAlert>
 
         <UAlert v-if="push.visible.value" color="primary" variant="soft" icon="i-lucide-bell-ring" :title="t('notifications.pushTitle')" :description="pushDescription">

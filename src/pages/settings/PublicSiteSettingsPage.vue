@@ -38,7 +38,7 @@ async function save() {
   <section class="page-wrap space-y-4">
     <PageHeader :title="t('siteSettings.title')" />
     <USkeleton v-if="status === 'pending' || status === 'idle'" class="h-64" />
-    <UAlert v-else-if="loadError" color="error" :description="t('common.error')"><template #actions><UButton class="min-h-11" @click="refresh()">{{ t('publication.retry') }}</UButton></template></UAlert>
+    <UAlert v-else-if="loadError" color="error" orientation="horizontal" :description="t('common.error')"><template #actions><UButton color="error" variant="ghost" class="min-h-11" @click="refresh()">{{ t('publication.retry') }}</UButton></template></UAlert>
     <UForm v-else-if="data" :state="form" :validate="validate" :validate-on="validation.validateOn.value" class="surface grid max-w-3xl gap-4 p-4 sm:p-5" novalidate @error="validation.onError" @submit="save">
       <USwitch v-model="form.enabled" :label="t('siteSettings.enabled')" class="min-h-11" :disabled="pending" />
       <UFormField name="websiteUrl" :label="t('siteSettings.address')" required><UInput v-model="form.websiteUrl" type="url" placeholder="https://aparts-bansko.com" class="w-full" :disabled="pending" /></UFormField>

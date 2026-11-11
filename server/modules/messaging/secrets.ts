@@ -43,7 +43,7 @@ export function decryptBotToken(value: string) {
   } catch {
     throw createError({
       statusCode: 503,
-      statusMessage: 'Не удалось расшифровать токен Telegram',
+      statusMessage: 'Не удалось расшифровать данные подключения',
     })
   }
 }

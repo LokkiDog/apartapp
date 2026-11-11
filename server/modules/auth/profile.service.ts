@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto'
 import { and, eq } from 'drizzle-orm'
 import { createError } from 'h3'
+import { z } from 'zod'
+import { currencies } from '@contracts/currency'
 import sharp from 'sharp'
 import type { Actor } from '../../infrastructure/auth/actor'
 import { db } from '../../infrastructure/database/client'
@@ -16,7 +18,7 @@ function ownUser(actor: Actor) {
 export async function getOwnProfile(actor: Actor): Promise<OwnProfile> {
   const user = await db.query.users.findFirst({ where: ownUser(actor) })
   if (!user) throw createError({ statusCode: 404, statusMessage: 'Пользователь не найден' })
-  return { name: user.name, phone: user.phone, publicBio: user.publicBio, hasPhoto: Boolean(user.profilePhotoKey), photoVersion: user.updatedAt.toISOString() }
+  return { currency: user.currency, name: user.name, phone: user.phone, publicBio: user.publicBio, hasPhoto: Boolean(user.profilePhotoKey), photoVersion: user.updatedAt.toISOString() }
 }
 export async function updateOwnProfile(actor: Actor, input: unknown) {
   const data = profileUpdateSchema.parse(input)
@@ -24,6 +26,17 @@ export async function updateOwnProfile(actor: Actor, input: unknown) {
   if (!user) throw createError({ statusCode: 404, statusMessage: 'Пользователь не найден' })
   return user
 }
+const currencyUpdateSchema = z.strictObject({ currency: z.enum(currencies) })
+
+export async function updateOwnCurrency(actor: Actor, input: unknown) {
+  const result = currencyUpdateSchema.safeParse(input)
+  if (!result.success) throw createError({ statusCode: 400, statusMessage: 'Invalid currency' })
+  const { currency } = result.data
+  const [user] = await db.update(users).set({ currency }).where(ownUser(actor)).returning({ currency: users.currency })
+  if (!user) throw createError({ statusCode: 404, statusMessage: 'Пользователь не найден' })
+  return user
+}
+
 export async function ownProfilePhoto(actor: Actor) {
   const user = await db.query.users.findFirst({ where: ownUser(actor), columns: { profilePhotoKey: true } })
   return readProfilePhoto(user?.profilePhotoKey)

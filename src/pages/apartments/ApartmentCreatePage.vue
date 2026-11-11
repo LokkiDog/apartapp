@@ -5,12 +5,13 @@ import {
   type ApartmentFormManager,
   type ApartmentFormType
 } from '#fsd/features/manage-apartment'
-import { useCurrentUser } from '#fsd/shared/auth'
+import { useCurrentUser, useCurrentUserScope } from '#fsd/shared/auth'
 import { PageHeader } from '#fsd/shared/ui'
 import ApartmentPhotoPanel from './ApartmentPhotoPanel.vue'
 import { useI18n } from 'vue-i18n'
 
 const currentUser = useCurrentUser()
+const userScope = useCurrentUserScope()
 const { t } = useI18n()
 if (currentUser.value && !currentUser.value.roles.includes('administrator')) {
   await navigateTo('/apartments')
@@ -21,9 +22,9 @@ const [
   { data: users, status: usersStatus, error: usersError },
   { data: types, status: typesStatus, error: typesError }
 ] = await Promise.all([
-  useAsyncData('apartment-form-hotels', () => currentUser.value ? $fetch<ApartmentFormHotel[]>('/api/hotels') : Promise.resolve([]), { server: false, default: () => [], watch: [currentUser] }),
-  useAsyncData('apartment-form-users', () => currentUser.value ? $fetch<ApartmentFormManager[]>('/api/users') : Promise.resolve([]), { server: false, default: () => [], watch: [currentUser] }),
-  useAsyncData('apartment-form-types', () => currentUser.value ? $fetch<ApartmentFormType[]>('/api/apartment-types') : Promise.resolve([]), { server: false, default: () => [], watch: [currentUser] })
+  useAsyncData('apartment-form-hotels', () => currentUser.value ? $fetch<ApartmentFormHotel[]>('/api/hotels') : Promise.resolve([]), { server: false, default: () => [], watch: [userScope] }),
+  useAsyncData('apartment-form-users', () => currentUser.value ? $fetch<ApartmentFormManager[]>('/api/users') : Promise.resolve([]), { server: false, default: () => [], watch: [userScope] }),
+  useAsyncData('apartment-form-types', () => currentUser.value ? $fetch<ApartmentFormType[]>('/api/apartment-types') : Promise.resolve([]), { server: false, default: () => [], watch: [userScope] })
 ])
 
 const loading = computed(() => [hotelsStatus.value, usersStatus.value, typesStatus.value].some(status => status === 'idle' || status === 'pending'))
@@ -31,6 +32,7 @@ const loadError = computed(() => hotelsError.value || usersError.value || typesE
 const pendingPhotos = ref<File[]>([])
 const uploadPending = ref(false)
 const photoError = ref('')
+const createdApartmentId = ref<string>()
 
 function addPhotos(files: File[]) {
   photoError.value = ''
@@ -42,8 +44,13 @@ function removePendingPhoto(index: number) {
 }
 
 async function uploadPendingPhotos(apartmentId: string) {
-  if (!pendingPhotos.value.length) return undefined
+  if (uploadPending.value) return
+  if (!pendingPhotos.value.length) {
+    await navigateTo('/apartments')
+    return
+  }
   uploadPending.value = true
+  photoError.value = ''
   const failed: File[] = []
   for (const photo of pendingPhotos.value) {
     try {
@@ -52,13 +59,15 @@ async function uploadPendingPhotos(apartmentId: string) {
       body.set('entityId', apartmentId)
       body.set('file', photo)
       await $fetch('/api/attachments', { method: 'POST', body })
-    } catch {
+    } catch (cause: any) {
       failed.push(photo)
+      photoError.value = cause?.data?.statusMessage ?? t('common.error')
     }
   }
-  uploadPending.value = false
   pendingPhotos.value = failed
-  return failed.length ? `/apartments/${apartmentId}/edit?photoUploadFailed=${failed.length}` : undefined
+  uploadPending.value = false
+  if (failed.length) createdApartmentId.value = apartmentId
+  else await navigateTo('/apartments')
 }
 </script>
 
@@ -92,7 +101,13 @@ async function uploadPendingPhotos(apartmentId: string) {
       :description="t('scope.loadErrorDescription')"
     />
     <template v-else>
-      <UAlert v-if="photoError" color="error" variant="soft" :description="photoError" />
+      <UAlert
+        v-if="photoError"
+        color="error"
+        variant="soft"
+        :title="createdApartmentId ? t('apartments.photoUploadFailed') : undefined"
+        :description="photoError"
+      />
       <ApartmentPhotoPanel
         :pending-photos="pendingPhotos"
         :uploading="uploadPending"
@@ -100,7 +115,16 @@ async function uploadPendingPhotos(apartmentId: string) {
         @remove-pending="removePendingPhoto"
         @invalid-files="photoError = t('apartments.photoFormatError')"
       />
+      <div v-if="createdApartmentId" class="form-actions form-actions--footer">
+        <UButton :to="`/apartments/${createdApartmentId}/edit`" color="neutral" variant="ghost" class="min-h-11" :disabled="uploadPending">
+          {{ t('apartments.edit') }}
+        </UButton>
+        <UButton v-if="pendingPhotos.length" class="min-h-11" :loading="uploadPending" :disabled="uploadPending" @click="uploadPendingPhotos(createdApartmentId)">
+          {{ t('apartments.retryPhotoUpload') }}
+        </UButton>
+      </div>
       <ApartmentForm
+        v-else
         mode="create"
         :hotels="hotels ?? []"
         :managers="users ?? []"

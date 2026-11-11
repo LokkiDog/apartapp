@@ -1,5 +1,6 @@
 import type { TDocumentDefinitions } from 'pdfmake/interfaces'
-import { formatEuro, getFormatLocale } from '../../../shared/lib'
+import { defaultCurrency, type Currency } from '@contracts/currency'
+import { formatCurrency, getFormatLocale } from '../../../shared/lib/format'
 import { managerExpenseCategories, managerExpenseCategoryLines, managerExpenseReportLines, managerExpenseReportTotal, type ManagerExpenseCategory, type ManagerExpenseCategoryVisibility, type ManagerExpenseLine } from '../model/manager-expense-report'
 
 type ManagerExpensePdfReport = {
@@ -33,8 +34,9 @@ export function managerExpensePdfFileName(report: ManagerExpensePdfReport) {
   return `${prefix}-${safeFilePart(report.apartmentName)}-${report.month}.pdf`
 }
 
-export function managerExpensePdfDefinition(report: ManagerExpensePdfReport): TDocumentDefinitions {
+export function managerExpensePdfDefinition(report: ManagerExpensePdfReport, currency: Currency = defaultCurrency): TDocumentDefinitions {
   const locale = getFormatLocale()
+  const formatAmount = (amount: number) => formatCurrency(amount, currency, locale, 'code')
   const copy = locale === 'en-US'
     ? { title: 'Expense report', name: 'Name', date: 'Date', amount: 'Amount', total: 'Monthly total', subject: 'Monthly expense report' }
     : locale === 'he-IL'
@@ -55,7 +57,7 @@ export function managerExpensePdfDefinition(report: ManagerExpensePdfReport): TD
     const categoryTotal = Number(categoryLines.reduce((sum, line) => sum + line.amountEur, 0).toFixed(2))
     content.push({
       stack: [
-        { columns: [{ text: categoryLabels[getFormatLocale()]?.[category] ?? categoryLabels['ru-RU']![category], style: 'category' }, { text: formatEuro(categoryTotal), alignment: 'right', style: 'categoryAmount' }], margin: [0, 14, 0, 7] },
+        { columns: [{ text: categoryLabels[getFormatLocale()]?.[category] ?? categoryLabels['ru-RU']![category], style: 'category' }, { text: formatAmount(categoryTotal), alignment: 'right', style: 'categoryAmount' }], margin: [0, 14, 0, 7] },
         ...(category === 'inventory' || !categoryLines.length
           ? []
           : [{
@@ -67,7 +69,7 @@ export function managerExpensePdfDefinition(report: ManagerExpensePdfReport): TD
                       [{ text: copy.date, style: 'tableHeader' }, { text: copy.amount, style: ['tableHeader', 'tableAmount'] }],
                       ...categoryLines.map(line => [
                         { text: formatDate(line.occurredOn), style: 'tableText' },
-                        { text: formatEuro(line.amountEur), style: 'tableAmount' }
+                        { text: formatAmount(line.amountEur), style: 'tableAmount' }
                       ])
                     ]
                   : [
@@ -75,7 +77,7 @@ export function managerExpensePdfDefinition(report: ManagerExpensePdfReport): TD
                       ...categoryLines.map(line => [
                         { text: line.description, style: 'tableText' },
                         { text: formatDate(line.occurredOn), style: 'tableDate' },
-                        { text: formatEuro(line.amountEur), style: 'tableAmount' }
+                        { text: formatAmount(line.amountEur), style: 'tableAmount' }
                       ])
                     ]
               },
@@ -95,7 +97,7 @@ export function managerExpensePdfDefinition(report: ManagerExpensePdfReport): TD
   }
 
   content.push({
-    columns: [{ text: copy.total, style: 'totalLabel' }, { text: formatEuro(total), alignment: 'right', style: 'totalAmount' }],
+    columns: [{ text: copy.total, style: 'totalLabel' }, { text: formatAmount(total), alignment: 'right', style: 'totalAmount' }],
     margin: [0, 24, 0, 0]
   })
 
@@ -121,7 +123,7 @@ export function managerExpensePdfDefinition(report: ManagerExpensePdfReport): TD
   }
 }
 
-export async function downloadManagerExpensePdf(report: ManagerExpensePdfReport) {
+export async function downloadManagerExpensePdf(report: ManagerExpensePdfReport, currency: Currency) {
   if (!import.meta.client) return
 
   const [{ default: pdfMake }, { default: virtualFileSystem }] = await Promise.all([
@@ -129,5 +131,5 @@ export async function downloadManagerExpensePdf(report: ManagerExpensePdfReport)
     import('pdfmake/build/vfs_fonts.js')
   ])
   pdfMake.addVirtualFileSystem(virtualFileSystem)
-  await pdfMake.createPdf(managerExpensePdfDefinition(report)).download(managerExpensePdfFileName(report))
+  await pdfMake.createPdf(managerExpensePdfDefinition(report, currency)).download(managerExpensePdfFileName(report))
 }
