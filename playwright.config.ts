@@ -5,7 +5,7 @@ export default defineConfig({
   timeout: 30_000,
   workers: 1,
   use: {
-    baseURL: process.env.E2E_BASE_URL || 'http://localhost:3017',
+    baseURL: process.env.E2E_BASE_URL || 'http://localhost:2000',
     trace: 'retain-on-failure'
   },
   projects: [

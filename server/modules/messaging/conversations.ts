@@ -3,6 +3,7 @@ import { createError } from 'h3'
 import { and, desc, eq, inArray, sql } from 'drizzle-orm'
 import { db } from '../../infrastructure/database/client'
 import {
+  guests,
   messagingAttachments,
   messagingConnections,
   messagingContacts,
@@ -18,44 +19,83 @@ import { assertMessagingAccess, assertMessagingEnabled } from './access'
 import { fileStorage } from '../../infrastructure/storage/local'
 import { decryptBotToken } from './secrets'
 import { downloadTelegramFile } from './telegram'
-import { MAX_MESSAGE_FILE_BYTES } from '../../../shared/contracts/messaging'
+import { MAX_MESSAGE_FILE_BYTES, type MessagingChannel } from '../../../shared/contracts/messaging'
 
 export async function listConversations(actor: Actor, before?: string) {
   await assertMessagingAccess(actor)
-  let cursor
-  if (before) cursor = await findConversation(actor, before)
-  const rows = await conversationQuery(actor)
-    .where(
-      and(
-        eq(messagingConversations.organizationId, actor.organizationId),
-        cursor
-          ? sql`(${messagingConversations.lastMessageAt}, ${messagingConversations.id}) < (select last_message_at, id from messaging_conversations where id = ${cursor.id} and organization_id = ${actor.organizationId})`
-          : undefined,
-      ),
-    )
-    .orderBy(
-      desc(messagingConversations.lastMessageAt),
-      desc(messagingConversations.id),
-    )
-    .limit(50)
-  return { items: rows, next: rows.length === 50 ? rows.at(-1)!.id : null }
+  const scopedChats = db.$with('scoped_chats').as(
+    conversationQuery(actor, db).where(eq(messagingConversations.organizationId, actor.organizationId)),
+  )
+  const group = sql`partition by coalesce(${scopedChats.guestId}, ${scopedChats.id}), ${scopedChats.guestId} is not null`
+  const chats = db.$with('inbox_chats').as(
+    db.select({
+      id: scopedChats.id,
+      channel: scopedChats.channel,
+      name: scopedChats.name,
+      username: scopedChats.username,
+      stayId: scopedChats.stayId,
+      guestName: scopedChats.guestName,
+      guestId: scopedChats.guestId,
+      guestDisplayName: scopedChats.guestDisplayName,
+      checkInOn: scopedChats.checkInOn,
+      checkOutOn: scopedChats.checkOutOn,
+      apartmentName: scopedChats.apartmentName,
+      rank: sql<number>`row_number() over (${group} order by ${scopedChats.id})`.as('chat_rank'),
+      threadUnread: sql<number>`sum(${scopedChats.unread}) over (${group})`.mapWith(Number).as('thread_unread'),
+      threadActivity: sql<Date>`max(${scopedChats.lastMessageAt}) over (${group})`
+        .mapWith(messagingConversations.lastMessageAt).as('thread_activity'),
+      threadChannels: sql<MessagingChannel[]>`array_agg(${scopedChats.channel}) over (${group})`.as('thread_channels'),
+    }).from(scopedChats),
+  )
+  const cursor = before
+    ? db.select({ activity: chats.threadActivity, id: chats.id }).from(chats).where(and(
+        eq(chats.rank, 1),
+        sql`(${chats.id} = ${before} or ${chats.guestId} = (select guest_id from inbox_chats where id = ${before}))`,
+      ))
+    : null
+  const rows = await db.with(scopedChats, chats).select().from(chats)
+    .where(and(
+      eq(chats.rank, 1),
+      cursor ? sql`(${chats.threadActivity}, ${chats.id}) < (${cursor})` : undefined,
+    ))
+    .orderBy(desc(chats.threadActivity), desc(chats.id))
+    .limit(51)
+  return {
+    items: rows.slice(0, 50).map(({ rank, threadActivity, threadUnread, threadChannels, ...row }) => ({
+      ...row,
+      lastMessageAt: threadActivity,
+      unread: threadUnread,
+      channels: [...new Set(threadChannels)].sort(),
+    })),
+    next: rows.length > 50 ? rows[49]!.id : null,
+  }
 }
 
-function conversationQuery(actor: Actor) {
-  return db
-    .select({
-      id: messagingConversations.id,
-      channel: messagingConnections.channel,
-      name: messagingContacts.name,
-      username: messagingContacts.username,
-      unread: messagingConversations.unread,
-      lastMessageAt: messagingConversations.lastMessageAt,
-      stayId: messagingConversations.stayId,
-      guestName: stays.guestName,
-      checkInOn: stays.checkInOn,
-      checkOutOn: stays.checkOutOn,
-      apartmentName: apartments.name,
-    })
+type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0]
+
+const conversationFields = {
+  id: messagingConversations.id,
+  channel: messagingConnections.channel,
+  connected: messagingConnections.connected,
+  name: messagingContacts.name,
+  username: messagingContacts.username,
+  unread: messagingConversations.unread,
+  lastMessageAt: messagingConversations.lastMessageAt,
+  stayId: messagingConversations.stayId,
+  guestName: stays.guestName,
+  guestId: sql<string | null>`${guests.id}`.as('guest_id'),
+  guestDisplayName: sql<string | null>`${guests.name}`.as('guest_display_name'),
+  checkInOn: stays.checkInOn,
+  checkOutOn: stays.checkOutOn,
+  apartmentName: sql<string | null>`${apartments.name}`.as('apartment_name'),
+}
+
+function conversationQuery(
+  actor: Actor,
+  database: typeof db | Transaction,
+) {
+  return database
+    .select(conversationFields)
     .from(messagingConversations)
     .innerJoin(
       messagingContacts,
@@ -71,6 +111,12 @@ function conversationQuery(actor: Actor) {
         eq(messagingConnections.organizationId, actor.organizationId),
       ),
     )
+    .innerJoin(organizations, eq(organizations.id, messagingConversations.organizationId))
+    .leftJoin(guests, and(
+      eq(guests.id, messagingContacts.guestId),
+      eq(guests.organizationId, actor.organizationId),
+      eq(organizations.guestsEnabled, true),
+    ))
     .leftJoin(
       stays,
       and(
@@ -87,18 +133,6 @@ function conversationQuery(actor: Actor) {
     )
 }
 
-export async function findConversation(actor: Actor, id: string) {
-  const conversation = await db.query.messagingConversations.findFirst({
-    where: and(
-      eq(messagingConversations.id, id),
-      eq(messagingConversations.organizationId, actor.organizationId),
-    ),
-  })
-  if (!conversation)
-    throw createError({ statusCode: 404, statusMessage: 'Диалог не найден' })
-  return conversation
-}
-
 export async function listMessages(
   actor: Actor,
   conversationId: string,
@@ -106,85 +140,103 @@ export async function listMessages(
   limit: number,
 ) {
   await assertMessagingAccess(actor)
-  await findConversation(actor, conversationId)
-  const [conversation] = await conversationQuery(actor)
-    .where(
-      and(
-        eq(messagingConversations.id, conversationId),
-        eq(messagingConversations.organizationId, actor.organizationId),
-      ),
+  return db.transaction(async (tx) => {
+    const organization = eq(messagingConversations.organizationId, actor.organizationId)
+    const [conversation] = await conversationQuery(actor, tx)
+      .where(and(eq(messagingConversations.id, conversationId), organization))
+      .limit(1)
+    if (!conversation)
+      throw createError({ statusCode: 404, statusMessage: 'Диалог не найден' })
+
+    const chats = conversation.guestId
+      ? await conversationQuery(actor, tx).where(and(organization, eq(guests.id, conversation.guestId)))
+      : [conversation]
+    const sources = chats.map(({ id, channel, connected, name, username }) => ({
+      id, channel, connected, name, username,
+    }))
+    const sourcesById = new Map(sources.map(source => [source.id, source]))
+    const scope = and(
+      eq(messagingMessages.organizationId, actor.organizationId),
+      inArray(messagingMessages.conversationId, [...sourcesById.keys()]),
     )
-    .limit(1)
-  const cursor = before
-    ? await db.query.messagingMessages.findFirst({
-        where: and(
-          eq(messagingMessages.id, before),
-          eq(messagingMessages.conversationId, conversationId),
-          eq(messagingMessages.organizationId, actor.organizationId),
-        ),
-      })
-    : null
-  if (before && !cursor)
-    throw createError({
-      statusCode: 404,
-      statusMessage: 'Сообщение не найдено',
-    })
-  const rows = await db
-    .select()
-    .from(messagingMessages)
-    .where(
-      and(
-        eq(messagingMessages.organizationId, actor.organizationId),
-        eq(messagingMessages.conversationId, conversationId),
-        cursor
-          ? sql`(${messagingMessages.createdAt}, ${messagingMessages.id}) < (select created_at, id from messaging_messages where id = ${cursor.id} and organization_id = ${actor.organizationId})`
-          : undefined,
-      ),
-    )
-    .orderBy(desc(messagingMessages.createdAt), desc(messagingMessages.id))
-    .limit(limit)
-  const files = rows.length
-    ? await db
-        .select({
-          id: messagingAttachments.id,
-          messageId: messagingAttachments.messageId,
-          name: messagingAttachments.name,
-          size: messagingAttachments.size,
-          mimeType: messagingAttachments.mimeType,
-          available: messagingAttachments.available,
-        })
-        .from(messagingAttachments)
-        .where(
-          and(
-            eq(messagingAttachments.organizationId, actor.organizationId),
-            inArray(
-              messagingAttachments.messageId,
-              rows.map((row) => row.id),
-            ),
+    const [latestIncoming] = await tx.select({ conversationId: messagingMessages.conversationId })
+      .from(messagingMessages)
+      .where(and(scope, eq(messagingMessages.direction, 'incoming')))
+      .orderBy(desc(messagingMessages.createdAt), desc(messagingMessages.id))
+      .limit(1)
+    const cursor = before
+      ? await tx.query.messagingMessages.findFirst({
+          where: and(
+            eq(messagingMessages.id, before),
+            scope,
           ),
-        )
-    : []
-  return {
-    conversation,
-    items: rows
-      .map(
-        ({
-          externalId,
-          requestId,
-          authorId,
-          organizationId,
-          conversationId: ignored,
-          ...row
-        }) => ({
-          ...row,
-          attachments: files
-            .filter((file) => file.messageId === row.id)
-            .map(({ messageId, ...file }) => file),
-        }),
+        })
+      : null
+    if (before && !cursor)
+      throw createError({
+        statusCode: 404,
+        statusMessage: 'Сообщение не найдено',
+      })
+    const rows = await tx
+      .select()
+      .from(messagingMessages)
+      .where(
+        and(
+          scope,
+          cursor
+            ? sql`(${messagingMessages.createdAt}, ${messagingMessages.id}) < (select created_at, id from messaging_messages where id = ${cursor.id} and organization_id = ${actor.organizationId})`
+            : undefined,
+        ),
       )
-      .reverse(),
-    next: rows.length === limit ? rows.at(-1)!.id : null,
-  }
+      .orderBy(desc(messagingMessages.createdAt), desc(messagingMessages.id))
+      .limit(limit)
+    const files = rows.length
+      ? await tx
+          .select({
+            id: messagingAttachments.id,
+            messageId: messagingAttachments.messageId,
+            name: messagingAttachments.name,
+            size: messagingAttachments.size,
+            mimeType: messagingAttachments.mimeType,
+            available: messagingAttachments.available,
+          })
+          .from(messagingAttachments)
+          .where(
+            and(
+              eq(messagingAttachments.organizationId, actor.organizationId),
+              inArray(
+                messagingAttachments.messageId,
+                rows.map((row) => row.id),
+              ),
+            ),
+          )
+      : []
+    return {
+      conversation,
+      sources,
+      replyTo: latestIncoming?.conversationId ?? conversationId,
+      items: rows
+        .map(
+          ({
+            externalId,
+            requestId,
+            authorId,
+            organizationId,
+            conversationId,
+            ...row
+          }) => ({
+            ...row,
+            conversationId,
+            channel: sourcesById.get(conversationId)!.channel,
+            attachments: files
+              .filter((file) => file.messageId === row.id)
+              .map(({ messageId, ...file }) => file),
+          }),
+        )
+        .reverse(),
+      next: rows.length === limit ? rows.at(-1)!.id : null,
+    }
+  }, { isolationLevel: 'repeatable read', accessMode: 'read only' })
 }
 
 export async function updateConversation(
@@ -258,6 +310,7 @@ export async function enqueueMessage(
   conversationId: string,
   input: { requestId: string; text: string },
   file?: OutgoingFile,
+  threadId = conversationId,
 ) {
   await assertMessagingAccess(actor)
   if (
@@ -297,6 +350,25 @@ export async function enqueueMessage(
           statusCode: 404,
           statusMessage: 'Диалог не найден',
         })
+      if (threadId !== conversationId) {
+        const contacts = await tx
+          .select({ guestId: messagingContacts.guestId })
+          .from(messagingContacts)
+          .innerJoin(messagingConversations, eq(messagingConversations.contactId, messagingContacts.id))
+          .where(and(
+            eq(messagingContacts.organizationId, actor.organizationId),
+            eq(messagingConversations.organizationId, actor.organizationId),
+            inArray(messagingConversations.id, [threadId, conversationId]),
+          ))
+          .orderBy(messagingContacts.id)
+          .for('share', { of: messagingContacts })
+        if (!organization?.guestsEnabled || contacts.length !== 2 || !contacts[0]?.guestId || contacts[0].guestId !== contacts[1]?.guestId)
+          throw createError({
+            statusCode: 409,
+            statusMessage: 'Состав переписки изменился',
+            data: { code: 'MESSAGING_THREAD_CHANGED' },
+          })
+      }
       const [connection] = await tx
         .select()
         .from(messagingConnections)

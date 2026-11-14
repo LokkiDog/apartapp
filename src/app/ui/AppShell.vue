@@ -4,6 +4,7 @@ import {
   switchClientContext,
   canAccessWorkSection,
   useCurrentUser,
+  useCurrentUserScope,
   usesManagerOnlyNavigation,
 } from "#fsd/shared/auth";
 import { useNetworkStatus } from "#fsd/shared/lib";
@@ -42,6 +43,44 @@ const logoutPending = ref(false);
 const mobileNavigationReady = ref(false);
 const notificationsReady = ref(false);
 const isAdministrator = computed(() => user.value?.roles.includes("administrator") ?? false);
+const userScope = useCurrentUserScope();
+const messagingScope = computed(() =>
+  isAdministrator.value && user.value?.messagingEnabled ? userScope.value : null,
+);
+const { data: messageCountResult, refresh: refreshMessageCount } = useAsyncData(
+  "messaging-unread-count",
+  async (_app, { signal }): Promise<{ scope: string | null; count: number }> => {
+    const scope = messagingScope.value;
+    if (!scope) return { scope, count: 0 };
+    try {
+      const { count } = await $fetch<{ count: number }>("/api/messaging/unread-count", { signal });
+      return { scope, count };
+    } catch {
+      return { scope, count: messageCountResult.value?.scope === scope ? messageCountResult.value.count : 0 };
+    }
+  },
+  { server: false, default: () => ({ scope: null, count: 0 }), watch: [messagingScope] },
+);
+const messageCount = computed(() => {
+  const result = messageCountResult.value;
+  return result && result.scope === messagingScope.value ? result.count : 0;
+});
+const messageBadge = computed(() => messageCount.value > 99 ? "99+" : String(messageCount.value));
+const messageCountLabel = computed(() => t("messaging.unreadCount", { count: messageCount.value }));
+
+let messageCountTimer: ReturnType<typeof setInterval> | undefined;
+function pollMessageCount() {
+  if (messagingScope.value && !document.hidden) void refreshMessageCount({ dedupe: "defer" });
+}
+onMounted(() => {
+  messageCountTimer = setInterval(pollMessageCount, 5000);
+  document.addEventListener("visibilitychange", pollMessageCount);
+});
+onBeforeUnmount(() => {
+  clearInterval(messageCountTimer);
+  document.removeEventListener("visibilitychange", pollMessageCount);
+});
+
 const isSpecialistNavigation = computed(() =>
   Boolean(
     user.value?.roles.includes("specialist") &&
@@ -118,7 +157,14 @@ const managerPrimary = computed<NavItem[]>(() => [
   },
   ...managerFinance.value,
 ]);
-const messagingItems = computed<NavItem[]>(() => user.value?.messagingEnabled ? [{ to: '/messages', label: t('messaging.title'), icon: 'i-lucide-messages-square' }] : []);
+const communicationItems = computed<NavItem[]>(() => [
+  ...(user.value?.guestsEnabled
+    ? [{ to: "/guests", label: t("guests.title"), icon: "i-lucide-contact" }]
+    : []),
+  ...(user.value?.messagingEnabled
+    ? [{ to: "/messages", label: t("messaging.title"), icon: "i-lucide-messages-square" }]
+    : []),
+]);
 const settings = computed<NavItem[]>(() => [
   ...(user.value?.messagingEnabled ? [{ to: '/settings/messaging', label: t('messaging.settings'), icon: 'i-lucide-messages-square' }] : []),
   { to: "/settings/site", label: t("siteSettings.title"), icon: "i-lucide-globe" },
@@ -144,7 +190,10 @@ const isSettingsPage = computed(() =>
 const groups = computed(() => {
   if (isAdministrator.value)
     return [
-      { label: t("nav.work"), items: [...work.value, ...messagingItems.value, problems.value, expenses.value] },
+      { label: t("nav.work"), items: [...work.value, problems.value, expenses.value] },
+      ...(communicationItems.value.length
+        ? [{ label: t("nav.communication"), items: communicationItems.value }]
+        : []),
       { label: t("nav.objects"), items: objects.value },
       { label: t("nav.reports"), items: reports.value },
     ];
@@ -272,13 +321,22 @@ async function logout() {
             >
               <NuxtLink
                 :to="item.to"
-                class="nav-item"
+                class="nav-item relative"
                 :class="{ 'nav-item--active': active(item.to) }"
-                :aria-label="item.label"
+                :aria-label="item.to === '/messages' && messageCount ? `${item.label}, ${messageCountLabel}` : item.label"
                 :aria-current="active(item.to) ? 'page' : undefined"
               >
                 <UIcon :name="item.icon" class="size-5 shrink-0" aria-hidden="true" />
-                <span v-if="!sidebarCollapsed">{{ item.label }}</span>
+                <span v-if="!sidebarCollapsed" class="min-w-0 truncate">{{ item.label }}</span>
+                <UBadge
+                  v-if="item.to === '/messages' && messageCount"
+                  size="sm"
+                  color="primary"
+                  variant="solid"
+                  class="shrink-0 tabular-nums"
+                  :class="sidebarCollapsed ? 'absolute end-0 top-0' : 'ms-auto'"
+                  aria-hidden="true"
+                >{{ messageBadge }}</UBadge>
               </NuxtLink>
             </UTooltip>
           </div>
@@ -417,11 +475,20 @@ async function logout() {
                 :key="item.to"
                 :to="item.to"
                 class="drawer-nav-item"
+                :aria-label="item.to === '/messages' && messageCount ? `${item.label}, ${messageCountLabel}` : undefined"
                 @click="moreOpen = false"
-                ><UIcon :name="item.icon" class="size-5" />{{
-                  item.label
-                }}</NuxtLink
               >
+                <UIcon :name="item.icon" class="size-5 shrink-0" aria-hidden="true" />
+                <span>{{ item.label }}</span>
+                <UBadge
+                  v-if="item.to === '/messages' && messageCount"
+                  size="sm"
+                  color="primary"
+                  variant="solid"
+                  class="ms-auto shrink-0 tabular-nums"
+                  aria-hidden="true"
+                >{{ messageBadge }}</UBadge>
+              </NuxtLink>
             </div>
           </section>
         </nav>

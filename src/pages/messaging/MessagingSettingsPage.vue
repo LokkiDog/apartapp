@@ -2,6 +2,8 @@
 import type { MessagingConnection } from '@contracts/messaging'
 import { useCurrentUser } from '#fsd/shared/auth'
 import { ConfirmActionModal, PageHeader } from '#fsd/shared/ui'
+import MessagingAutomationSettings from './MessagingAutomationSettings.vue'
+import ReplyTemplateSettings from './ReplyTemplateSettings.vue'
 import MessagingIntegrationRow from './MessagingIntegrationRow.vue'
 import LineConnectionSettings from './LineConnectionSettings.vue'
 import TelegramInstructionsModal from './TelegramInstructionsModal.vue'
@@ -35,6 +37,10 @@ const {
   { server: false, default: () => null, watch: [identity, allowed] },
 )
 const expandedProvider = ref<'telegram' | 'line' | null>(null)
+const messageSettings = computed(() => [
+  { label: t('messaging.automation.title'), slot: 'automation' as const },
+  { label: t('messaging.templates.title'), slot: 'templates' as const },
+])
 const telegramStatus = computed(() => {
   if (loadError.value) return t('messaging.integrationLoadError')
   if (!data.value) return t('messaging.loading')
@@ -186,6 +192,32 @@ async function disconnect() {
         <MessagingIntegrationRow name="WhatsApp" icon="i-lucide-message-circle" :status="t('messaging.integrationExample')" />
         <MessagingIntegrationRow name="Viber" icon="i-lucide-phone" :status="t('messaging.integrationExample')" />
       </ul>
+    </section>
+    <section class="surface" aria-labelledby="message-settings-title">
+      <h2 id="message-settings-title" class="px-3.5 py-3.5 text-sm font-medium text-[var(--color-muted)]">
+        {{ t('messaging.messageSettings') }}
+      </h2>
+      <UAccordion
+        :key="identity"
+        :items="messageSettings"
+        value-key="slot"
+        type="multiple"
+        :unmount-on-hide="false"
+        class="border-t border-[var(--color-line)]"
+        :ui="{
+          item: 'border-[var(--color-line)]',
+          trigger: 'min-h-11 cursor-pointer px-3.5 text-base font-semibold hover:bg-[var(--color-surface-muted)] active:bg-[var(--color-primary-soft)]',
+          content: 'motion-reduce:animate-none',
+          trailingIcon: 'motion-reduce:transition-none',
+        }"
+      >
+        <template #automation>
+          <MessagingAutomationSettings :identity="identity" />
+        </template>
+        <template #templates>
+          <ReplyTemplateSettings :identity="identity" />
+        </template>
+      </UAccordion>
     </section>
     <TelegramInstructionsModal v-model:open="instructionsOpen" />
     <ConfirmActionModal

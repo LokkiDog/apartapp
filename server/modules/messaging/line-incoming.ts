@@ -7,7 +7,7 @@ import { db } from '../../infrastructure/database/client'
 import { messagingConnections, messagingContacts, messagingUpdates, organizations } from '../../infrastructure/database/schema'
 import { fileStorage } from '../../infrastructure/storage/local'
 import { parseMessagingJson } from './body'
-import { saveIncomingMessage } from './incoming'
+import { deliverIncomingNotification, saveIncomingMessage } from './incoming'
 import { downloadLineFile, getLineProfile, verifyLineSignature } from './line'
 import { decryptBotToken } from './secrets'
 
@@ -66,8 +66,9 @@ export async function receiveLineWebhook(id: string, signature: string | undefin
     if (!event.success) continue
     const { message, source, webhookEventId, timestamp } = event.data
     let storedKey: string | undefined
+    let saved: Awaited<ReturnType<typeof saveIncomingMessage>>
     try {
-      await db.transaction(async (tx) => {
+      saved = await db.transaction(async (tx) => {
         const [organization] = await tx.select().from(organizations)
           .where(eq(organizations.id, connection.organizationId)).for('share')
         if (!organization?.messagingEnabled || organization.status !== 'active' ||
@@ -105,6 +106,7 @@ export async function receiveLineWebhook(id: string, signature: string | undefin
           createdAt: new Date(timestamp),
           name,
           username: '',
+          automation: { channel: 'line', organization },
           content: {
             text: message.text ?? '',
             unsupported: !hasFile && message.text === undefined,
@@ -121,11 +123,13 @@ export async function receiveLineWebhook(id: string, signature: string | undefin
           await fileStorage.remove(storedKey)
           storedKey = undefined
         }
+        return saved
       })
     } catch (error) {
       if (storedKey) await fileStorage.remove(storedKey).catch(() => {})
       throw error
     }
+    await deliverIncomingNotification(connection.organizationId, saved)
   }
   return { ok: true }
 }

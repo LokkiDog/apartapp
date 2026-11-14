@@ -8,6 +8,14 @@ Mobile-first CRM для управления апартаментами в Ба�
 2. Запустите инфраструктуру: `docker compose up -d`.
 3. Выполните `npm install`, `npm run db:migrate`, затем `npm run dev`.
 
+С `CRM_BRAND=aparts` команда `npm run dev` открывает CRM на 2000, с
+`CRM_BRAND=magicmop` — на 2002. Задайте `NUXT_PUBLIC_APP_URL` в локальном
+`.env` под выбранный бренд. Если основной `.env` настроен на MagicMop,
+для параллельного запуска Aparts используйте `npm run dev:aparts` с
+`.env.aparts`, отдельной базой Aparts и отдельным каталогом сборки.
+Гостевой сайт запускается командой `npm run dev:guest` на 2001 и
+по умолчанию обращается к Aparts CRM.
+
 Первый администратор создается идемпотентно при старте сервера из переменных окружения.
 
 Локальный Compose-проект `aparts` запускает два PostgreSQL с отдельными томами.

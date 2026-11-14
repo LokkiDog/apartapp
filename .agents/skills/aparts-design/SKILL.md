@@ -34,6 +34,7 @@ Search for an existing component or pattern before adding one. Use slice public 
 
 ## Forms and actions
 
+- Always center button labels vertically within the control, including menu actions. Align accompanying icons to the same vertical center.
 - Reuse Nuxt UI controls, slideover forms and ellipsis menus. Use `form-actions form-actions--footer`: cancellation first, submission second.
 - Use full-width `UTextarea`; its field must span all columns in multi-column forms. Use one `DateRangeInput`, keeping separate start/end values in the API.
 - Use `DeleteConfirmModal` for ordinary dangerous deletion and `ConfirmActionModal` for other confirmations. Show loading/errors, prevent duplicate submissions and keep failed requests retryable. Never use browser `confirm()`.

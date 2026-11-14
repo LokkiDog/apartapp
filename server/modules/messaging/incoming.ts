@@ -11,6 +11,9 @@ import {
   messagingUpdates,
   organizations,
 } from '../../infrastructure/database/schema'
+import { deliverNotifications, saveNotifications } from '../../infrastructure/notification/publish'
+import type { MessagingChannel } from '../../../shared/contracts/messaging'
+import { queueAutomaticReply } from './automation'
 import { verifyWebhookSecret } from './secrets'
 import { telegramMessageContent, type TelegramMessage } from './telegram'
 
@@ -63,7 +66,7 @@ export async function receiveTelegramUpdate(
   if (!connection || connection.channel !== 'telegram' || !verifyWebhookSecret(secret, connection.webhookSecret))
     throw createError({ statusCode: 403, statusMessage: 'Forbidden' })
   const update = incomingSchema.parse(body)
-  await db.transaction(async (tx) => {
+  const saved = await db.transaction(async (tx) => {
     const [organization] = await tx
       .select()
       .from(organizations)
@@ -106,7 +109,7 @@ export async function receiveTelegramUpdate(
         .join(' ') ||
       message.chat.username ||
       String(message.chat.id)
-    await saveIncomingMessage(tx, {
+    return saveIncomingMessage(tx, {
       organizationId: connection.organizationId,
       connectionId,
       externalContactId: String(message.chat.id),
@@ -115,8 +118,10 @@ export async function receiveTelegramUpdate(
       name,
       username: message.chat.username ?? '',
       content,
+      automation: { channel: 'telegram', organization },
     })
   })
+  await deliverIncomingNotification(connection.organizationId, saved)
   return { ok: true }
 }
 
@@ -128,7 +133,7 @@ type IncomingContent = {
 }
 
 export async function saveIncomingMessage(tx: Transaction, {
-  organizationId, connectionId, externalContactId, externalMessageId, name, username, createdAt, content,
+  organizationId, connectionId, externalContactId, externalMessageId, name, username, createdAt, content, automation,
 }: {
   organizationId: string
   connectionId: string
@@ -138,6 +143,7 @@ export async function saveIncomingMessage(tx: Transaction, {
   username: string
   createdAt: Date
   content: IncomingContent
+  automation: { channel: MessagingChannel, organization: Pick<typeof organizations.$inferSelect, 'messagingAutomation' | 'timezone'> }
 }) {
   const [contact] = await tx
     .insert(messagingContacts)
@@ -183,7 +189,7 @@ export async function saveIncomingMessage(tx: Transaction, {
     })
     .onConflictDoNothing()
     .returning()
-  if (!saved) return false
+  if (!saved) return
   if (content.file)
     await tx.insert(messagingAttachments).values({
       ...content.file,
@@ -199,5 +205,34 @@ export async function saveIncomingMessage(tx: Transaction, {
       updatedAt: new Date(),
     })
     .where(eq(messagingConversations.id, conversation!.id))
-  return true
+  const { channel, organization } = automation
+  if (organization.messagingAutomation)
+    await queueAutomaticReply(tx, conversation!, saved, channel, organization.messagingAutomation, organization.timezone)
+  const text = content.text.trim()
+  const body = [text, content.file?.name].filter(Boolean).join('\n') || {
+    ru: 'Сообщение без текста',
+    en: 'Message without text',
+    he: 'הודעה ללא טקסט',
+  }
+  const notification = await saveNotifications(tx, {
+    organizationId,
+    type: 'guest_message',
+    eventKey: 'guest_message',
+    title: Array.from(name.trim()).slice(0, 120).join('') || username || externalContactId,
+    body,
+    href: `/messages/${conversation!.id}`,
+  })
+  return { notification }
+}
+
+export async function deliverIncomingNotification(
+  organizationId: string,
+  saved: Awaited<ReturnType<typeof saveIncomingMessage>>,
+) {
+  try {
+    await deliverNotifications(organizationId, saved?.notification)
+  } catch {
+    // The message and CRM notification have already been committed.
+    console.error('Failed to deliver incoming message notification', { organizationId })
+  }
 }

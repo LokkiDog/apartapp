@@ -1,3 +1,4 @@
+import { guestEmailSchema } from './guests'
 import { z } from 'zod'
 import Decimal from 'decimal.js'
 import { specialServiceIconNames } from '../config/special-service-icons'
@@ -114,6 +115,7 @@ export const stayInputSchema = z.object({
   specialRequests: z.string().max(2000).optional().default(''),
   guestName: z.string().trim().max(160).optional().default(''),
   guestPhone: z.string().trim().max(50).optional().default(''),
+  guestEmail: guestEmailSchema.optional(),
   guestComment: z.string().max(2000).optional().default(''),
   serviceIds: z.array(z.uuid()).default([]),
   cashAmountEur: moneyEurSchema.nullable().optional()

@@ -9,7 +9,7 @@ import {
   encryptBotToken,
   verifyWebhookSecret,
 } from '../server/modules/messaging/secrets'
-import { downloadLineFile, pushLineMessage, verifyLineSignature } from '../server/modules/messaging/line'
+import { downloadLineFile, getLineMessageQuota, pushLineMessage, verifyLineSignature } from '../server/modules/messaging/line'
 import { clientUpdateSchema } from '../shared/contracts/platform'
 import { MAX_MESSAGE_FILE_BYTES } from '../shared/contracts/messaging'
 
@@ -104,6 +104,27 @@ describe('Telegram transport and secrets', () => {
 })
 
 describe('LINE Messaging API transport', () => {
+  it.each([
+    [{ type: 'limited', value: 300 }, 300],
+    [{ type: 'limited', value: 0 }, 0],
+    [{ type: 'none' }, null],
+  ])('reads quota %j and consumption from LINE', async (quota, limit) => {
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      if (url === 'https://api.line.me/v2/bot/message/quota') return Response.json(quota)
+      if (url === 'https://api.line.me/v2/bot/message/quota/consumption') return Response.json({ totalUsage: 54 })
+      return new Response(null, { status: 404 })
+    }))
+    await expect(getLineMessageQuota('token')).resolves.toEqual({ limit, used: 54 })
+  })
+
+  it('does not report zero usage when LINE returns an error', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      if (url.endsWith('/consumption')) return new Response(null, { status: 503 })
+      return Response.json({ type: 'limited', value: 300 })
+    }))
+    await expect(getLineMessageQuota('token')).rejects.toThrow()
+  })
+
   it('checks the exact webhook bytes against an independent HMAC fixture', () => {
     const raw = Buffer.from('{"destination":"U8e742f61d673b39c7fff3cecb7536ef0","events":[]}')
     const signature = 'CaQfo/vpROry+7UB85x+gtiNTkKSZx76mCFrzUgf1Tg='

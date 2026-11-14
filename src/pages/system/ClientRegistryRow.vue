@@ -14,8 +14,12 @@ const props = defineProps<{
   pending: boolean
   enteringClientId: string | null
 }>()
-const emit = defineEmits<{ enter: []; 'update:messaging': [enabled: boolean] }>()
+const emit = defineEmits<{ enter: []; 'update:module': [field: 'messagingEnabled' | 'guestsEnabled', enabled: boolean] }>()
 
+const modules = [
+  { field: 'messagingEnabled', label: 'Сообщения' },
+  { field: 'guestsEnabled', label: 'Гости' },
+] as const
 const table = computed(() => props.layout === 'table')
 const cell = computed(() => table.value ? 'td' : 'div')
 const createdOn = computed(() => dateFormatter.format(new Date(props.client.createdAt)))
@@ -56,15 +60,19 @@ const createdOn = computed(() => dateFormatter.format(new Date(props.client.crea
       />
     </component>
     <component :is="cell" :class="table ? '' : 'col-span-2 row-start-3 self-center min-[380px]:col-span-1'">
-      <USwitch
-        :model-value="client.messagingEnabled"
-        :label="table ? (client.messagingEnabled ? 'Включены' : 'Выключены') : 'Сообщения'"
-        :aria-label="`Сообщения: ${client.name}`"
-        :disabled="pending"
-        class="min-h-11 items-center"
-        :ui="{ root: 'gap-2', label: 'text-xs' }"
-        @update:model-value="emit('update:messaging', $event)"
-      />
+      <div class="flex flex-wrap gap-x-3 lg:flex-col">
+        <USwitch
+          v-for="{ field, label } in modules"
+          :key="field"
+          :model-value="client[field]"
+          :label="label"
+          :aria-label="`${label}: ${client.name}`"
+          :disabled="pending"
+          class="min-h-11 items-center lg:min-h-8"
+          :ui="{ root: 'gap-2', label: 'text-xs' }"
+          @update:model-value="emit('update:module', field, $event)"
+        />
+      </div>
     </component>
     <component :is="cell" :class="table ? '!pe-4' : 'col-span-2 justify-self-end min-[380px]:col-span-1 min-[380px]:col-start-2 min-[380px]:row-start-3'">
       <div class="flex items-center justify-end gap-0.5">

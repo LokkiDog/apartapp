@@ -36,7 +36,7 @@ export const taskPriorityEnum = pgEnum('task_priority', ['low', 'normal', 'high'
 export const inventoryMovementEnum = pgEnum('inventory_movement', ['replenishment', 'usage', 'adjustment_in', 'adjustment_out'])
 export const financialEntryTypeEnum = pgEnum('financial_entry_type', ['cleaning_charge', 'inventory_charge', 'task_charge', 'guest_service_charge', 'compensation', 'manual_expense', 'cash_receipt'])
 export const visibilityEnum = pgEnum('entry_visibility', ['administrator', 'manager'])
-export const notificationTypeEnum = pgEnum('notification_type', ['stay_changed', 'stay_conflict', 'work_assigned', 'work_rescheduled', 'work_canceled', 'problem', 'manager_expense_report_published', 'cleaning_changed', 'task_resolved', 'task_returned', 'manual'])
+export const notificationTypeEnum = pgEnum('notification_type', ['stay_changed', 'stay_conflict', 'work_assigned', 'work_rescheduled', 'work_canceled', 'problem', 'manager_expense_report_published', 'cleaning_changed', 'task_resolved', 'task_returned', 'manual', 'guest_message'])
 export const staySourceEnum = pgEnum('stay_source', ['manual', 'ical'])
 export const stayStateEnum = pgEnum('stay_state', ['active', 'canceled', 'superseded', 'hidden'])
 export const managerExpenseCategoryEnum = pgEnum('manager_expense_category', ['cleaning', 'inventory', 'task', 'other'])
@@ -45,7 +45,9 @@ export const authTokenTypeEnum = pgEnum('auth_token_type', ['invitation', 'passw
 export const organizations = pgTable('organizations', {
   id: uuid('id').primaryKey().defaultRandom(),
   name: text('name').notNull(),
+  guestsEnabled: boolean('guests_enabled').notNull().default(false),
   messagingEnabled: boolean('messaging_enabled').notNull().default(false),
+  messagingAutomation: jsonb('messaging_automation').$type<import('../../../shared/contracts/messaging-automation').MessagingAutomation>(),
   messagingEnabledSince: timestamp('messaging_enabled_since', { withTimezone: true }),
   status: text('status').$type<'active' | 'blocked'>().notNull().default('active'),
   timezone: text('timezone').notNull().default('Europe/Sofia'),
@@ -185,6 +187,23 @@ export const specialServices = pgTable('special_services', {
   ...timestamps
 }, table => [check('special_service_price_nonnegative', sql`${table.priceEur} >= 0`)])
 
+export const guests = pgTable('guests', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  organizationId: uuid('organization_id').notNull().references(() => organizations.id),
+  name: text('name').notNull().default(''),
+  phone: text('phone').notNull().default(''),
+  phoneKey: text('phone_key'),
+  email: text('email').notNull().default(''),
+  emailKey: text('email_key'),
+  whatsapp: text('whatsapp').notNull().default(''),
+  notes: text('notes').notNull().default(''),
+  ...timestamps
+}, table => [
+  index('guests_org_name_idx').on(table.organizationId, table.name, table.id),
+  uniqueIndex('guests_org_phone_idx').on(table.organizationId, table.phoneKey),
+  uniqueIndex('guests_org_email_idx').on(table.organizationId, table.emailKey),
+])
+
 export const stays = pgTable('stays', {
   id: uuid('id').primaryKey().defaultRandom(),
   organizationId: uuid('organization_id').notNull().references(() => organizations.id),
@@ -196,6 +215,8 @@ export const stays = pgTable('stays', {
   specialRequests: text('special_requests').notNull().default(''),
   guestName: text('guest_name').notNull().default(''),
   guestPhone: text('guest_phone').notNull().default(''),
+  guestEmail: text('guest_email').notNull().default(''),
+  guestId: uuid('guest_id').references(() => guests.id),
   guestComment: text('guest_comment').notNull().default(''),
   cashAmountEur: numeric('cash_amount_eur', { precision: 12, scale: 2, mode: 'number' }),
   createdById: uuid('created_by_id').references(() => users.id),
@@ -210,6 +231,7 @@ export const stays = pgTable('stays', {
   check('stay_dates_order', sql`${table.checkOutOn} > ${table.checkInOn}`),
   check('stay_cash_nonnegative', sql`${table.cashAmountEur} IS NULL OR ${table.cashAmountEur} >= 0`),
   check('stay_guest_counts_valid', sql`(${table.source} = 'ical' AND ${table.adultCount} IS NULL AND ${table.childCount} IS NULL) OR (${table.adultCount} >= 1 AND ${table.childCount} >= 0)`),
+  index('stays_guest_idx').on(table.guestId, table.organizationId, table.checkInOn),
   index('stay_report_dates_idx').on(table.organizationId, table.checkInOn, table.checkOutOn),
   uniqueIndex('stay_ical_uid_unique').on(table.icalFeedId, table.icalUid).where(sql`${table.icalUid} IS NOT NULL`)
 ])
@@ -799,6 +821,13 @@ export const apartmentPublicationPhotos = pgTable('apartment_publication_photos'
 }, table => [primaryKey({ columns: [table.publicationId, table.attachmentId] })])
 
 
+export const messagingTemplates = pgTable('messaging_templates', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  organizationId: uuid('organization_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  text: text('text').notNull(),
+}, table => [index('messaging_template_org_idx').on(table.organizationId, table.name, table.id)])
+
 export const messagingConnections = pgTable('messaging_connections', {
   id: uuid('id').primaryKey().defaultRandom(),
   organizationId: uuid('organization_id').notNull().references(() => organizations.id),
@@ -820,11 +849,12 @@ export const messagingContacts = pgTable('messaging_contacts', {
   id: uuid('id').primaryKey().defaultRandom(),
   organizationId: uuid('organization_id').notNull().references(() => organizations.id),
   connectionId: uuid('connection_id').notNull().references(() => messagingConnections.id),
+  guestId: uuid('guest_id').references(() => guests.id),
   externalId: text('external_id').notNull(),
   name: text('name').notNull(),
   username: text('username').notNull().default(''),
   ...timestamps
-}, table => [uniqueIndex('messaging_contact_external_idx').on(table.connectionId, table.externalId)])
+}, table => [uniqueIndex('messaging_contact_external_idx').on(table.connectionId, table.externalId), index('messaging_contacts_guest_idx').on(table.guestId, table.organizationId)])
 
 export const messagingConversations = pgTable('messaging_conversations', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -832,6 +862,7 @@ export const messagingConversations = pgTable('messaging_conversations', {
   connectionId: uuid('connection_id').notNull().references(() => messagingConnections.id),
   contactId: uuid('contact_id').notNull().references(() => messagingContacts.id),
   stayId: uuid('stay_id').references(() => stays.id, { onDelete: 'set null' }),
+  lastAwayPeriod: text('last_away_period'),
   unread: integer('unread').notNull().default(0),
   lastMessageAt: timestamp('last_message_at', { withTimezone: true }).notNull().defaultNow(),
   ...timestamps
@@ -848,6 +879,7 @@ export const messagingMessages = pgTable('messaging_messages', {
   unsupported: boolean('unsupported').notNull().default(false),
   requestId: uuid('request_id'),
   sentAt: timestamp('sent_at', { withTimezone: true }),
+  automated: boolean('automated').notNull().default(false),
   authorId: uuid('author_id').references(() => users.id, { onDelete: 'set null' }),
   authorName: text('author_name'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()

@@ -26,9 +26,9 @@ export function assertMessagingEnabled(
 
 export async function requireMessagingActor(
   event: Parameters<typeof requireActor>[0],
+  options?: Parameters<typeof requireActor>[1],
 ) {
-  const actor = await requireActor(event)
-  requireRole(actor, 'administrator')
+  const actor = await requireActor(event, options)
   await assertMessagingAccess(actor)
   return actor
 }

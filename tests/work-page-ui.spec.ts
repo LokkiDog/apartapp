@@ -333,7 +333,7 @@ describe('work page UI contracts', () => {
     expect(app).toContain('progress: false')
     expect(app).toContain("portal: 'body'")
     expect(app).toContain("viewport: 'app-toast-viewport'")
-    expect(app).toContain('<UApp :toaster="toasterDefaults">')
+    expect(app).toMatch(/<UApp\b[^>]*\s:toaster="toasterDefaults"/)
     expect(detail).toContain('const toast = useToast()')
     expect(detail).toContain("color: 'primary'")
     expect(detail).toContain("icon: 'i-lucide-check'")

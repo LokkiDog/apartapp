@@ -6,7 +6,7 @@ let taskRevisionTimer: ReturnType<typeof setTimeout> | null = null
 let pendingCleaningMessage: CleaningChangeMessage | null = null
 let pendingTaskMessage: TaskChangeMessage | null = null
 
-export type NotificationType = 'stay_changed' | 'stay_conflict' | 'work_assigned' | 'work_rescheduled' | 'work_canceled' | 'problem' | 'manager_expense_report_published' | 'cleaning_changed' | 'task_resolved' | 'task_returned' | 'manual'
+export type NotificationType = 'stay_changed' | 'stay_conflict' | 'work_assigned' | 'work_rescheduled' | 'work_canceled' | 'problem' | 'manager_expense_report_published' | 'cleaning_changed' | 'task_resolved' | 'task_returned' | 'manual' | 'guest_message'
 export type { CleaningChangeMessage, TaskChangeMessage } from '#fsd/shared/realtime'
 
 export type NotificationItem = {
@@ -66,15 +66,6 @@ export function useNotificationState() {
     }, 100)
   }
 
-  async function refreshUnreadCount() {
-    try {
-      const response = await $fetch<{ count: number }>('/api/notifications/unread-count')
-      unreadCount.value = response.count
-    } catch {
-      // Realtime reconnects and the notifications page both reconcile this indicator.
-    }
-  }
-
   function applyRealtimeMessage(message: NotificationRealtimeMessage) {
     if (message.type === 'notifications.heartbeat' || message.type === 'session.revoked') return
     if (message.type === 'cleaning.changed') {
@@ -85,9 +76,6 @@ export function useNotificationState() {
       scheduleTaskRevision(message)
       return
     }
-    if (message.type === 'notification.created' && !message.notification.readAt) unreadCount.value += 1
-    if (message.type === 'notification.read') unreadCount.value = Math.max(0, unreadCount.value - 1)
-    if (message.type === 'notifications.read-all') unreadCount.value = 0
     scheduleNotificationRevision()
   }
 
@@ -95,13 +83,5 @@ export function useNotificationState() {
     cleaningRealtime.reconcile()
   }
 
-  function markRead() {
-    unreadCount.value = Math.max(0, unreadCount.value - 1)
-  }
-
-  function markAllRead() {
-    unreadCount.value = 0
-  }
-
-  return { unreadCount, revision, cleaningRevision, lastCleaningChange, taskRevision, lastTaskChange, refreshUnreadCount, applyRealtimeMessage, reconcileCleaningData, markRead, markAllRead }
+  return { unreadCount, revision, cleaningRevision, lastCleaningChange, taskRevision, lastTaskChange, applyRealtimeMessage, reconcileCleaningData }
 }

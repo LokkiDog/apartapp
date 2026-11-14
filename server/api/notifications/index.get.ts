@@ -5,7 +5,7 @@ import { db } from '../../infrastructure/database/client'
 import { notifications } from '../../infrastructure/database/schema'
 import { localizedNotificationBody, localizedNotificationTitle } from '../../infrastructure/notification/localize'
 export default defineEventHandler(async event => {
-  const actor = await requireActor(event)
+  const actor = await requireActor(event, { renew: false })
   const query = notificationListQuerySchema.parse(getQuery(event))
   let cursor: { createdAt: Date; id: string } | null = null
   if (query.cursor) {

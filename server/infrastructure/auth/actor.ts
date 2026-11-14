@@ -19,6 +19,7 @@ export interface Actor {
   isSuperuser?: boolean
   inSystem?: boolean
   organizationName?: string
+  guestsEnabled?: boolean
   messagingEnabled?: boolean
   organizationStatus?: 'active' | 'blocked'
   platformSessionId?: string
@@ -26,15 +27,17 @@ export interface Actor {
   sessionVersion?: number
 }
 
-export async function requireActor(event: Parameters<typeof setUserSession>[0]): Promise<Actor> {
+export async function requireActor(event: Parameters<typeof setUserSession>[0], { renew = true } = {}): Promise<Actor> {
   const actor = await requirePrincipal(event, false)
   if (actor.inSystem) throw createError({ statusCode: 409, statusMessage: 'Выберите клиента' })
   if (actor.isSuperuser && (getHeader(event, 'x-client-context') ?? (getMethod(event) === 'GET' ? getQuery(event).clientContext : undefined)) !== `${actor.organizationId}:${actor.contextRevision}`) {
     throw createError({ statusCode: 409, statusMessage: 'Контекст клиента изменился', data: { code: 'CLIENT_CONTEXT_CHANGED' } })
   }
   // Do not renew a stale-context request or overwrite a newly selected context.
-  await db.update(platformSessions).set({ expiresAt: sessionExpiry() }).where(eq(platformSessions.id, actor.platformSessionId!))
-  await refreshUserSession(event, actor)
+  if (renew) {
+    await db.update(platformSessions).set({ expiresAt: sessionExpiry() }).where(eq(platformSessions.id, actor.platformSessionId!))
+    await refreshUserSession(event, actor)
+  }
   event.context.platformActor = actor
   return actor
 }

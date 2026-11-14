@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { localizedName } from '#shared/utils/localized-name'
+import { useCurrentUser } from '#fsd/shared/auth'
 import type { Stay } from '#fsd/entities/stay'
 import { formatDate, useMoneyFormat } from '#fsd/shared/lib'
 import StayServiceIcons from './StayServiceIcons.vue'
@@ -14,6 +15,7 @@ const props = defineProps<{
   showServicePrices: boolean
 }>()
 const emit = defineEmits<{ 'update:open': [value: boolean]; edit: [stay: Stay]; saved: [] }>()
+const user = useCurrentUser()
 const { t, locale } = useI18n()
 const { formatMoney } = useMoneyFormat()
 const adultCount = ref(1)
@@ -74,14 +76,16 @@ async function saveGuests() {
           <UAlert v-if="guestError" color="error" role="alert" :description="guestError" />
         </section>
 
-        <section v-if="stay.guestName || stay.guestPhone || stay.guestComment || stay.specialRequests" class="stay-details__section">
+        <section v-if="stay.guestName || stay.guestPhone || stay.guestEmail || stay.guestId || stay.guestComment || stay.specialRequests" class="stay-details__section">
           <h3>{{ t('calendarExtra.guestDetails') }}</h3>
           <dl class="stay-details__list">
             <div v-if="stay.guestName"><dt>{{ t('calendarExtra.guestName') }}</dt><dd>{{ stay.guestName }}</dd></div>
             <div v-if="stay.guestPhone"><dt>{{ t('common.phone') }}</dt><dd>{{ stay.guestPhone }}</dd></div>
+            <div v-if="stay.guestEmail"><dt>Email</dt><dd class="break-all">{{ stay.guestEmail }}</dd></div>
             <div v-if="stay.guestComment"><dt>{{ t('calendar.guestComment') }}</dt><dd>{{ stay.guestComment }}</dd></div>
             <div v-if="stay.specialRequests"><dt>{{ t('common.notes') }}</dt><dd>{{ stay.specialRequests }}</dd></div>
           </dl>
+          <UButton v-if="stay.guestId && canManageCleaning && user?.guestsEnabled" :to="`/guests/${stay.guestId}`" color="neutral" variant="ghost" icon="i-lucide-contact" class="min-h-11">{{ t('guests.linkedGuest') }}</UButton>
         </section>
 
         <section v-if="stay.services?.length" class="stay-details__section">

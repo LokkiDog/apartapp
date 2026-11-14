@@ -15,6 +15,7 @@ import {
 export default defineEventHandler(async (event) => {
   const actor = await requireMessagingActor(event)
   const conversationId = z.uuid().parse(getRouterParam(event, 'id'))
+  const threadId = z.uuid().optional().parse(getQuery(event).thread)
   const raw = await readMessagingBody(event, MAX_MESSAGE_FILE_BYTES + 64 * 1024)
   let input: z.infer<typeof messageInputSchema>
   let file: OutgoingFile | undefined
@@ -42,5 +43,5 @@ export default defineEventHandler(async (event) => {
       text: form.get('text') ?? '',
     })
   } else input = messageInputSchema.parse(parseMessagingJson(raw))
-  return enqueueMessage(actor, conversationId, input, file)
+  return enqueueMessage(actor, conversationId, input, file, threadId)
 })

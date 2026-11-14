@@ -24,6 +24,11 @@ export interface LineConnection extends MessagingConnection {
   webhookUrl: string | null
 }
 
+export interface LineMessageQuota {
+  limit: number | null
+  used: number
+}
+
 export const messageInputSchema = z
   .object({
     requestId: z.uuid(),
@@ -54,9 +59,21 @@ export interface MessagingConversation {
   lastMessageAt: string
   stayId: string | null
   guestName: string | null
+  guestId: string | null
+  guestDisplayName: string | null
   checkInOn: string | null
   checkOutOn: string | null
   apartmentName: string | null
+}
+export interface MessagingSource {
+  id: string
+  channel: MessagingChannel
+  connected: boolean
+  name: string
+  username: string
+}
+export interface MessagingInboxItem extends MessagingConversation {
+  channels: MessagingChannel[]
 }
 export interface MessagingAttachment {
   id: string
@@ -67,6 +84,8 @@ export interface MessagingAttachment {
 }
 export interface GuestMessage {
   id: string
+  conversationId: string
+  channel: MessagingChannel
   direction: 'incoming' | 'outgoing'
   text: string
   unsupported: boolean

@@ -5,16 +5,21 @@ import { AUTH_SESSION_IDLE_MAX_AGE_SECONDS } from './shared/config/auth-session'
 import { getCrmBrand } from './shared/config/crm-brand'
 
 const brand = getCrmBrand(process.env.CRM_BRAND)
+const devPort = brand.id === 'magicmop' ? 2002 : 2000
+const publicAppUrl = process.env.NUXT_PUBLIC_APP_URL || 'http://localhost:3000'
+const publicAppHost = URL.canParse(publicAppUrl) ? new URL(publicAppUrl).hostname : ''
 
 export default defineNuxtConfig({
   compatibilityDate: '2026-08-09',
+  devServer: { port: devPort },
+  ...(process.env.APARTS_DEV_BUILD_DIR ? { buildDir: process.env.APARTS_DEV_BUILD_DIR } : {}),
   devtools: { enabled: true },
   nitro: {
     experimental: { websocket: true }
   },
   modules: ['@nuxt/ui', 'nuxt-auth-utils', '@vite-pwa/nuxt', '@nuxtjs/i18n'],
   i18n: {
-    baseUrl: process.env.NUXT_PUBLIC_APP_URL || 'http://localhost:3000',
+    baseUrl: publicAppUrl,
     defaultLocale: 'ru',
     strategy: 'no_prefix',
     langDir: 'locales',
@@ -63,6 +68,9 @@ export default defineNuxtConfig({
     typeCheck: true
   },
   vite: {
+    server: {
+      allowedHosts: publicAppHost && !publicAppHost.startsWith('.') ? [publicAppHost] : [],
+    },
     build: {
       rolldownOptions: {
         output: {
@@ -113,7 +121,7 @@ export default defineNuxtConfig({
     vapidPrivateKey: process.env.NUXT_VAPID_PRIVATE_KEY || process.env.VAPID_PRIVATE_KEY,
     public: {
       brand,
-      appUrl: process.env.NUXT_PUBLIC_APP_URL || 'http://localhost:3000',
+      appUrl: publicAppUrl,
       vapidPublicKey: process.env.NUXT_PUBLIC_VAPID_PUBLIC_KEY || process.env.NUXT_VAPID_PUBLIC_KEY || process.env.VAPID_PUBLIC_KEY || ''
     }
   },

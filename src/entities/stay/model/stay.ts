@@ -12,6 +12,8 @@ export interface Stay {
   specialRequests?: string
   guestName?: string
   guestPhone?: string
+  guestEmail?: string
+  guestId?: string | null
   guestComment?: string
   cashAmountEur?: number | null
   cashTaskState?: 'none' | 'pending' | 'collected'

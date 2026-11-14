@@ -14,7 +14,7 @@ type Line = { id: string, category: Category, description: string, occurredOn: s
 type SavedLine = Omit<Line, 'id'>
 const order: Category[] = ['cleaning', 'inventory', 'task', 'other']
 
-async function getManagerTeamSnapshot(organizationId: string, apartmentId: string, database: typeof db = db) {
+async function getManagerTeamSnapshot(organizationId: string, apartmentId: string, database: Pick<typeof db, 'query' | 'insert'> = db) {
   const assignments = await database.query.apartmentManagers.findMany({
     where: and(eq(apartmentManagers.apartmentId, apartmentId), eq(apartmentManagers.organizationId, organizationId)),
     with: { manager: { columns: { id: true, name: true } } }
@@ -24,7 +24,7 @@ async function getManagerTeamSnapshot(organizationId: string, apartmentId: strin
 
 export async function createFinancialEntry(input: {
   organizationId: string; apartmentId: string; type: 'cleaning_charge' | 'inventory_charge' | 'task_charge' | 'guest_service_charge' | 'compensation' | 'manual_expense' | 'cash_receipt'; visibility: 'administrator' | 'manager'; amountEur: number; occurredOn: string; description: string; sourceType: string; sourceId: string; createdById: string; problemId?: string | null
-}, database: typeof db = db) {
+}, database: Pick<typeof db, 'query' | 'insert'> = db) {
   const apartment = await database.query.apartments.findFirst({ where: and(eq(apartments.id, input.apartmentId), eq(apartments.organizationId, input.organizationId)) })
   if (!apartment) throw createError({ statusCode: 404, statusMessage: 'Апартамент не найден' })
   const managerTeamSnapshot = await getManagerTeamSnapshot(input.organizationId, input.apartmentId, database)

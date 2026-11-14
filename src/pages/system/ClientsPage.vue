@@ -90,10 +90,11 @@ async function setStatus(client: PlatformClient, next: 'active' | 'blocked') {
   catch (cause: any) { error.value = cause?.data?.statusMessage ?? 'Не удалось изменить статус' }
   finally { pending.value = false }
 }
-async function setMessaging(client: PlatformClient, enabled: boolean) {
+async function setModule(client: PlatformClient, field: 'messagingEnabled' | 'guestsEnabled', enabled: boolean) {
+  if (pending.value) return
   pending.value = true; error.value = ''
-  try { await $fetch(`/api/system/clients/${client.id}`, { method: 'PATCH', body: { messagingEnabled: enabled } }); await refresh() }
-  catch (cause: any) { error.value = cause?.data?.statusMessage ?? 'Не удалось изменить доступ к сообщениям' }
+  try { await $fetch(`/api/system/clients/${client.id}`, { method: 'PATCH', body: { [field]: enabled } }); await refresh() }
+  catch (cause: any) { error.value = cause?.data?.statusMessage ?? 'Не удалось изменить доступ к модулю' }
   finally { pending.value = false }
 }
 async function resend(client: PlatformClient, administratorId: string) {
@@ -203,7 +204,7 @@ function actions(client: PlatformClient): DropdownMenuItem[] {
             <th scope="col" class="px-4 py-2.5 text-start font-semibold">Компания</th>
             <th scope="col" class="px-3 py-2.5 text-start font-semibold">Администратор</th>
             <th scope="col" class="px-3 py-2.5 text-start font-semibold">Статус</th>
-            <th scope="col" class="px-3 py-2.5 text-start font-semibold">Сообщения</th>
+            <th scope="col" class="px-3 py-2.5 text-start font-semibold">Модули</th>
             <th scope="col"><span class="sr-only">Действия</span></th>
           </tr>
         </thead>
@@ -217,7 +218,7 @@ function actions(client: PlatformClient): DropdownMenuItem[] {
             :pending="pending"
             :entering-client-id="enteringClientId"
             @enter="enter(client.id)"
-            @update:messaging="setMessaging(client, $event)"
+            @update:module="(field, enabled) => setModule(client, field, enabled)"
           />
         </tbody>
       </table>
@@ -231,7 +232,7 @@ function actions(client: PlatformClient): DropdownMenuItem[] {
           :pending="pending"
           :entering-client-id="enteringClientId"
           @enter="enter(client.id)"
-          @update:messaging="setMessaging(client, $event)"
+          @update:module="(field, enabled) => setModule(client, field, enabled)"
         />
       </ul>
     </div>

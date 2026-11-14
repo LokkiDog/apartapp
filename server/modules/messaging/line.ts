@@ -1,6 +1,6 @@
 import { createHmac } from 'node:crypto'
 import { z } from 'zod'
-import { MAX_MESSAGE_FILE_BYTES } from '../../../shared/contracts/messaging'
+import { MAX_MESSAGE_FILE_BYTES, type LineMessageQuota } from '../../../shared/contracts/messaging'
 import { verifyWebhookSecret } from './secrets'
 
 export function verifyLineSignature(raw: Buffer, signature: string | undefined, secret: string) {
@@ -26,6 +26,24 @@ export async function getLineBot(token: string) {
   const response = await lineFetch(token, 'info')
   if (!response.ok) throw new Error('LINE bot lookup failed')
   return botSchema.parse(await response.json())
+}
+
+const messageCount = z.number().int().nonnegative()
+const quotaSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('none') }),
+  z.object({ type: z.literal('limited'), value: messageCount }),
+])
+const quotaConsumptionSchema = z.object({ totalUsage: messageCount })
+
+export async function getLineMessageQuota(token: string): Promise<LineMessageQuota> {
+  const [quota, consumption] = await Promise.all([
+    lineFetch(token, 'message/quota'),
+    lineFetch(token, 'message/quota/consumption'),
+  ])
+  if (!quota.ok || !consumption.ok) throw new Error('LINE quota lookup failed')
+  const limit = quotaSchema.parse(await quota.json())
+  const { totalUsage } = quotaConsumptionSchema.parse(await consumption.json())
+  return { limit: limit.type === 'limited' ? limit.value : null, used: totalUsage }
 }
 
 export async function getLineProfile(token: string, id: string) {

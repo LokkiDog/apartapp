@@ -36,6 +36,7 @@ type StayForm = {
   specialRequests: string
   guestName: string
   guestPhone: string
+  guestEmail: string
   guestComment: string
   serviceIds: string[]
   cashAmountEur: number | null
@@ -43,7 +44,7 @@ type StayForm = {
 type SpecialServiceOption = { id: string; name: string; nameTranslations?: NameTranslations; iconName: string; priceEur: number; managerSharePercent: number; active: boolean }
 
 function emptyStayForm(): StayForm {
-  return { apartmentId: '', checkInOn: '', checkOutOn: '', adultCount: 1, childCount: 0, specialRequests: '', guestName: '', guestPhone: '', guestComment: '', serviceIds: [], cashAmountEur: null }
+  return { apartmentId: '', checkInOn: '', checkOutOn: '', adultCount: 1, childCount: 0, specialRequests: '', guestName: '', guestPhone: '', guestEmail: '', guestComment: '', serviceIds: [], cashAmountEur: null }
 }
 
 const user = useCurrentUser()
@@ -354,6 +355,7 @@ function openEdit(stay: Stay) {
     specialRequests: stay.specialRequests ?? '',
     guestName: stay.guestName ?? '',
     guestPhone: stay.guestPhone ?? '',
+    guestEmail: stay.guestEmail ?? '',
     guestComment: stay.guestComment ?? '',
     serviceIds: stay.services?.map(service => service.specialServiceId) ?? [],
     cashAmountEur: stay.cashAmountEur ?? null
@@ -366,6 +368,32 @@ function openDetails(stay: Stay) {
   selectedStay.value = stay
   detailsOpen.value = true
 }
+const toast = useToast()
+watch([() => route.query.stay, () => user.value?.organizationId, isAdministrator], async ([stayId, organizationId, administrator], _, onCleanup) => {
+  if (!import.meta.client || !administrator || typeof stayId !== 'string') return
+  const controller = new AbortController()
+  onCleanup(() => controller.abort())
+  try {
+    const stay = await $fetch<Stay>(`/api/stays/${encodeURIComponent(stayId)}`, { signal: controller.signal })
+    if (!controller.signal.aborted && user.value?.organizationId === organizationId) openDetails(stay)
+  } catch {
+    if (!controller.signal.aborted) toast.add({ color: 'error', title: t('guests.stayError') })
+  }
+}, { immediate: true })
+
+watch(() => user.value?.organizationId, (organizationId, previous) => {
+  if (previous && organizationId !== previous && route.query.stay) {
+    detailsOpen.value = false
+    selectedStay.value = null
+  }
+})
+
+function closeStayLink(open: boolean) {
+  if (open || typeof route.query.stay !== 'string') return
+  const { stay: _stay, ...query } = route.query
+  void navigateTo({ query }, { replace: true })
+}
+
 function setServiceSelected(serviceId: string, selected: boolean | 'indeterminate') {
   if (selected === true) {
     if (!form.serviceIds.includes(serviceId)) form.serviceIds.push(serviceId)
@@ -391,7 +419,7 @@ async function saveStay() {
     editingStay.value = null
     await refresh()
   } catch (cause: any) {
-    error.value = cause?.data?.statusMessage ?? t('common.error')
+    error.value = cause?.data?.data?.code === 'GUEST_CONTACT_CONFLICT' ? t('guests.contactConflict') : cause?.data?.statusMessage ?? t('common.error')
   } finally {
     pending.value = false
   }
@@ -668,7 +696,7 @@ async function saveStay() {
 
     </div>
 
-    <LazyStayDetailsSlideover v-if="detailsOpen" v-model:open="detailsOpen" :stay="selectedStay" :can-edit="canEditStays" :can-manage-cleaning="Boolean(user?.roles.includes('administrator'))" :show-service-prices="showFinancialDetails" @edit="openEdit" @saved="refreshStayDetails" />
+    <LazyStayDetailsSlideover v-if="detailsOpen" v-model:open="detailsOpen" :stay="selectedStay" :can-edit="canEditStays" :can-manage-cleaning="Boolean(user?.roles.includes('administrator'))" :show-service-prices="showFinancialDetails" @update:open="closeStayLink" @edit="openEdit" @saved="refreshStayDetails" />
 
     <USlideover v-model:open="open" :title="editingStay ? t('calendar.editBooking') : t('calendar.newStay')" :modal="true" :overlay="true">
       <template #body>
@@ -687,6 +715,11 @@ async function saveStay() {
             <UFormField name="childCount" :label="t('calendar.children')"><UInput v-model.number="form.childCount" type="number" min="0" /></UFormField>
           </div>
           <USeparator />
+          <div class="grid gap-3 sm:grid-cols-2">
+            <UFormField name="guestName" :label="t('guests.name')"><UInput v-model="form.guestName" autocomplete="name" class="w-full" :ui="{ base: 'min-h-11' }" /></UFormField>
+            <UFormField name="guestPhone" :label="t('common.phone')"><UInput v-model="form.guestPhone" type="tel" autocomplete="tel" class="w-full" :ui="{ base: 'min-h-11' }" /></UFormField>
+            <UFormField name="guestEmail" label="Email"><UInput v-model="form.guestEmail" type="email" autocomplete="email" class="w-full" :ui="{ base: 'min-h-11' }" /></UFormField>
+          </div>
           <UFormField name="guestComment" :label="t('calendar.guestComment')"><UTextarea v-model="form.guestComment" class="w-full" /></UFormField>
           <div v-if="formServices.length" class="rounded-xl bg-[#f4f8f6] px-0 py-1">
             <p class="font-semibold">{{ t('calendar.extraServices') }}</p>

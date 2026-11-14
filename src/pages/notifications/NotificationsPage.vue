@@ -60,6 +60,10 @@ const { data: firstPage, refresh, status, error: loadError } = await useAsyncDat
 const items = ref<Notification[]>([])
 const nextCursor = ref<string | null>(null)
 const loadMorePending = ref(false)
+const hasLoaded = ref(status.value === 'success')
+watch(status, value => {
+  if (value === 'success') hasLoaded.value = true
+})
 watch(firstPage, page => {
   const latestIds = new Set(page.items.map(item => item.id))
   items.value = [...page.items, ...items.value.filter(item => !latestIds.has(item.id))]
@@ -86,6 +90,7 @@ const notificationAppearance: Record<NotificationType, { icon: string; className
   cleaning_changed: { icon: 'i-lucide-broom', className: 'bg-[var(--color-primary-soft)] text-[var(--color-primary)]' },
   task_resolved: { icon: 'i-lucide-circle-check', className: 'bg-[#e8f1f7] text-[#356882]' },
   task_returned: { icon: 'i-lucide-rotate-ccw', className: 'bg-[#fff4d7] text-[#9a5b10]' },
+  guest_message: { icon: 'i-lucide-message-circle', className: 'bg-[var(--color-primary-soft)] text-[var(--color-primary)]' },
   manual: { icon: 'i-lucide-megaphone', className: 'bg-[var(--color-primary-soft)] text-[var(--color-primary)]' }
 }
 
@@ -123,7 +128,7 @@ function errorMessage(cause: any) {
 function markLocallyRead(ids: string[]) {
   const readAt = new Date().toISOString()
   items.value = items.value.map(item => ids.includes(item.id) ? { ...item, readAt } : item)
-  ids.forEach(() => notificationState.markRead())
+  notificationState.revision.value += 1
 }
 
 async function retry() {
@@ -221,7 +226,7 @@ async function markAllRead() {
 }
 
 watch(notificationState.revision, () => {
-  if (status.value !== 'pending') void refresh()
+  void refresh()
 })
 </script>
 
@@ -235,7 +240,7 @@ watch(notificationState.revision, () => {
 
     <div class="mx-auto max-w-4xl space-y-4">
       <UAlert v-if="sendNotice" color="success" variant="soft" :description="sendNotice" />
-      <div v-if="status === 'idle' || status === 'pending'" class="space-y-5" aria-busy="true">
+      <div v-if="!hasLoaded && (status === 'idle' || status === 'pending')" class="space-y-5" aria-busy="true">
         <div class="flex items-center justify-between gap-3"><USkeleton class="h-11 w-44 rounded-xl" /><USkeleton class="h-11 w-36 rounded-xl" /></div>
         <section v-for="group in 2" :key="group" class="space-y-2">
           <USkeleton class="h-5 w-24 rounded" />

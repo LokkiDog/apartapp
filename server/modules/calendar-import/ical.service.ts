@@ -168,7 +168,7 @@ export async function listIcalConflicts(actor: Actor) {
   requireRole(actor, 'administrator', 'manager')
   const conflicts = await db.query.icalConflicts.findMany({
     where: and(eq(icalConflicts.organizationId, actor.organizationId), inArray(icalConflicts.status, actor.roles.includes('administrator') ? ['open', 'needs_admin'] : ['open'])),
-    with: { apartment: { with: { managerAssignments: true } }, importedStay: true, existingStay: true }, orderBy: (table, { desc }) => [desc(table.createdAt)]
+    with: { apartment: { with: { managerAssignments: true } }, importedStay: { columns: { guestId: false } }, existingStay: { columns: { guestId: false } } }, orderBy: (table, { desc }) => [desc(table.createdAt)]
   })
   return Promise.all(conflicts.filter(conflict => actor.roles.includes('administrator') || conflict.apartment.managerAssignments.some(item => item.userId === actor.id)).map(async conflict => ({
     id: conflict.id, status: conflict.status, apartmentId: conflict.apartmentId, apartmentName: conflict.apartment.name,

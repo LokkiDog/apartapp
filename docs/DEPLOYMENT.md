@@ -311,9 +311,9 @@ npm run dev -- --port 3000
 npm run dev:guest
 ```
 
-Для локального сайта укажите `http://localhost:3001` в «Настройки → Сайт»
+Для локального сайта укажите `http://localhost:2001` в «Настройки → Сайт»
 локальной CRM. В `guest/.env` при необходимости задайте только
-`NUXT_CATALOGUE_API_BASE=http://localhost:3000`. Это не изменяет production-БД.
+`NUXT_CATALOGUE_API_BASE=http://localhost:2000`. Это не изменяет production-БД.
 
 Вторая команда запускает именно `guest/`; повторный `npm run dev` поднимает ещё
 одну CRM и не заменяет гостевой сайт. Используйте Node.js 22.18+.

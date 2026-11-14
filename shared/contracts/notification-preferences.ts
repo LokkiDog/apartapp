@@ -27,6 +27,7 @@ export const notificationEvents = [
   {"key": "problem_deleted", "category": "problems", "roles": ["administrator", "manager", "cleaner", "specialist"], "label": {"ru": "Удаление проблемы", "en": "Problem deleted", "he": "מחיקת בעיה"}},
   {"key": "problem_deletion_rejected", "category": "problems", "roles": ["administrator", "manager", "cleaner", "specialist"], "label": {"ru": "Удаление проблемы отклонено", "en": "Problem deletion declined", "he": "מחיקת בעיה נדחתה"}},
   {"key": "expense_report_published", "category": "reports", "roles": ["administrator", "manager"], "label": {"ru": "Публикация отчёта по расходам", "en": "Expense report published", "he": "פרסום דוח הוצאות"}},
+  {"key": "guest_message", "category": "messages", "roles": ["administrator"], "label": {"ru": "Сообщение гостя", "en": "Guest message", "he": "הודעת אורח"}},
   {"key": "manual", "category": "messages", "roles": ["administrator", "manager", "cleaner", "specialist"], "label": {"ru": "Сообщение администратора", "en": "Administrator message", "he": "הודעת מנהל"}},
  ] as const
 export type NotificationEventKey = typeof notificationEvents[number]['key']

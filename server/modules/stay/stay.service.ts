@@ -12,6 +12,13 @@ import { buildStayServiceSnapshot } from './stay-service-snapshot'
 import { refreshAutomaticCleaningUrgency } from '../cleaning/cleaning-urgency'
 import { reconcileCleaningGuestPreparation } from '../cleaning/guest-preparation'
 import { syncCashTasksForStay } from '../task/cash-task.service'
+import { resolveStayGuest } from '../guest/guest.service'
+
+function visibleStay<T extends { guestId: string | null }>(actor: Actor, stay: T) {
+  if (actor.guestsEnabled && actor.roles.includes('administrator')) return stay
+  const { guestId: _guestId, ...visible } = stay
+  return visible
+}
 
 async function assertNoOverlap(organizationId: string, apartmentId: string, checkInOn: string, checkOutOn: string, exceptId?: string) {
   const criteria = [eq(stays.organizationId, organizationId), eq(stays.apartmentId, apartmentId), eq(stays.state, 'active'), lt(stays.checkInOn, checkOutOn), gt(stays.checkOutOn, checkInOn)]
@@ -68,10 +75,20 @@ export async function listStays(actor: Actor, query: StayListQuery = {}) {
       const apartment = serializeApartment(stay.apartment)
       const hasCleaning = Boolean(stay.cleaning?.id)
       const cashTaskState = cashTaskStateByStayId.get(stay.id) ?? 'none'
-      if (actor.roles.includes('administrator')) return { ...stay, apartment, hasCleaning, cashTaskState }
-      const { cleaning: _cleaning, ...safeStay } = stay
+      if (actor.roles.includes('administrator')) return { ...visibleStay(actor, stay), apartment, hasCleaning, cashTaskState }
+      const { cleaning: _cleaning, guestId: _guestId, ...safeStay } = stay
       return { ...safeStay, apartment, cashTaskState }
     })
+}
+
+export async function getStayDetails(actor: Actor, id: string) {
+  requireRole(actor, 'administrator')
+  const stay = await db.query.stays.findFirst({
+    where: and(eq(stays.id, id), eq(stays.organizationId, actor.organizationId)),
+    with: { apartment: { with: { hotel: true } }, services: true, cleaning: { columns: { id: true, status: true, scheduledOn: true } } },
+  })
+  if (!stay) throw createError({ statusCode: 404, statusMessage: 'Booking not found' })
+  return visibleStay(actor, stay)
 }
 
 export async function createStay(actor: Actor, input: unknown) {
@@ -82,17 +99,23 @@ export async function createStay(actor: Actor, input: unknown) {
   const services = await serviceSnapshots(data.serviceIds, actor.organizationId)
   const cashAmountEur = data.cashAmountEur ?? Number(services.reduce((sum, service) => sum.plus(service.priceEur), new Decimal(0)).toDecimalPlaces(2))
   const { serviceIds: _serviceIds, ...stayData } = data
-  const [stay] = await db.insert(stays).values({ ...stayData, organizationId: actor.organizationId, cashAmountEur, createdById: actor.id }).returning()
-  if (!stay) throw createError({ statusCode: 500, statusMessage: 'Не удалось создать заезд' })
-  const snapshots = services.length
-    ? await db.insert(stayServices).values(services.map(service => buildStayServiceSnapshot(stay.id, service))).returning()
-    : []
-  await Promise.all(snapshots.map(service => createFinancialEntry({ organizationId: actor.organizationId, apartmentId: stay.apartmentId, type: 'guest_service_charge', visibility: 'administrator', amountEur: service.priceEurSnapshot, occurredOn: stay.checkInOn, description: `Допуслуга: ${service.nameSnapshot}`, sourceType: 'stay_service', sourceId: service.id, createdById: actor.id })))
+  const stay = await db.transaction(async tx => {
+    const guestId = await resolveStayGuest(tx, actor.organizationId, data.guestName, data.guestPhone, data.guestEmail ?? '')
+    const [created] = await tx.insert(stays).values({ ...stayData, guestId, organizationId: actor.organizationId, cashAmountEur, createdById: actor.id }).returning()
+    if (!created) throw createError({ statusCode: 500, statusMessage: 'Не удалось создать заезд' })
+    const snapshots = services.length
+      ? await tx.insert(stayServices).values(services.map(service => buildStayServiceSnapshot(created.id, service))).returning()
+      : []
+    for (const service of snapshots) {
+      await createFinancialEntry({ organizationId: actor.organizationId, apartmentId: created.apartmentId, type: 'guest_service_charge', visibility: 'administrator', amountEur: service.priceEurSnapshot, occurredOn: created.checkInOn, description: `Допуслуга: ${service.nameSnapshot}`, sourceType: 'stay_service', sourceId: service.id, createdById: actor.id }, tx)
+    }
+    return created
+  })
   await writeAuditLog({ organizationId: actor.organizationId, actorId: actor.id, action: 'stay.created', entityType: 'stay', entityId: stay.id })
   await refreshAutomaticCleaningUrgency(actor.organizationId, stay.apartmentId, [stay.checkInOn, stay.checkOutOn])
   await reconcileCleaningGuestPreparation(actor, stay.apartmentId)
   if (actor.roles.includes('manager')) await notifyUsers({ organizationId: actor.organizationId, userIds: await administratorsForOrganization(actor.organizationId), type: 'stay_changed', eventKey: 'booking_created', title: 'Новый заезд', body: {"ru": "Собственник создал новый заезд", "en": "The owner created a new booking", "he": "בעל הנכס יצר הזמנה חדשה"}, href: `/calendar` })
-  return stay
+  return visibleStay(actor, stay)
 }
 
 export async function updateStay(actor: Actor, stayId: string, input: unknown) {
@@ -113,7 +136,9 @@ export async function updateStay(actor: Actor, stayId: string, input: unknown) {
   const removedServices = existing.services.filter(service => !requestedServiceIds.has(service.specialServiceId))
 
   const updated = await db.transaction(async tx => {
-    const [updatedStay] = await tx.update(stays).set({ ...stayData, cashAmountEur, updatedAt: new Date() }).where(eq(stays.id, stayId)).returning()
+    const [updatedStay] = await tx.update(stays).set({ ...stayData, cashAmountEur, updatedAt: new Date() }).where(and(eq(stays.id, stayId), eq(stays.organizationId, actor.organizationId))).returning()
+
+    if (!updatedStay) throw createError({ statusCode: 404, statusMessage: 'Booking not found' })
 
     if (removedServices.length) {
       const removedIds = removedServices.map(service => service.id)
@@ -131,7 +156,7 @@ export async function updateStay(actor: Actor, stayId: string, input: unknown) {
       ? await tx.insert(stayServices).values(addedServices.map(service => buildStayServiceSnapshot(stayId, service))).returning()
       : []
     for (const service of addedSnapshots) {
-      await createFinancialEntry({ organizationId: actor.organizationId, apartmentId: existing.apartmentId, type: 'guest_service_charge', visibility: 'administrator', amountEur: service.priceEurSnapshot, occurredOn: data.checkInOn, description: `Допуслуга: ${service.nameSnapshot}`, sourceType: 'stay_service', sourceId: service.id, createdById: actor.id }, tx as unknown as typeof db)
+      await createFinancialEntry({ organizationId: actor.organizationId, apartmentId: existing.apartmentId, type: 'guest_service_charge', visibility: 'administrator', amountEur: service.priceEurSnapshot, occurredOn: data.checkInOn, description: `Допуслуга: ${service.nameSnapshot}`, sourceType: 'stay_service', sourceId: service.id, createdById: actor.id }, tx)
     }
     return updatedStay
   })
@@ -140,7 +165,7 @@ export async function updateStay(actor: Actor, stayId: string, input: unknown) {
   await reconcileCleaningGuestPreparation(actor, existing.apartmentId)
   await syncCashTasksForStay(actor, stayId)
   if (actor.roles.includes('manager')) await notifyUsers({ organizationId: actor.organizationId, userIds: await administratorsForOrganization(actor.organizationId), type: 'stay_changed', eventKey: 'booking_updated', title: 'Заезд изменен', body: {"ru": "Собственник изменил заезд", "en": "The owner changed a booking", "he": "בעל הנכס שינה הזמנה"}, href: '/calendar' })
-  return updated
+  return visibleStay(actor, updated)
 }
 
 export async function deleteStay(actor: Actor, stayId: string) {

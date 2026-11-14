@@ -54,6 +54,64 @@ async function conversationId() {
   return (await inbox.listConversations(actor)).items[0]!.id
 }
 
+async function makeApartment(owner: Actor) {
+  const [hotel] = await db
+    .insert(tables.hotels)
+    .values({
+      organizationId: owner.organizationId,
+      name: 'Hotel',
+      address: 'Bansko',
+      latitude: 41.8,
+      longitude: 23.4,
+    })
+    .returning()
+  const [type] = await db
+    .insert(tables.apartmentTypes)
+    .values({
+      organizationId: owner.organizationId,
+      name: 'Studio',
+      ownerTotalEur: 0,
+      cleanerPoolEur: 0,
+      laundryEur: 0,
+      serviceEur: 0,
+    })
+    .returning()
+  const [apartment] = await db
+    .insert(tables.apartments)
+    .values({
+      organizationId: owner.organizationId,
+      hotelId: hotel!.id,
+      apartmentTypeId: type!.id,
+      name: '101',
+      capacity: 2,
+      rooms: 1,
+      checkInTime: '14:00',
+      checkOutTime: '11:00',
+    })
+    .returning()
+  await db.insert(tables.apartmentManagers).values({
+    organizationId: owner.organizationId, apartmentId: apartment!.id, userId: owner.id,
+  })
+  return apartment!
+}
+
+async function makeStay(owner: Actor) {
+  const apartment = await makeApartment(owner)
+  const [stay] = await db
+    .insert(tables.stays)
+    .values({
+      organizationId: owner.organizationId,
+      apartmentId: apartment!.id,
+      checkInOn: '2026-12-01',
+      checkOutOn: '2026-12-05',
+      adultCount: 2,
+      childCount: 0,
+      guestName: 'Guest',
+    })
+    .returning()
+  return stay!
+}
+
 // This suite only migrates and resets a disposable database with this exact name.
 describe.skipIf(!url)('guest messaging PostgreSQL boundaries', () => {
   beforeAll(async () => {
@@ -122,6 +180,7 @@ describe.skipIf(!url)('guest messaging PostgreSQL boundaries', () => {
       name: 'Admin',
       roles: ['administrator'],
       locale: 'ru',
+      guestsEnabled: true,
     }
     other = { ...actor, id: users[1]!.id, organizationId: second!.id }
     fetchMock.mockReset()
@@ -141,15 +200,49 @@ describe.skipIf(!url)('guest messaging PostgreSQL boundaries', () => {
     await platform.updateClient(
       { ...actor, isSuperuser: true },
       actor.organizationId,
-      { messagingEnabled: true },
+      { messagingEnabled: true, guestsEnabled: true },
     )
     await platform.updateClient(
       { ...actor, isSuperuser: true },
       other.organizationId,
-      { messagingEnabled: true },
+      { messagingEnabled: true, guestsEnabled: true },
     )
     await telegram.connectTelegram(actor, '123456:abcdefghijklmnopqrstuvwx')
     botConnection = (await db.select().from(tables.messagingConnections))[0]!
+  })
+
+  it('delivers a first-contact reply and only one after-hours reply for concurrent Telegram messages', async () => {
+    const { defaultMessagingAutomation } = await import('../shared/contracts/messaging-automation')
+    const settings = defaultMessagingAutomation()
+    // Pick a working day two local dates away, so the test always runs outside working hours.
+    const today = new Date().getUTCDay()
+    settings.days = [(today + 1) % 7 + 1]
+    settings.telegram = {
+      welcome: { enabled: true, text: 'Welcome' },
+      away: { enabled: true, text: 'We will reply during business hours.' },
+    }
+    await db.update(tables.organizations).set({ messagingAutomation: settings, timezone: 'UTC' })
+      .where(eq(tables.organizations.id, actor.organizationId))
+    const sent: string[] = []
+    fetchMock.mockImplementation(async (url: string, request?: RequestInit) => {
+      if (url.endsWith('/sendMessage')) {
+        sent.push(JSON.parse(String(request?.body)).text)
+        return Response.json({ ok: true, result: { message_id: 42 } })
+      }
+      return Response.json({ ok: true, result: true })
+    })
+    const first = update('/start')
+    const receive = (payload: ReturnType<typeof update>) =>
+      incoming.receiveTelegramUpdate(botConnection.id, botConnection.webhookSecret, payload)
+    await Promise.all([receive(first), receive(first), receive(update('Hello'))])
+    await outbox.processMessagingOutbox()
+    expect(sent).toEqual(['Welcome\n\nWe will reply during business hours.'])
+    const [{ id }] = (await inbox.listConversations(actor)).items
+    expect((await inbox.listMessages(actor, id, undefined, 50)).items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ direction: 'outgoing', status: 'sent', text: sent[0] }),
+      ]),
+    )
   })
 
   it('defaults new clients to off and permits only the super to enable the module', async () => {
@@ -172,6 +265,14 @@ describe.skipIf(!url)('guest messaging PostgreSQL boundaries', () => {
   })
 
   it('deduplicates incoming updates and prevents another client from reading or sending to a conversation', async () => {
+    await db.insert(tables.users).values({
+      organizationId: actor.organizationId,
+      name: 'Cleaner',
+      email: 'cleaner@first.test',
+      passwordHash: 'unused',
+      status: 'active',
+      roles: ['cleaner'],
+    })
     const event = update('Question')
     await Promise.all([
       incoming.receiveTelegramUpdate(
@@ -187,6 +288,16 @@ describe.skipIf(!url)('guest messaging PostgreSQL boundaries', () => {
     ])
     const first = (await inbox.listConversations(actor)).items[0]!
     expect(first.unread).toBe(1)
+    const alerts = await db.select().from(tables.notifications)
+      .where(eq(tables.notifications.type, 'guest_message'))
+    expect(alerts).toMatchObject([{
+      organizationId: actor.organizationId,
+      userId: actor.id,
+      title: 'Guest',
+      body: 'Question',
+      href: `/messages/${first.id}`,
+      crmVisible: true,
+    }])
     expect(
       (await inbox.listMessages(actor, first.id, undefined, 50)).items.map(
         (item) => item.text,
@@ -550,6 +661,14 @@ describe.skipIf(!url)('guest messaging PostgreSQL boundaries', () => {
     await deliver(events)
     const [chat] = (await inbox.listConversations(actor)).items
     expect(chat).toMatchObject({ channel: 'line', name: 'LINE Guest', unread: 4 })
+    const alerts = await db.select().from(tables.notifications)
+      .where(eq(tables.notifications.type, 'guest_message'))
+    expect(alerts).toHaveLength(4)
+    expect(alerts.every(alert => alert.userId === actor.id && alert.title === 'LINE Guest' &&
+      alert.href === `/messages/${chat!.id}`)).toBe(true)
+    expect(alerts.map(alert => alert.body)).toEqual(expect.arrayContaining([
+      'Booking question', 'photo.jpg', 'booking.pdf', 'huge.pdf',
+    ]))
     expect((await inbox.listConversations(other)).items).toHaveLength(0)
     await expect(inbox.listMessages(other, chat!.id, undefined, 50)).rejects.toMatchObject({ statusCode: 404 })
 
@@ -584,55 +703,6 @@ describe.skipIf(!url)('guest messaging PostgreSQL boundaries', () => {
   })
 
   it('permits linking only a stay belonging to the same company', async () => {
-    async function makeStay(owner: Actor) {
-      const [hotel] = await db
-        .insert(tables.hotels)
-        .values({
-          organizationId: owner.organizationId,
-          name: 'Hotel',
-          address: 'Bansko',
-          latitude: 41.8,
-          longitude: 23.4,
-        })
-        .returning()
-      const [type] = await db
-        .insert(tables.apartmentTypes)
-        .values({
-          organizationId: owner.organizationId,
-          name: 'Studio',
-          ownerTotalEur: 0,
-          cleanerPoolEur: 0,
-          laundryEur: 0,
-          serviceEur: 0,
-        })
-        .returning()
-      const [apartment] = await db
-        .insert(tables.apartments)
-        .values({
-          organizationId: owner.organizationId,
-          hotelId: hotel!.id,
-          apartmentTypeId: type!.id,
-          name: '101',
-          capacity: 2,
-          rooms: 1,
-          checkInTime: '14:00',
-          checkOutTime: '11:00',
-        })
-        .returning()
-      const [stay] = await db
-        .insert(tables.stays)
-        .values({
-          organizationId: owner.organizationId,
-          apartmentId: apartment!.id,
-          checkInOn: '2026-12-01',
-          checkOutOn: '2026-12-05',
-          adultCount: 2,
-          childCount: 0,
-          guestName: 'Guest',
-        })
-        .returning()
-      return stay!
-    }
     const id = await conversationId()
     const ownStay = await makeStay(actor)
     const foreignStay = await makeStay(other)
@@ -646,4 +716,227 @@ describe.skipIf(!url)('guest messaging PostgreSQL boundaries', () => {
     await inbox.updateConversation(actor, id, { stayId: null })
     expect((await inbox.listConversations(actor)).items[0]?.stayId).toBeNull()
   })
+
+  it('lets only the superuser switch off a client guest directory while keeping bookings and chat history', async () => {
+    const directory = await import('../server/modules/guest/guest.service')
+    const booking = await import('../server/modules/stay/stay.service')
+    const superuser = { ...actor, isSuperuser: true }
+    const fields = { name: 'Guest', phone: '', email: '', whatsapp: '', notes: '' }
+    const id = await conversationId()
+    const guest = await directory.assignConversationGuest(actor, id, { action: 'create', guest: fields })
+
+    await expect(platform.updateClient(actor, actor.organizationId, { guestsEnabled: false }))
+      .rejects.toMatchObject({ statusCode: 403 })
+    await platform.updateClient(superuser, actor.organizationId, { guestsEnabled: false })
+    await expect(directory.getGuest(actor, guest.id)).rejects.toMatchObject({ statusCode: 403 })
+    await expect(directory.saveGuest(actor, fields)).rejects.toMatchObject({ statusCode: 403 })
+    await expect(directory.assignConversationGuest(actor, id, { action: 'link', guestId: guest.id }))
+      .rejects.toMatchObject({ statusCode: 403 })
+    expect(await directory.listGuests(other, '', 1)).toEqual({ items: [], hasMore: false })
+    expect(await inbox.listMessages(actor, id, undefined, 30)).toMatchObject({
+      conversation: { guestId: null, guestDisplayName: null },
+      items: [{ text: 'Hello' }],
+    })
+
+    const apartment = await makeApartment(actor)
+    const stay = await booking.createStay({ ...actor, guestsEnabled: false }, {
+      apartmentId: apartment.id, adultCount: 1, childCount: 0,
+      checkInOn: '2030-01-01', checkOutOn: '2030-01-02', guestName: 'New guest',
+    })
+    expect(stay.guestName).toBe('New guest')
+    expect(stay).not.toHaveProperty('guestId')
+
+    await platform.updateClient(superuser, actor.organizationId, { guestsEnabled: true })
+    expect((await directory.listGuests(actor, '', 1)).items.map(item => item.id)).toEqual([guest.id])
+    expect((await inbox.listMessages(actor, id, undefined, 30)).conversation.guestId).toBe(guest.id)
+    expect((await booking.getStayDetails(actor, stay.id)).guestId).toBeNull()
+  })
+
+  it('creates and reuses guests from bookings without guessing identity', async () => {
+    const directory = await import('../server/modules/guest/guest.service')
+    const booking = await import('../server/modules/stay/stay.service')
+    const apartment = await makeApartment(actor)
+    const base = { apartmentId: apartment.id, adultCount: 1, childCount: 0 }
+    const dates = (day: number) => ({
+      checkInOn: `2030-01-${String(day).padStart(2, '0')}`,
+      checkOutOn: `2030-01-${String(day + 1).padStart(2, '0')}`,
+    })
+    const create = (day: number, contacts = {}, owner = actor) =>
+      booking.createStay(owner, { ...base, ...dates(day), ...contacts })
+
+    const [first, repeat] = await Promise.all([
+      create(1, { guestName: 'Elena', guestPhone: '+359 888 123 456' }),
+      create(3, { guestName: 'Elena', guestPhone: '00359 (888) 123-456', guestEmail: 'ELENA@example.test' }),
+    ])
+    expect(first.guestId).toBeTruthy()
+    expect(repeat.guestId).toBe(first.guestId)
+    const emailOnly = await create(5, { guestEmail: 'elena@EXAMPLE.test' }, { ...actor, roles: ['manager'] })
+    expect(emailOnly).not.toHaveProperty('guestId')
+    expect((await directory.getGuest(actor, first.guestId!)).stays.map(stay => stay.id))
+      .toEqual([emailOnly.id, repeat.id, first.id])
+    expect((await directory.listGuests(actor, '888123456', 1)).items).toHaveLength(1)
+    expect((await directory.listGuests(actor, 'ELENA@', 1)).items).toHaveLength(1)
+    expect((await create(7, { guestPhone: '+359888123456', guestEmail: 'elena@example.test' })).guestId).toBe(first.guestId)
+
+    const nameOnly = await create(9, { guestName: 'Elena' })
+    expect(nameOnly.guestId).toBeTruthy()
+    expect(nameOnly.guestId).not.toBe(first.guestId)
+    expect((await create(11)).guestId).toBeNull()
+    const second = await create(13, { guestEmail: 'second@example.test' })
+    await expect(create(15, { guestPhone: '+359888123456', guestEmail: 'second@example.test' }))
+      .rejects.toMatchObject({ statusCode: 409 })
+    expect(await booking.listStays(actor)).toHaveLength(7)
+
+    const ical = await db.insert(tables.stays).values({
+      ...dates(17), organizationId: actor.organizationId, apartmentId: apartment.id, source: 'ical',
+    }).returning({ id: tables.stays.id, guestId: tables.stays.guestId })
+    expect(ical[0]?.guestId).toBeNull()
+    await directory.linkGuestStay(actor, first.guestId!, ical[0]!.id, true)
+    expect((await booking.getStayDetails(actor, ical[0]!.id)).guestId).toBe(first.guestId)
+    await directory.linkGuestStay(actor, second.guestId!, ical[0]!.id, true)
+    await expect(directory.linkGuestStay(actor, first.guestId!, ical[0]!.id, false))
+      .rejects.toMatchObject({ statusCode: 404 })
+    await directory.linkGuestStay(actor, second.guestId!, ical[0]!.id, false)
+    expect((await booking.getStayDetails(actor, ical[0]!.id)).guestId).toBeNull()
+
+    await booking.updateStay(actor, first.id, { ...base, ...dates(1), guestName: 'Changed', guestPhone: '111' })
+    expect(await booking.getStayDetails(actor, first.id)).toMatchObject({ guestId: first.guestId, guestName: 'Changed' })
+    await booking.deleteStay(actor, first.id)
+    expect(await directory.getGuest(actor, first.guestId!)).toMatchObject({ name: 'Elena' })
+    await expect(directory.getGuest(other, first.guestId!)).rejects.toMatchObject({ statusCode: 404 })
+    await expect(directory.listGuests({ ...actor, roles: ['manager'] }, '', 1)).rejects.toMatchObject({ statusCode: 403 })
+    await expect(directory.linkGuestStay(other, first.guestId!, repeat.id, true)).rejects.toMatchObject({ statusCode: 404 })
+    const foreignApartment = await makeApartment(other)
+    const foreignStay = await booking.createStay(other, {
+      ...base, apartmentId: foreignApartment.id, ...dates(1), guestPhone: '+359888123456',
+    })
+    expect(foreignStay.guestId).not.toBe(first.guestId)
+    await expect(directory.linkGuestStay(actor, first.guestId!, foreignStay.id, true)).rejects.toMatchObject({ statusCode: 404 })
+  })
+
+  it('searches and pages manually managed guests without crossing company boundaries', async () => {
+    const directory = await import('../server/modules/guest/guest.service')
+    const fields = { name: 'Test Guest', phone: '', email: '', whatsapp: '', notes: '' }
+    const first = await directory.saveGuest(actor, {
+      ...fields, name: 'Test Guest 00', phone: '+359 888 234 567', notes: 'Private note',
+    })
+    await Promise.all(Array.from({ length: 30 }, (_, index) => directory.saveGuest(actor, {
+      ...fields, name: `Test Guest ${String(index + 1).padStart(2, '0')}`,
+    })))
+    await directory.saveGuest(other, { ...fields, phone: '+359888234567' })
+    const page1 = await directory.listGuests(actor, 'test guest', 1)
+    const page2 = await directory.listGuests(actor, 'test guest', 2)
+    expect(page1.items).toHaveLength(30)
+    expect(page1.hasMore).toBe(true)
+    expect(page2.items.map(guest => guest.name)).toEqual(['Test Guest 30'])
+    expect(page2.hasMore).toBe(false)
+    expect(page1.items[0]).toMatchObject({ id: first.id })
+    expect(page1.items[0]).not.toHaveProperty('notes')
+    await expect(directory.saveGuest(actor, { ...fields, phone: '00359 888234567' }))
+      .rejects.toMatchObject({ statusCode: 409 })
+    await directory.saveGuest(actor, { ...fields, name: 'Renamed', whatsapp: '+359888234567' }, first.id)
+    expect(await directory.getGuest(actor, first.id)).toMatchObject({ name: 'Renamed', phone: '', whatsapp: '+359888234567', notes: '' })
+    await expect(directory.saveGuest(other, fields, first.id)).rejects.toMatchObject({ statusCode: 404 })
+  })
+
+  it('creates a guest and links the chat atomically, then allows linking an existing guest', async () => {
+    const directory = await import('../server/modules/guest/guest.service')
+    const id = await conversationId()
+    const fields = { name: 'Guest from chat', phone: '', email: '', whatsapp: '', notes: '' }
+    const foreign = await directory.saveGuest(other, fields)
+    await expect(directory.assignConversationGuest(actor, id, { action: 'link', guestId: foreign.id }))
+      .rejects.toMatchObject({ statusCode: 404 })
+    await expect(directory.assignConversationGuest({ ...actor, roles: ['cleaner'] }, id, { action: 'create', guest: fields }))
+      .rejects.toMatchObject({ statusCode: 403 })
+
+    const requests = await Promise.allSettled([
+      directory.assignConversationGuest(actor, id, { action: 'create', guest: fields }),
+      directory.assignConversationGuest(actor, id, { action: 'create', guest: fields }),
+    ])
+    expect(requests.filter(request => request.status === 'rejected')).toEqual([
+      expect.objectContaining({ reason: expect.objectContaining({ statusCode: 409 }) }),
+    ])
+    const { items } = await directory.listGuests(actor, '', 1)
+    expect(items).toHaveLength(1)
+    const [created] = items
+    const [chat] = (await directory.getGuest(actor, created!.id)).conversations
+    expect(chat?.id).toBe(id)
+
+    await directory.linkGuestContact(actor, created!.id, chat!.contactId, false)
+    const existing = await directory.saveGuest(actor, { ...fields, name: 'Existing guest' })
+    await directory.assignConversationGuest(actor, id, { action: 'link', guestId: existing.id })
+    expect(await inbox.listMessages(actor, id, undefined, 50)).toMatchObject({
+      conversation: { guestId: existing.id, guestDisplayName: existing.name, stayId: null },
+      items: [expect.objectContaining({ direction: 'incoming' })],
+    })
+  })
+
+  it('identifies a guest in both Telegram and LINE and preserves message history when unlinked', async () => {
+    const directory = await import('../server/modules/guest/guest.service')
+    const fields = { name: 'Maria', phone: '', email: '', whatsapp: '', notes: '' }
+    const guest = await directory.saveGuest(actor, fields)
+    const second = await directory.saveGuest(actor, { ...fields, name: 'Elena' })
+    const foreign = await directory.saveGuest(other, fields)
+    const telegramId = await conversationId()
+    const { connectLine } = await import('../server/modules/messaging/line-connection')
+    const { receiveLineWebhook } = await import('../server/modules/messaging/line-incoming')
+    const secret = 'b'.repeat(32)
+    const destination = 'U' + 'c'.repeat(32)
+    const userId = 'U' + 'd'.repeat(32)
+    fetchMock.mockImplementation(async (url: string) => url.endsWith('/bot/info')
+      ? Response.json({ userId: destination, displayName: 'LINE', basicId: '@test' })
+      : Response.json({ displayName: 'LINE Guest' }))
+    const setup = await connectLine(actor, 'test-access-token', secret)
+    const lineId = setup.webhookUrl!.split('/').at(-2)!
+    const deliver = (events: unknown[]) => {
+      const raw = Buffer.from(JSON.stringify({ destination, events }))
+      return receiveLineWebhook(lineId, createHmac('sha256', secret).update(raw).digest('base64'), raw)
+    }
+    await deliver([])
+    await deliver([{
+      type: 'message', mode: 'active', timestamp: Date.now(), webhookEventId: 'line-text',
+      source: { type: 'user', userId }, message: { id: 'line-text', type: 'text', text: 'Hello' },
+    }])
+    const chats = (await directory.findGuestConversations(actor, '', 1)).items
+    expect(chats.map(chat => chat.channel).sort()).toEqual(['line', 'telegram'])
+    expect((await inbox.listConversations(actor)).items).toHaveLength(2)
+    for (const chat of chats) {
+      await directory.linkGuestContact(actor, guest.id, chat.contactId, true)
+      await expect(directory.linkGuestContact(actor, second.id, chat.contactId, true)).rejects.toMatchObject({ statusCode: 409 })
+      await expect(directory.linkGuestContact(other, foreign.id, chat.contactId, true)).rejects.toMatchObject({ statusCode: 404 })
+      expect((await inbox.listMessages(actor, chat.id, undefined, 50)).conversation)
+        .toMatchObject({ guestId: guest.id, guestDisplayName: 'Maria' })
+    }
+    expect((await directory.getGuest(actor, guest.id)).conversations).toHaveLength(2)
+    expect((await inbox.listConversations(actor)).items).toMatchObject([
+      { guestId: guest.id, channels: ['line', 'telegram'], unread: 2 },
+    ])
+    const lineChat = chats.find(chat => chat.channel === 'line')!
+    const reply = await inbox.enqueueMessage(actor, telegramId, { requestId: randomUUID(), text: 'Telegram reply' })
+    await db.update(tables.messagingMessages).set({ createdAt: new Date(Date.now() + 60_000) })
+      .where(eq(tables.messagingMessages.id, reply.id))
+    const latest = await inbox.listMessages(actor, telegramId, undefined, 1)
+    expect(latest.replyTo).toBe(lineChat.id)
+    const head = (await inbox.listConversations(actor)).items[0]!
+    expect((await inbox.listConversations(actor, head.id)).items).toEqual([])
+    expect(latest.items).toMatchObject([{ channel: 'telegram', direction: 'outgoing' }])
+    expect((await inbox.listMessages(actor, lineChat.id, latest.next!, 1)).items)
+      .toMatchObject([{ channel: 'line', direction: 'incoming' }])
+    expect((await inbox.listMessages(actor, lineChat.id, undefined, 50)).items)
+      .toMatchObject([{ channel: 'telegram' }, { channel: 'line' }, { channel: 'telegram' }])
+    const telegramContact = chats.find(chat => chat.id === telegramId)!
+    await directory.linkGuestContact(actor, guest.id, telegramContact.contactId, false)
+    const telegramHistory = await inbox.listMessages(actor, telegramId, undefined, 50)
+    expect(telegramHistory.conversation?.guestId).toBeNull()
+    expect(telegramHistory.items).toHaveLength(2)
+    expect((await inbox.listConversations(actor)).items).toHaveLength(2)
+    await expect(inbox.enqueueMessage(
+      actor, lineChat.id, { requestId: randomUUID(), text: 'Stale reply' }, undefined, telegramId,
+    )).rejects.toMatchObject({ statusCode: 409, data: { code: 'MESSAGING_THREAD_CHANGED' } })
+    await directory.linkGuestContact(actor, second.id, telegramContact.contactId, true)
+    await platform.updateClient({ ...actor, isSuperuser: true }, actor.organizationId, { messagingEnabled: false })
+    expect((await directory.getGuest(actor, guest.id)).conversations).toEqual([])
+    await expect(directory.linkGuestContact(actor, second.id, telegramContact.contactId, false)).rejects.toMatchObject({ statusCode: 403 })
+  })
+
 })

@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "nuxt dev",
+    "dev:aparts": "APARTS_DEV_BUILD_DIR=.nuxt-aparts nuxt dev --dotenv .env.aparts --port 2000",
     "build": "nuxt build",
     "preview": "nuxt preview",
     "prepare": "nuxt prepare",
@@ -18,7 +19,7 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:seed": "tsx server/infrastructure/database/seed.ts",
-    "dev:guest": "nuxt dev guest --port 3001",
+    "dev:guest": "NUXT_CATALOGUE_API_BASE=${NUXT_CATALOGUE_API_BASE:-http://localhost:2000} nuxt dev guest --port 2001",
     "build:guest": "nuxt build guest",
     "typecheck:guest": "nuxt typecheck guest"
   },

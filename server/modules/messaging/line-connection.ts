@@ -6,8 +6,8 @@ import { db } from '../../infrastructure/database/client'
 import { messagingConnections, organizations } from '../../infrastructure/database/schema'
 import { assertMessagingAccess, assertMessagingEnabled } from './access'
 import { cancelConnectionQueue, connectionScope } from './connection'
-import { getLineBot } from './line'
-import { encryptBotToken } from './secrets'
+import { getLineBot, getLineMessageQuota } from './line'
+import { decryptBotToken, encryptBotToken } from './secrets'
 
 function webhookUrl(id: string) {
   const base = useRuntimeConfig().public.appUrl
@@ -27,6 +27,20 @@ export async function getLineConnection(actor: Actor): Promise<LineConnection> {
     botUsername: row?.botUsername ?? '',
     url: row ? `https://line.me/R/ti/p/${encodeURIComponent(row.botUsername)}` : null,
     webhookUrl: row && (row.connected || row.verificationPending) ? webhookUrl(row.id) : null,
+  }
+}
+
+export async function getConnectedLineQuota(actor: Actor) {
+  await assertMessagingAccess(actor)
+  const row = await db.query.messagingConnections.findFirst({
+    where: connectionScope(actor.organizationId, 'line'),
+    columns: { connected: true, encryptedToken: true },
+  })
+  if (!row?.connected) throw createError({ statusCode: 404, statusMessage: 'LINE is not connected' })
+  try {
+    return await getLineMessageQuota(decryptBotToken(row.encryptedToken))
+  } catch {
+    throw createError({ statusCode: 502, statusMessage: 'LINE quota unavailable' })
   }
 }
 

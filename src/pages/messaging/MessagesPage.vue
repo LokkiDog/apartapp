@@ -3,10 +3,18 @@ import type {
   GuestMessage,
   MessagingConversation,
   MessagingConnection,
+  MessagingInboxItem,
+  MessagingSource,
+  MessagingChannel,
 } from '@contracts/messaging'
 import { MAX_MESSAGE_FILE_BYTES } from '@contracts/messaging'
+import { GuestForm } from '#fsd/features/guest-form'
+import ConversationContactField from './ConversationContactField.vue'
+import ConversationGuestPicker from './ConversationGuestPicker.vue'
+import ReplyTemplatePicker from './ReplyTemplatePicker.vue'
 import type { Stay } from '#fsd/entities/stay'
 import { clientResourceUrl, useCurrentUser } from '#fsd/shared/auth'
+import { formatDate } from '#fsd/shared/lib'
 import { EmptyState, PageHeader } from '#fsd/shared/ui'
 const { t, locale } = useI18n()
 const user = useCurrentUser()
@@ -23,7 +31,8 @@ const allowed = computed(() =>
     user.value?.messagingEnabled && user.value.roles.includes('administrator'),
   ),
 )
-const conversations = ref<MessagingConversation[]>([])
+const conversations = ref<MessagingInboxItem[]>([])
+const inboxPages = ref(1)
 const conversationNext = ref<string | null>(null)
 const messages = ref<GuestMessage[]>([])
 const historyNext = ref<string | null>(null)
@@ -34,14 +43,25 @@ const fileInput = ref<HTMLInputElement | null>(null)
 const pending = ref(false)
 const polling = ref(false)
 const connection = ref<MessagingConnection | null>(null)
+const sources = ref<MessagingSource[]>([])
+const defaultReplyId = ref('')
+const chosenReplyId = ref<string>()
+const replySource = computed(() => sources.value.find(
+  source => source.id === (frozen.value?.conversationId ?? chosenReplyId.value ?? defaultReplyId.value),
+))
 const frozen = ref<{
+  conversationId: string
   requestId: string
   text: string
   file: File | null
 } | null>(null)
 const list = ref<HTMLElement | null>(null)
 const linkOpen = ref(false)
+const guestPickerOpen = ref(false)
+const guestFormOpen = ref(false)
 const stayId = ref<string | undefined>()
+const stayPickerToday = ref('')
+const showEarlierStays = ref(false)
 const linkPending = ref(false)
 const detail = ref<MessagingConversation | null>(null)
 const selected = computed(
@@ -49,6 +69,44 @@ const selected = computed(
     detail.value ??
     conversations.value.find((item) => item.id === selectedId.value),
 )
+const templateValues = computed(() => {
+  const chat = selected.value
+  const booking = chat?.stayId ? chat : undefined
+  return {
+    guestName: chat?.guestDisplayName?.trim() || chat?.name.trim() || undefined,
+    apartmentName: booking?.apartmentName?.trim() || undefined,
+    checkInOn: booking?.checkInOn ? formatDate(booking.checkInOn) : undefined,
+    checkOutOn: booking?.checkOutOn ? formatDate(booking.checkOutOn) : undefined,
+  }
+})
+function channelName(channel: MessagingChannel) {
+  return channel === 'line' ? 'LINE' : 'Telegram'
+}
+function sourceLabel(source: MessagingSource) {
+  return [channelName(source.channel), source.username ? `@${source.username}` : source.name].join(' · ')
+}
+const displayedChannels = computed(() => [...new Set(sources.value.map(source => channelName(source.channel)))].join(' · '))
+const sourcesById = computed(() => new Map(sources.value.map(source => [source.id, source])))
+const repeatedChannels = computed(() => {
+  const seen = new Set<MessagingChannel>()
+  const repeated = new Set<MessagingChannel>()
+  for (const source of sources.value) {
+    if (seen.has(source.channel)) repeated.add(source.channel)
+    seen.add(source.channel)
+  }
+  return repeated
+})
+const replyOptions = computed(() => sources.value.map(source => ({
+  value: source.id,
+  label: sourceLabel(source),
+})))
+const replySelection = computed({
+  get: () => replySource.value?.id,
+  set: (id) => { chosenReplyId.value = id },
+})
+function isSelected(item: MessagingConversation) {
+  return selectedId.value === item.id || Boolean(item.guestId && item.guestId === selected.value?.guestId)
+}
 const validId = computed(
   () => !selectedId.value || /^[0-9a-f-]{36}$/i.test(selectedId.value),
 )
@@ -63,7 +121,7 @@ const {
     if (!allowed.value) return null
     const current = identity.value
     const result = await $fetch<{
-      items: MessagingConversation[]
+      items: MessagingInboxItem[]
       next: string | null
     }>('/api/messaging/conversations')
     return current === identity.value && allowed.value ? result : null
@@ -76,6 +134,7 @@ watch(
     if (value && allowed.value) {
       conversations.value = value.items
       conversationNext.value = value.next
+      inboxPages.value = 1
     }
   },
   { immediate: true },
@@ -85,9 +144,14 @@ watch([identity, allowed], () => {
   stayId.value = undefined
   clearNuxtData('messaging-stay-options')
   conversations.value = []
+  conversationNext.value = null
+  inboxPages.value = 1
   messages.value = []
   detail.value = null
   connection.value = null
+  sources.value = []
+  chosenReplyId.value = undefined
+  defaultReplyId.value = ''
   text.value = ''
   upload.value = null
   frozen.value = null
@@ -108,21 +172,39 @@ function showError(cause: any) {
   }
   error.value = cause?.data?.statusMessage ?? t('common.error')
 }
-async function loadHistory(older = false) {
+let historyRequest = 0
+async function loadHistory(older = false): Promise<void> {
   const id = selectedId.value
   const current = identity.value
   if (!id || !validId.value || !allowed.value) return
   const previousNext = historyNext.value
+  if (older && !previousNext) return
+  const request = ++historyRequest
   const result = await $fetch<{
     items: GuestMessage[]
     next: string | null
     conversation: MessagingConversation
+    sources: MessagingSource[]
+    replyTo: string
   }>(`/api/messaging/conversations/${id}`, {
     query: older ? { before: previousNext } : undefined,
   })
-  if (id !== selectedId.value || current !== identity.value || !allowed.value)
+  if (request !== historyRequest || id !== selectedId.value || current !== identity.value || !allowed.value)
     return
+  const scopeChanged = sources.value.length !== result.sources.length
+    || sources.value.some(source => !result.sources.some(item => item.id === source.id))
   detail.value = result.conversation
+  if (scopeChanged) {
+    messages.value = []
+    historyNext.value = null
+    if (older) return loadHistory()
+  }
+  sources.value = result.sources
+  defaultReplyId.value = result.replyTo
+  if (!sources.value.some(source => source.id === chosenReplyId.value))
+    chosenReplyId.value = undefined
+  if (frozen.value && !sources.value.some(source => source.id === frozen.value?.conversationId))
+    frozen.value = null
   const atBottom =
     !list.value ||
     list.value.scrollHeight - list.value.scrollTop - list.value.clientHeight <
@@ -141,24 +223,29 @@ async function loadHistory(older = false) {
   // If more than one page arrived between polls, leave a visible way to fetch the gap.
   if (!older && hadMessages && !overlapsHistory && result.next)
     historyNext.value = result.next
-  const through = result.items
-    .filter((item) => item.direction === 'incoming')
-    .at(-1)?.id
-  if (through)
-    await $fetch(`/api/messaging/conversations/${id}/read`, {
+  const readThrough = new Map<string, string>()
+  for (const item of result.items) {
+    if (item.direction === 'incoming') readThrough.set(item.conversationId, item.id)
+  }
+  await Promise.all([...readThrough].map(([chatId, through]) =>
+    $fetch(`/api/messaging/conversations/${chatId}/read`, {
       method: 'POST',
       body: { through },
-    })
+    }),
+  ))
   if (!older && atBottom) {
     await nextTick()
     list.value?.scrollTo({ top: list.value.scrollHeight })
   }
 }
 watch(
-  selectedId,
+  [selectedId, identity, allowed],
   () => {
     messages.value = []
     detail.value = null
+    sources.value = []
+    chosenReplyId.value = undefined
+    defaultReplyId.value = ''
     historyNext.value = null
     text.value = ''
     upload.value = null
@@ -169,28 +256,31 @@ watch(
   },
   { immediate: true },
 )
+type InboxPage = { items: MessagingInboxItem[]; next: string | null }
+function fetchInboxPage(before?: string) {
+  return $fetch<InboxPage>('/api/messaging/conversations', { query: { before } })
+}
 async function refreshInbox() {
   if (polling.value || !allowed.value || document.visibilityState !== 'visible')
     return
   polling.value = true
   const current = identity.value
   try {
-    const [result, settings] = await Promise.all([
-      $fetch<{ items: MessagingConversation[]; next: string | null }>(
-        '/api/messaging/conversations',
-      ),
+    const [first, settings] = await Promise.all([
+      fetchInboxPage(),
       $fetch<MessagingConnection>('/api/messaging/connection'),
     ])
+    const items = new Map(first.items.map(item => [item.guestId ?? item.id, item]))
+    let next = first.next
+    for (let page = 1; page < inboxPages.value && next && current === identity.value; page++) {
+      const result = await fetchInboxPage(next)
+      for (const item of result.items) items.set(item.guestId ?? item.id, item)
+      next = result.next
+    }
     if (current !== identity.value || !allowed.value) return
     connection.value = settings
-    const merged = new Map(conversations.value.map((item) => [item.id, item]))
-    for (const item of result.items) merged.set(item.id, item)
-    conversations.value = [...merged.values()].sort(
-      (a, b) =>
-        b.lastMessageAt.localeCompare(a.lastMessageAt) ||
-        b.id.localeCompare(a.id),
-    )
-    if (!conversationNext.value) conversationNext.value = result.next
+    conversations.value = [...items.values()]
+    conversationNext.value = next
     await loadHistory()
   } catch (cause) {
     if (current === identity.value) showError(cause)
@@ -213,17 +303,13 @@ async function moreConversations() {
   polling.value = true
   const current = identity.value
   try {
-    const result = await $fetch<{
-      items: MessagingConversation[]
-      next: string | null
-    }>('/api/messaging/conversations', {
-      query: { before: conversationNext.value },
-    })
+    const result = await fetchInboxPage(conversationNext.value)
     if (current !== identity.value || !allowed.value) return
-    const merged = new Map(conversations.value.map((item) => [item.id, item]))
-    for (const item of result.items) merged.set(item.id, item)
+    const merged = new Map(conversations.value.map(item => [item.guestId ?? item.id, item]))
+    for (const item of result.items) merged.set(item.guestId ?? item.id, item)
     conversations.value = [...merged.values()]
     conversationNext.value = result.next
+    inboxPages.value++
   } catch (cause) {
     showError(cause)
   } finally {
@@ -248,17 +334,23 @@ function chooseFile(event: Event) {
   }
   upload.value = file
 }
+function onMessageEnter(event: KeyboardEvent) {
+  if (event.shiftKey || event.isComposing || event.keyCode === 229) return
+  event.preventDefault()
+  if (!event.repeat) void sendMessage()
+}
 async function sendMessage() {
-  if (pending.value || !selectedId.value || !allowed.value) return
+  const source = replySource.value
+  if (pending.value || !selectedId.value || !allowed.value || !source?.connected) return
+  if (upload.value && source.channel !== 'telegram') return
+  if (!text.value.trim() && !upload.value) return
   const draft = frozen.value ?? {
+    conversationId: source.id,
     requestId: crypto.randomUUID(),
     text: text.value.trim(),
     file: upload.value,
   }
-  if (
-    (!draft.text && !draft.file) ||
-    (draft.file && draft.text.length > 1024)
-  ) {
+  if (draft.file && draft.text.length > 1024) {
     error.value = t('messaging.captionLimit')
     return
   }
@@ -272,8 +364,9 @@ async function sendMessage() {
     body.set('requestId', draft.requestId)
     body.set('text', draft.text)
     if (draft.file) body.set('file', draft.file)
-    await $fetch(`/api/messaging/conversations/${id}/messages`, {
+    await $fetch(`/api/messaging/conversations/${draft.conversationId}/messages`, {
       method: 'POST',
+      query: { thread: id },
       body,
       retry: false,
     })
@@ -285,30 +378,59 @@ async function sendMessage() {
     if (fileInput.value) fileInput.value.value = ''
     await loadHistory()
   } catch (cause) {
-    if (id === selectedId.value && current === identity.value) showError(cause)
+    if (id === selectedId.value && current === identity.value) {
+      showError(cause)
+      if ((cause as { data?: { data?: { code?: string } } }).data?.data?.code === 'MESSAGING_THREAD_CHANGED') {
+        frozen.value = null
+        await loadHistory().catch(showError)
+      }
+    }
   } finally {
     pending.value = false
   }
 }
 const {
   data: stays,
+  status: staysStatus,
   refresh: loadStays,
   error: staysError,
-} = await useAsyncData<Stay[]>(
+} = useAsyncData<Stay[]>(
   'messaging-stay-options',
-  () =>
+  (_nuxtApp, { signal }) =>
     linkOpen.value && allowed.value
-      ? $fetch<Stay[]>('/api/stays')
+      ? $fetch<Stay[]>('/api/stays', { signal })
       : Promise.resolve([]),
-  { server: false, default: () => [], watch: [identity, linkOpen] },
+  {
+    server: false,
+    immediate: false,
+    default: () => [],
+    getCachedData: () => undefined,
+    watch: [identity, allowed, linkOpen],
+  },
 )
-const stayOptions = computed(() =>
-  stays.value.map((stay) => ({
-    value: stay.id,
-    label: `${stay.apartment.name} · ${stay.guestName || '—'} · ${stay.checkInOn} – ${stay.checkOutOn}`,
-  })),
-)
+const staysLoading = computed(() => staysStatus.value === 'idle' || staysStatus.value === 'pending')
+function stayLabel(stay: Stay) {
+  return `${stay.apartment.name} · ${stay.guestName || '—'} · ${stay.checkInOn} – ${stay.checkOutOn}`
+}
+
+const currentStays = computed(() => stays.value.filter(stay => stay.checkOutOn >= stayPickerToday.value))
+const earlierStays = computed(() => stays.value
+  .filter(stay => stay.checkOutOn < stayPickerToday.value)
+  .sort((left, right) => right.checkOutOn.localeCompare(left.checkOutOn)))
+const stayOptions = computed(() => {
+  const visibleStays = showEarlierStays.value ? [...currentStays.value, ...earlierStays.value] : currentStays.value
+  return visibleStays.map(stay => ({ value: stay.id, label: stayLabel(stay) }))
+})
+const selectedStayLabel = computed(() => {
+  const stay = stays.value.find(stay => stay.id === stayId.value)
+  return stay ? stayLabel(stay) : undefined
+})
+
 function openLink() {
+  stayPickerToday.value = new Intl.DateTimeFormat('en-CA', {
+    year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'Europe/Sofia',
+  }).format(new Date())
+  showEarlierStays.value = false
   stayId.value = selected.value?.stayId ?? undefined
   linkOpen.value = true
 }
@@ -335,6 +457,20 @@ async function saveLink() {
     showError(cause)
   } finally {
     linkPending.value = false
+  }
+}
+watch([identity, allowed, selectedId], () => {
+  guestPickerOpen.value = false
+  guestFormOpen.value = false
+}, { flush: 'sync' })
+
+async function onGuestSaved() {
+  if (!allowed.value || !selectedId.value) return
+  try {
+    if (polling.value) await loadHistory()
+    else await refreshInbox()
+  } catch (cause) {
+    showError(cause)
   }
 }
 function formattedTime(value: string) {
@@ -368,7 +504,7 @@ function formattedTime(value: string) {
       ></UAlert
     >
     <UAlert
-      v-if="connection && !connection.connected"
+      v-if="connection && !connection.connected && !conversations.length"
       :description="t('messaging.connectHelp')"
       color="info"
       ><template #actions
@@ -391,31 +527,39 @@ function formattedTime(value: string) {
           :title="t('messaging.noConversations')"
           :description="t('messaging.startHelp')"
         />
-        <NuxtLink
+        <div
           v-for="conversation in conversations"
           :key="conversation.id"
-          :to="`/messages/${conversation.id}`"
-          class="messaging-conversation"
-          :aria-current="selectedId === conversation.id ? 'page' : undefined"
+          class="messaging-conversation-row flex items-center border-b border-[var(--color-line)]"
+          :class="{ 'messaging-conversation-row--selected': isSelected(conversation) }"
         >
-          <div class="flex items-center justify-between gap-2">
-            <strong class="truncate">{{ conversation.name }}</strong
-            ><UBadge v-if="conversation.unread" color="primary">{{
-              conversation.unread
-            }}</UBadge>
-          </div>
-          <p
-            v-if="conversation.apartmentName"
-            class="truncate text-sm text-[var(--color-muted)]"
+          <NuxtLink
+            :to="`/messages/${conversation.id}`"
+            class="messaging-conversation min-w-0 flex-1"
+            :aria-current="isSelected(conversation) ? 'page' : undefined"
           >
-            {{ conversation.apartmentName }} · {{ conversation.checkInOn }}
-          </p>
-          <p v-else class="text-sm text-[var(--color-muted)]">
-            {{ conversation.channel === 'line' ? 'LINE' : 'Telegram' }}<span v-if="conversation.username">
-              · @{{ conversation.username }}</span
-            >
-          </p>
-        </NuxtLink>
+            <div class="flex items-center justify-between gap-2">
+              <strong class="truncate">{{ conversation.guestDisplayName || conversation.name }}</strong>
+              <UBadge v-if="conversation.unread" color="primary">{{ conversation.unread }}</UBadge>
+            </div>
+            <p v-if="conversation.apartmentName" class="truncate text-sm text-[var(--color-muted)]">
+              {{ conversation.apartmentName }} · {{ conversation.checkInOn }}
+            </p>
+            <p v-else class="truncate text-sm text-[var(--color-muted)]">
+              {{ conversation.channels.map(channelName).join(' · ') }}<span v-if="!conversation.guestId && conversation.username"> · @{{ conversation.username }}</span>
+            </p>
+          </NuxtLink>
+          <UButton
+            v-if="user?.guestsEnabled && conversation.guestId"
+            :to="`/guests/${conversation.guestId}`"
+            icon="i-lucide-contact"
+            color="neutral"
+            variant="ghost"
+            class="me-1 size-11 shrink-0 justify-center"
+            :aria-label="t('guests.linkedGuest') + ' · ' + (conversation.guestDisplayName || conversation.name)"
+            :title="t('guests.linkedGuest')"
+          />
+        </div>
         <UButton
           v-if="conversationNext"
           color="neutral"
@@ -432,7 +576,7 @@ function formattedTime(value: string) {
       >
         <template v-if="selectedId && validId">
           <header
-            class="flex items-center justify-between gap-2 p-3 border-b border-[var(--color-line)]"
+            class="flex items-center justify-between gap-2 px-3 py-1 border-b border-[var(--color-line)]"
           >
             <div class="flex min-w-0 items-center gap-2">
               <UButton
@@ -440,29 +584,42 @@ function formattedTime(value: string) {
                 color="neutral"
                 variant="ghost"
                 icon="i-lucide-arrow-left"
-                class="md:hidden"
+                class="size-11 shrink-0 justify-center md:hidden"
                 :aria-label="t('messaging.back')"
               />
-              <div class="min-w-0">
-                <strong class="block truncate">{{ selected?.name || t('messaging.guest') }}</strong>
-                <span v-if="selected" class="text-xs text-[var(--color-muted)]">
-                  {{ selected.channel === 'line' ? 'LINE' : 'Telegram' }}
+              <div class="relative flex min-h-11 min-w-0 flex-col justify-center">
+                <NuxtLink
+                  v-if="user?.guestsEnabled && selected?.guestId"
+                  :to="`/guests/${selected.guestId}`"
+                  class="truncate rounded-sm font-semibold leading-5 underline after:absolute after:inset-0 hover:text-[var(--color-primary-strong)] active:text-[var(--color-primary)] focus-visible:outline-2 focus-visible:outline-offset-2"
+                >
+                  {{ selected.guestDisplayName || selected.name }}
+                </NuxtLink>
+                <strong v-else class="truncate leading-5">{{ selected?.name || t('messaging.guest') }}</strong>
+                <span v-if="sources.length" class="truncate text-xs leading-4 text-[var(--color-muted)]">
+                  {{ displayedChannels }}
                 </span>
               </div>
             </div>
-            <UButton
-              color="neutral"
-              variant="outline"
-              :disabled="!selected"
-              @click="openLink"
-              >{{ selected?.apartmentName || t('messaging.linkStay') }}</UButton
+            <UDropdownMenu
+              v-if="selected"
+              :items="[
+                { label: t('messaging.linkStay'), icon: 'i-lucide-calendar-days', onSelect: openLink },
+                ...(user?.guestsEnabled && !selected.guestId ? [
+                  { label: t('guests.linkGuest'), icon: 'i-lucide-link', onSelect: () => { guestPickerOpen = true } },
+                  { label: t('guests.add'), icon: 'i-lucide-user-plus', onSelect: () => { guestFormOpen = true } },
+                ] : []),
+              ]"
+              :ui="{ item: 'min-h-11 items-center' }"
             >
+              <UButton class="size-11 shrink-0 justify-center" color="neutral" variant="ghost" icon="i-lucide-ellipsis" :aria-label="t('messaging.chatActions')" />
+            </UDropdownMenu>
           </header>
           <p
             v-if="selected?.stayId"
             class="px-3 py-2 text-sm text-[var(--color-muted)]"
           >
-            {{ selected.guestName }} · {{ selected.checkInOn }} –
+            {{ [selected.apartmentName, selected.guestName].filter(Boolean).join(' · ') }} · {{ selected.checkInOn }} –
             {{ selected.checkOutOn }}
           </p>
           <div
@@ -488,10 +645,11 @@ function formattedTime(value: string) {
               }"
             >
               <p
-                v-if="message.authorName"
                 class="text-xs text-[var(--color-muted)]"
               >
-                {{ message.authorName }}
+                {{ channelName(message.channel) }}<template v-if="repeatedChannels.has(message.channel)">
+                  · {{ sourcesById.get(message.conversationId)?.username || sourcesById.get(message.conversationId)?.name }}
+                </template><template v-if="message.authorName"> · {{ message.authorName }}</template>
               </p>
               <p class="whitespace-pre-wrap break-words">
                 {{
@@ -545,6 +703,17 @@ function formattedTime(value: string) {
             class="space-y-2 p-3 border-t border-[var(--color-line)]"
             @submit.prevent="sendMessage"
           >
+            <UFormField v-if="replySource" :label="t('messaging.replyTo')">
+              <USelect
+                v-if="replyOptions.length > 1"
+                v-model="replySelection"
+                :items="replyOptions"
+                :disabled="pending || Boolean(frozen)"
+                class="min-h-11 w-full"
+              />
+              <p v-else class="text-sm">{{ sourceLabel(replySource) }}</p>
+              <p v-if="!replySource.connected" class="mt-1 text-sm text-[var(--color-muted)]">{{ t('messaging.replyDisconnected') }}</p>
+            </UFormField>
             <UTextarea
               v-model="text"
               :aria-label="t('messaging.message')"
@@ -552,10 +721,11 @@ function formattedTime(value: string) {
               :rows="2"
               :maxlength="upload ? 1024 : 4096"
               :disabled="pending || Boolean(frozen)"
+              @keydown.enter="onMessageEnter"
               class="w-full"
             />
             <div class="flex flex-wrap items-center gap-2">
-              <label v-if="selected?.channel === 'telegram'" class="messaging-upload"
+              <label v-if="replySource?.channel === 'telegram'" class="messaging-upload"
                 ><UIcon name="i-lucide-paperclip" />{{ t('messaging.file')
                 }}<input
                   ref="fileInput"
@@ -564,6 +734,7 @@ function formattedTime(value: string) {
                   :aria-label="t('messaging.file')"
                   @change="chooseFile"
               /></label>
+              <span v-if="upload && replySource?.channel === 'line'" class="text-sm text-[var(--color-muted)]">{{ t('messaging.lineTextOnly') }}</span>
               <span v-if="upload" class="min-w-0 flex-1 truncate text-sm">{{
                 upload.name
               }}</span>
@@ -575,11 +746,20 @@ function formattedTime(value: string) {
                 :aria-label="t('messaging.removeFile')"
                 @click="removeFile"
               />
+              <ReplyTemplatePicker
+                :key="`${identity}:${selectedId}`"
+                :draft="text"
+                :values="templateValues"
+                :has-booking="Boolean(selected?.stayId)"
+                :limit="upload ? 1024 : 4096"
+                :disabled="pending || Boolean(frozen)"
+                @insert="text = $event"
+              />
               <UButton
                 type="submit"
                 class="ms-auto"
                 :disabled="
-                  pending || !connection?.connected || (!text.trim() && !upload)
+                  pending || !replySource?.connected || (!text.trim() && !upload) || (Boolean(upload) && replySource.channel !== 'telegram')
                 "
                 :loading="pending"
                 >{{ t(frozen ? 'messaging.retry' : 'messaging.send') }}</UButton
@@ -594,6 +774,14 @@ function formattedTime(value: string) {
         />
       </div>
     </div>
+    <template v-if="selected && allowed && user?.guestsEnabled" :key="`${identity}:${selected.id}`">
+      <ConversationGuestPicker v-model:open="guestPickerOpen" :conversation-id="selected.id" :scope="identity" @saved="onGuestSaved">
+        <ConversationContactField :contact="selected" />
+      </ConversationGuestPicker>
+      <GuestForm v-model:open="guestFormOpen" :conversation-id="selected.id" :initial-name="selected.name" @saved="onGuestSaved">
+        <ConversationContactField :contact="selected" />
+      </GuestForm>
+    </template>
     <USlideover
       :modal="true"
       :overlay="true"
@@ -609,9 +797,29 @@ function formattedTime(value: string) {
             ><USelectMenu
               v-model="stayId"
               :items="stayOptions"
+              :loading="staysLoading"
+              :disabled="staysLoading || !!staysError"
               value-key="value"
               :placeholder="t('messaging.selectStay')"
-              class="w-full" /></UFormField
+              :ui="{ base: 'justify-start! text-start', item: 'items-center' }"
+              class="w-full"
+            >
+              <template #default="{ ui }">
+                <span v-if="selectedStayLabel" :class="ui.value()">{{ selectedStayLabel }}</span>
+                <span v-else :class="ui.placeholder()">{{ t('messaging.selectStay') }}</span>
+              </template>
+              <template #content-bottom>
+                <div v-if="!showEarlierStays && earlierStays.length" class="shrink-0 border-t border-[var(--color-line)]">
+                  <UButton
+                    type="button"
+                    color="neutral"
+                    variant="ghost"
+                    class="w-full justify-center"
+                    @click="showEarlierStays = true"
+                  >{{ t('messaging.showEarlierStays') }}</UButton>
+                </div>
+              </template>
+            </USelectMenu></UFormField
           ><UButton
             color="neutral"
             variant="ghost"
@@ -660,14 +868,16 @@ function formattedTime(value: string) {
   display: block;
   padding: 12px 16px;
   min-height: 64px;
-  border-bottom: 1px solid var(--color-line);
   cursor: pointer;
+}
+.messaging-conversation-row {
   transition: background-color 120ms;
 }
-.messaging-conversation:hover,
-.messaging-conversation[aria-current='page'],
-.messaging-conversation:active {
+.messaging-conversation-row:not(.messaging-conversation-row--selected):is(:hover, :active) {
   background-color: var(--color-surface-muted);
+}
+.messaging-conversation-row--selected {
+  background-color: var(--tone-success-bg);
 }
 .messaging-conversation:focus-visible,
 .messaging-file:focus-visible,

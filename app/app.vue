@@ -1,6 +1,10 @@
 <script setup lang="ts">
+import { en, he, ru } from '@nuxt/ui/locale'
 import { PwaInstallPrompt } from '#fsd/features/install-pwa'
 
+const { locale } = useI18n()
+const uiLocales = { en, he, ru }
+const uiLocale = computed(() => uiLocales[locale.value as keyof typeof uiLocales] ?? ru)
 const i18nHead = useLocaleHead({ dir: true, lang: true, seo: false })
 const overlayDefaults = {
   dropdownMenu: { modal: false },
@@ -18,7 +22,7 @@ useHead(() => ({ htmlAttrs: i18nHead.value.htmlAttrs }))
 </script>
 
 <template>
-  <UApp :toaster="toasterDefaults">
+  <UApp :locale="uiLocale" :toaster="toasterDefaults">
     <UTheme :props="overlayDefaults">
       <VitePwaManifest />
       <NuxtLayout><NuxtPage /></NuxtLayout>

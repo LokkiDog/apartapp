@@ -144,7 +144,7 @@ export async function processMessagingOutbox() {
             !organization?.messagingEnabled ||
             organization.status !== 'active' ||
             !row.connection.connected ||
-            !eligibleAuthor ||
+            (!row.message.automated && !eligibleAuthor) ||
             row.message.status !== 'sending'
           ) {
             await tx
