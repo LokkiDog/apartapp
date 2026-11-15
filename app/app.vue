@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { en, he, ru } from '@nuxt/ui/locale'
-import { PwaInstallPrompt } from '#fsd/features/install-pwa'
 
 const { locale } = useI18n()
 const uiLocales = { en, he, ru }
@@ -26,7 +25,6 @@ useHead(() => ({ htmlAttrs: i18nHead.value.htmlAttrs }))
     <UTheme :props="overlayDefaults">
       <VitePwaManifest />
       <NuxtLayout><NuxtPage /></NuxtLayout>
-      <PwaInstallPrompt />
     </UTheme>
   </UApp>
 </template>

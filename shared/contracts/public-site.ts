@@ -6,6 +6,27 @@ export const publicBioSchema = z.object({
 }).strict()
 export type PublicBio = z.infer<typeof publicBioSchema>
 export const contactPhoneSchema = z.string().trim().max(40).refine(value => !value || /^\+?[1-9][0-9]{6,14}$/.test(value.replace(/[\s()+-]/g, '')), 'Неверный номер телефона')
+export const socialPlatforms = ['whatsapp', 'telegram', 'instagram', 'line', 'facebook', 'viber', 'other'] as const
+export const socialLabels: Record<typeof socialPlatforms[number], string> = {
+  whatsapp: 'WhatsApp', telegram: 'Telegram', instagram: 'Instagram', line: 'LINE', facebook: 'Facebook', viber: 'Viber', other: 'Другое'
+}
+const webLinkSchema = z.url({ protocol: /^https$/ }).pipe(z.string().refine(value => {
+  const url = new URL(value)
+  return !url.username && !url.password
+}))
+export const socialContactSchema = z.object({
+  platform: z.enum(socialPlatforms), value: z.string().trim().min(1).max(500)
+}).strict().refine(({ platform, value }) => platform === 'whatsapp'
+  ? contactPhoneSchema.safeParse(value).success
+  : (platform === 'telegram' && /^@[a-zA-Z0-9_]{5,32}$/.test(value)) || webLinkSchema.safeParse(value).success,
+{ path: ['value'], message: 'Укажите номер, ссылку HTTPS или имя Telegram' })
+export type SocialContact = z.infer<typeof socialContactSchema>
+export const socialContactsSchema = z.array(socialContactSchema).max(socialPlatforms.length)
+  .refine(contacts => new Set(contacts.map(contact => contact.platform)).size === contacts.length)
+export const publicContactKinds = ['phone', ...socialPlatforms] as const
+export type PublicContactKind = typeof publicContactKinds[number]
+export const emptyPublicBio = () => publicBioSchema.parse({})
+
 // A site is selected by its exact origin, never by a client-supplied organization ID.
 export const websiteUrlSchema = z.string().trim().max(300).transform((value, ctx) => {
   try {
@@ -16,11 +37,13 @@ export const websiteUrlSchema = z.string().trim().max(300).transform((value, ctx
 })
 export const publicSiteInputSchema = z.object({
   enabled: z.boolean(), websiteUrl: websiteUrlSchema,
-  hostUserId: z.string().uuid().nullable()
+  hostUserId: z.string().uuid().nullable(),
+  hostDescription: publicBioSchema.default(emptyPublicBio),
+  contactKinds: z.array(z.enum(publicContactKinds)).max(publicContactKinds.length).default([])
 }).strict().superRefine((value, ctx) => {
   if (value.enabled && !value.hostUserId) ctx.addIssue({ code: 'custom', path: ['hostUserId'], message: 'Выберите профиль' })
 })
 export type PublicSiteInput = z.infer<typeof publicSiteInputSchema>
-export type PublicSite = { websiteUrl: string; hostName: string; whatsapp: string; hostPhoto: string; hostDescription: PublicBio }
-export type OwnProfile = { currency: import('./currency').Currency; name: string; phone: string; publicBio: PublicBio; hasPhoto: boolean; photoVersion: string }
-export type PublicSiteSettings = { settings: PublicSiteInput; profiles: Array<{ id: string; name: string; phone: string; hasPhoto: boolean }> }
+export type PublicSite = { websiteUrl: string; hostName: string; whatsapp: string; hostPhoto: string; hostDescription: PublicBio; phone?: string; socials?: SocialContact[] }
+export type OwnProfile = { currency: import('./currency').Currency; name: string; phone: string; socials: SocialContact[]; hasPhoto: boolean; photoVersion: string }
+export type PublicSiteSettings = { settings: PublicSiteInput; profiles: Array<{ id: string; name: string; phone: string; socials: SocialContact[]; hasPhoto: boolean }> }

@@ -1,5 +1,6 @@
 import { beforeAll, afterAll, describe, expect, it, vi } from 'vitest'
 import { createError, createEvent, defineEventHandler, getRouterParam, setHeader, getResponseHeader, readMultipartFormData, getQuery } from 'h3'
+import { randomUUID } from 'node:crypto'
 import { IncomingMessage, ServerResponse } from 'node:http'
 import { Socket } from 'node:net'
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -59,6 +60,55 @@ describe.skipIf(!url)('guest publications PostgreSQL', () => {
     draft = { published: false, slug: 'studio', sortOrder: 0, translations: { ru: { title: 'Студия', summary: 'Для отдыха', description: 'Кухня и балкон.', location: '' } }, amenities: ['wifi'], photoIds: [photoId] }
   }, 30000)
   afterAll(async () => { await connection?.end(); if (storageRoot) await rm(storageRoot, { recursive: true, force: true }); vi.unstubAllGlobals() })
+  it('changes email only after a valid code in the initiating session', async () => {
+    const mail = await import('../server/infrastructure/mail/send')
+    const { sendEmailChangeCode, confirmEmailChange } = await import('../server/modules/auth/email-change.service')
+    const delivery = vi.spyOn(mail, 'sendNotificationEmail').mockResolvedValue()
+    vi.stubGlobal('verifyPassword', async (_hash: string, input: string) => input === 'current-password')
+    vi.stubGlobal('useRuntimeConfig', () => ({ session: { password: 'local-session-secret-for-test' } }))
+    const [account] = await db.insert(schema.users).values({
+      organizationId: actor.organizationId, name: 'Email change', email: 'before@example.test',
+      passwordHash: 'test-only', status: 'active', roles: ['manager']
+    }).returning()
+    const principal: Actor = { ...actor, id: account!.id, email: account!.email, roles: ['manager'], platformSessionId: randomUUID() }
+    const pendingRequest = () => db.query.pendingEmailChanges.findFirst({ where: eq(schema.pendingEmailChanges.userId, principal.id) })
+    const currentEmail = async () => (await db.query.users.findFirst({ where: eq(schema.users.id, principal.id) }))?.email
+    try {
+      const email = 'after@example.test'
+      await expect(sendEmailChangeCode(principal, { email, currentPassword: 'incorrect' })).rejects.toMatchObject({ data: { code: 'INCORRECT_PASSWORD' } })
+      await sendEmailChangeCode(principal, { email, currentPassword: 'current-password' })
+      const request = (await pendingRequest())!
+      expect(request.expiresAt.getTime() - request.sentAt.getTime()).toBe(30 * 60 * 1000)
+      const code = delivery.mock.calls[0]?.[0].text.match(/\d{6}/)?.[0]
+      expect(code).toBeDefined()
+      expect(await currentEmail()).toBe('before@example.test')
+      await expect(confirmEmailChange({ ...principal, platformSessionId: randomUUID() }, code!)).rejects.toMatchObject({ data: { code: 'CODE_EXPIRED' } })
+      await expect(confirmEmailChange(principal, code === '000000' ? '000001' : '000000')).rejects.toMatchObject({ data: { code: 'INVALID_CODE' } })
+      expect(await currentEmail()).toBe('before@example.test')
+      vi.setSystemTime(request.sentAt.getTime() + 61_000)
+      await sendEmailChangeCode(principal, {})
+      vi.useRealTimers()
+      const replacement = delivery.mock.lastCall?.[0].text.match(/\d{6}/)?.[0]
+      expect(replacement).toBeDefined()
+      await expect(confirmEmailChange(principal, code!)).rejects.toMatchObject({ data: { code: 'INVALID_CODE' } })
+      await expect(confirmEmailChange(principal, replacement!)).resolves.toEqual({ email })
+      expect(await currentEmail()).toBe(email)
+      expect(delivery.mock.lastCall?.[0].to).toBe('before@example.test')
+      await expect(confirmEmailChange(principal, replacement!)).rejects.toMatchObject({ data: { code: 'CODE_EXPIRED' } })
+
+      await sendEmailChangeCode(principal, { email: 'expired@example.test', currentPassword: 'current-password' })
+      const expiredCode = delivery.mock.lastCall?.[0].text.match(/\d{6}/)?.[0]
+      await db.update(schema.pendingEmailChanges).set({ expiresAt: new Date(0) }).where(eq(schema.pendingEmailChanges.userId, principal.id))
+      await expect(confirmEmailChange(principal, expiredCode!)).rejects.toMatchObject({ data: { code: 'CODE_EXPIRED' } })
+      expect(await currentEmail()).toBe(email)
+    } finally {
+      vi.useRealTimers()
+      delivery.mockRestore()
+      vi.stubGlobal('useRuntimeConfig', undefined)
+      vi.stubGlobal('verifyPassword', undefined)
+      await db.delete(schema.users).where(eq(schema.users.id, principal.id))
+    }
+  })
   it('publishes only the selected own profile, follows edits and revokes public data and photos', async () => {
     const sites = await import('../server/modules/publication/public-site.service')
     const profiles = await import('../server/modules/auth/profile.service')
@@ -74,9 +124,13 @@ describe.skipIf(!url)('guest publications PostgreSQL', () => {
     await expect(sites.savePublicSiteSettings({ ...actor, organizationId: foreignOrganization }, { ...original, hostUserId: foreign!.id })).rejects.toMatchObject({ statusCode: 409 })
     expect((await sites.getPublicSiteSettings(actor)).settings).toEqual(original)
     try {
-      await profiles.updateOwnProfile(actor, { name: 'Victoria', phone: '+359 888 222 333', publicBio: { ru: 'На связи', en: 'Here to help', he: '', bg: '' } })
+      const publicBio = { ru: 'На связи', en: 'Here to help', he: '', bg: '' }
+      const whatsapp = { platform: 'whatsapp', value: '+359 888 222 333' }
+      const telegram = { platform: 'telegram', value: '@publichost' }
+      await profiles.updateOwnProfile(actor, { name: 'Victoria', phone: '+359 888 111 000', socials: [whatsapp, telegram] })
+      await sites.savePublicSiteSettings(actor, { ...original, hostDescription: publicBio, contactKinds: ['whatsapp', 'telegram'] })
       const info = await sites.publicSiteInfo('https://public.example.test/')
-      expect(info).toEqual({ websiteUrl: 'https://public.example.test', hostName: 'Victoria', whatsapp: '+359 888 222 333', hostPhoto: '', hostDescription: { ru: 'На связи', en: 'Here to help', he: '', bg: '' } })
+      expect(info).toEqual({ websiteUrl: 'https://public.example.test', hostName: 'Victoria', whatsapp: '+359 888 222 333', phone: '', socials: [telegram], hostPhoto: '', hostDescription: publicBio })
       const image = await sharp({ create: { width: 8, height: 12, channels: 3, background: '#c0ffee' } }).jpeg().withMetadata().toBuffer()
       await expect(profiles.setOwnProfilePhoto({ ...actor, organizationId: foreignOrganization }, { data: image, type: 'image/jpeg' })).rejects.toMatchObject({ statusCode: 404 })
       await expect(profiles.setOwnProfilePhoto(actor, { data: Buffer.from('invalid'), type: 'image/jpeg' })).rejects.toMatchObject({ statusCode: 400 })

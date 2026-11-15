@@ -11,6 +11,7 @@ vi.mock('#fsd/shared/auth', () => ({
 }))
 vi.mock('#fsd/shared/ui', async () => ({
   ConfirmActionModal: { template: '<div />' },
+  ResponsiveFormDialog: { template: '<div />' },
   PageHeader: (await import('../src/shared/ui/PageHeader.vue')).default,
   EmptyState: (await import('../src/shared/ui/EmptyState.vue')).default,
   StatusBadge: (await import('../src/shared/ui/StatusBadge.vue')).default
@@ -45,7 +46,6 @@ it('renders the client registry even when connection requests fail', async () =>
         UInput: true,
         USelect: true,
         USkeleton: true,
-        USlideover: true,
         USwitch: true
       }
     }

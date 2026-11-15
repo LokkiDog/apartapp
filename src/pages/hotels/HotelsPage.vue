@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import type { DropdownMenuItem, FormSubmitEvent } from "@nuxt/ui";
-import type { Hotel } from "#fsd/entities/hotel";
+import { latestHotelViewport, type Hotel } from "#fsd/entities/hotel";
 import { useCurrentUser } from "#fsd/shared/auth";
 import { createFormValidator, useSubmitFormValidation } from "#fsd/shared/lib";
-import { DeleteConfirmModal, EmptyState, PageHeader, StatusBadge } from "#fsd/shared/ui";
+import { DeleteConfirmModal, EmptyState, PageHeader, StatusBadge, ResponsiveFormDialog } from "#fsd/shared/ui";
 import { useI18n } from "vue-i18n";
+import type { HotelLocationResult } from "@contracts/hotel-location-search";
 import { hotelInputSchema, type HotelInput } from "@contracts/crm";
 
 const LazyHotelLocationPicker = defineAsyncComponent(() =>
@@ -32,6 +33,7 @@ const [
     { server: false, default: () => [], watch: [user] },
   ),
 ]);
+const initialViewport = computed(() => latestHotelViewport(hotels.value ?? []));
 const apartmentCount = (hotelId: string) =>
   (apartments.value ?? []).filter((apartment) => apartment.hotel.id === hotelId)
     .length;
@@ -46,9 +48,10 @@ const hotelToEdit = ref<Hotel | null>(null);
 const form = reactive<{
   name: string;
   address: string;
+  addressAttribution: string | null;
   latitude: number | null;
   longitude: number | null;
-}>({ name: "", address: "", latitude: null, longitude: null });
+}>({ name: "", address: "", addressAttribution: null, latitude: null, longitude: null });
 const validation = useSubmitFormValidation();
 const validate = createFormValidator(hotelInputSchema, t, {
   pathMap: { latitude: "location", longitude: "location" },
@@ -72,6 +75,7 @@ function resetForm() {
   Object.assign(form, {
     name: "",
     address: "",
+    addressAttribution: null,
     latitude: null,
     longitude: null,
   });
@@ -90,6 +94,7 @@ function openEdit(hotel: Hotel) {
   Object.assign(form, {
     name: hotel.name,
     address: hotel.address,
+    addressAttribution: hotel.addressAttribution ?? null,
     latitude: Number(hotel.latitude),
     longitude: Number(hotel.longitude),
   });
@@ -112,13 +117,17 @@ async function resolveAddress(latitude: number, longitude: number) {
   geocoding.value = true;
   manualAddress.value = false;
   form.address = "";
+  form.addressAttribution = null;
   error.value = "";
   try {
-    const response = await $fetch<{ address: string }>(
+    const response = await $fetch<{ address: string; attribution?: string }>(
       "/api/hotels/reverse-geocode",
       { query: { latitude, longitude }, signal: geocodeController.signal },
     );
-    if (request === geocodeRequest) form.address = response.address;
+    if (request === geocodeRequest) {
+      form.address = response.address;
+      form.addressAttribution = response.attribution ?? null;
+    }
   } catch (cause: any) {
     if (request !== geocodeRequest) return;
     manualAddress.value = true;
@@ -131,6 +140,20 @@ function updateLocation(location: { latitude: number; longitude: number }) {
   form.latitude = location.latitude;
   form.longitude = location.longitude;
   void resolveAddress(location.latitude, location.longitude);
+}
+function selectAddress(result: HotelLocationResult) {
+  geocodeRequest += 1;
+  geocodeController?.abort();
+  geocodeController = null;
+  Object.assign(form, {
+    latitude: result.latitude,
+    longitude: result.longitude,
+    address: result.address,
+    addressAttribution: result.attribution,
+  });
+  geocoding.value = false;
+  manualAddress.value = true;
+  error.value = "";
 }
 async function save(event: FormSubmitEvent<HotelInput>) {
   pending.value = true;
@@ -273,6 +296,9 @@ function hotelMenuItems(hotel: Hotel): DropdownMenuItem[] {
             <p class="m-0 text-sm leading-5 text-[var(--color-muted)]">
               {{ hotel.address }}
             </p>
+            <p v-if="hotel.addressAttribution" class="text-xs text-[var(--color-muted)]">
+              <a href="https://www.geoapify.com/" target="_blank" rel="noopener" class="underline">Geoapify</a> · {{ hotel.addressAttribution }}
+            </p>
           </div>
         </div>
 
@@ -326,7 +352,7 @@ function hotelMenuItems(hotel: Hotel): DropdownMenuItem[] {
       >
     </EmptyState>
 
-    <USlideover
+    <ResponsiveFormDialog
       v-model:open="open"
       :title="hotelToEdit ? t('hotels.edit') : t('hotels.newTitle')"
       :modal="true"
@@ -355,7 +381,9 @@ function hotelMenuItems(hotel: Hotel): DropdownMenuItem[] {
               v-if="open"
               :latitude="form.latitude"
               :longitude="form.longitude"
+              :initial-viewport="initialViewport"
               @update:location="updateLocation"
+              @select-address="selectAddress"
             />
           </UFormField>
           <p
@@ -411,6 +439,9 @@ function hotelMenuItems(hotel: Hotel): DropdownMenuItem[] {
               class="w-full"
               :placeholder="t('hotels.addressPlaceholder')"
           /></UFormField>
+          <p v-if="form.addressAttribution" class="text-xs text-[var(--color-muted)]">
+            <a href="https://www.geoapify.com/" target="_blank" rel="noopener" class="underline">Geoapify</a> · {{ form.addressAttribution }}
+          </p>
           <UAlert
             v-if="error"
             color="error"
@@ -438,7 +469,7 @@ function hotelMenuItems(hotel: Hotel): DropdownMenuItem[] {
           >
         </div>
       </template>
-    </USlideover>
+    </ResponsiveFormDialog>
 
     <DeleteConfirmModal
       v-model:open="deleteOpen"

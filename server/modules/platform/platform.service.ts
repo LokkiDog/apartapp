@@ -78,6 +78,9 @@ export async function updateClient(actor: Actor, id: string, input: z.infer<type
     if (input.guestsEnabled !== undefined && input.guestsEnabled !== previous.guestsEnabled) {
       await tx.insert(platformAuditLogs).values({ actorId: actor.id, organizationId: id, action: input.guestsEnabled ? 'client.guests_enabled' : 'client.guests_disabled' })
     }
+    if (input.aiAgentsEnabled !== undefined && input.aiAgentsEnabled !== previous.aiAgentsEnabled) {
+      await tx.insert(platformAuditLogs).values({ actorId: actor.id, organizationId: id, action: input.aiAgentsEnabled ? 'client.ai_agents_enabled' : 'client.ai_agents_disabled' })
+    }
     if (input.messagingEnabled === false || input.status === 'blocked') {
       await tx.delete(messagingOutbox).where(eq(messagingOutbox.organizationId, id))
       await tx.update(messagingMessages).set({ status: 'canceled' }).where(and(eq(messagingMessages.organizationId, id), eq(messagingMessages.status, 'pending')))

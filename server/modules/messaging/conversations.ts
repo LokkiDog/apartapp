@@ -278,6 +278,7 @@ export async function updateConversation(
         throw createError({ statusCode: 404, statusMessage: 'Заезд не найден' })
     }
     if (update.read) {
+      if (conversation.unread === 0) return
       // Do not clear messages that arrived after the history displayed in the browser.
       const [latest] = await tx
         .select({ id: messagingMessages.id })

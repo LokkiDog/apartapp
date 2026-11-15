@@ -14,6 +14,12 @@ const archivedNotice = computed(() => route.query.reason === 'blocked' ? t('auth
 const loginForm = ref<HTMLFormElement | null>(null)
 const resetOpen = ref(false); const resetEmail = ref(''); const resetNotice = ref(''); const resetPending = ref(false)
 onMounted(() => { hydrated.value = true; const requested = route.query.lang; if (requested === 'ru' || requested === 'en' || requested === 'he') void setLocale(requested) })
+function afterLogin() {
+  if ((useUserSession().user.value as { isSuperuser?: boolean } | null)?.isSuperuser) return '/system/clients'
+  if (route.query.agentSettings === '1') return '/settings/ai-agents'
+  const consent = route.query.agentConsent
+  return typeof consent === 'string' && consent.length <= 6000 && consent.startsWith('/oauth/ai-agents/authorize?') ? consent : '/'
+}
 async function login() {
   if (pending.value || passkeyPending.value) return
   pending.value = true; error.value = ''
@@ -22,7 +28,7 @@ async function login() {
     await useUserSession().fetch()
     const offerReady = passkeys.offerAfterLogin(password.value)
     password.value = ''
-    await navigateTo((useUserSession().user.value as { isSuperuser?: boolean } | null)?.isSuperuser ? '/system/clients' : '/')
+    await navigateTo(afterLogin())
     await offerReady
   } catch (cause: any) { error.value = cause?.data?.statusMessage ?? t('auth.loginError') }
   finally { pending.value = false }
@@ -34,7 +40,7 @@ async function loginWithPasskey() {
     passkeys.offer.value = null
     await passkeys.authenticate()
     await useUserSession().fetch()
-    await navigateTo((useUserSession().user.value as { isSuperuser?: boolean } | null)?.isSuperuser ? '/system/clients' : '/')
+    await navigateTo(afterLogin())
   } catch (cause: any) {
     error.value = t(cause?.name === 'NotAllowedError' || cause?.name === 'AbortError' ? 'passkeys.cancelled' : 'passkeys.loginError')
   } finally { passkeyPending.value = false }

@@ -33,6 +33,7 @@ export async function requirePrincipal(event: Event, renew = true): Promise<Acto
     roles: user.isSuperuser ? (inSystem ? [] : ['administrator']) : user.roles,
     isSuperuser: user.isSuperuser, inSystem, organizationName: organization?.name,
     guestsEnabled: organization?.status === 'active' && organization.guestsEnabled,
+    aiAgentsEnabled: organization?.status === 'active' && organization.aiAgentsEnabled,
     organizationStatus: organization?.status, messagingEnabled: organization?.messagingEnabled ?? false,
     platformSessionId: context.id, contextRevision: context.revision, sessionVersion: SESSION_VERSION
   }

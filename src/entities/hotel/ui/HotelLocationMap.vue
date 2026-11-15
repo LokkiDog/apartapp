@@ -1,25 +1,27 @@
 <script setup lang="ts">
 import 'leaflet/dist/leaflet.css'
 import type { LeafletMouseEvent, Map, Marker } from 'leaflet'
+import type { HotelCoordinates, HotelMapViewport } from '../model/hotel'
+import { hotelNeighborhoodZoom, worldHotelViewport } from '../model/map-viewport'
 
 const props = withDefaults(defineProps<{
   latitude: number | null
   longitude: number | null
+  viewport?: HotelMapViewport
   selectable?: boolean
   compact?: boolean
   label: string
 }>(), { selectable: false, compact: false })
 
 const emit = defineEmits<{
-  'update:location': [location: { latitude: number, longitude: number }]
+  'update:location': [location: HotelCoordinates]
+  interact: []
 }>()
 
 const mapElement = ref<HTMLElement | null>(null)
 let map: Map | null = null
 let marker: Marker | null = null
 let leaflet: typeof import('leaflet') | null = null
-
-const bansko: [number, number] = [41.83, 23.49]
 
 function mapLocation(): [number, number] | null {
   if (props.latitude === null || props.longitude === null) return null
@@ -45,12 +47,9 @@ function createMarker(location: [number, number]) {
 }
 
 function selectLocation(latitude: number, longitude: number) {
-  if (!props.selectable) return
-  const location = { latitude: Number(latitude.toFixed(6)), longitude: Number(longitude.toFixed(6)) }
-  const point: [number, number] = [location.latitude, location.longitude]
-  map?.panTo(point)
-  if (marker) marker.setLatLng(point)
-  else createMarker(point)
+  if (!props.selectable || !map) return
+  const wrapped = map.wrapLatLng([latitude, longitude])
+  const location = { latitude: Number(wrapped.lat.toFixed(6)), longitude: Number(wrapped.lng.toFixed(6)) }
   emit('update:location', location)
 }
 
@@ -59,27 +58,42 @@ function handleMapClick(event: LeafletMouseEvent) {
 }
 
 onMounted(async () => {
+  const library = await import('leaflet')
   if (!mapElement.value) return
-  leaflet = await import('leaflet')
-  const initialLocation = mapLocation() ?? bansko
-  map = leaflet.map(mapElement.value, { center: initialLocation, zoom: 14, zoomControl: true })
+  leaflet = library
+  const location = mapLocation()
+  const viewport = props.viewport ?? worldHotelViewport
+  map = leaflet.map(mapElement.value, {
+    center: location ?? [viewport.latitude, viewport.longitude],
+    zoom: location ? hotelNeighborhoodZoom : viewport.zoom,
+    zoomControl: true
+  })
   leaflet.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '&copy; OpenStreetMap contributors',
     maxZoom: 19
   }).addTo(map)
   if (props.selectable) map.on('click', handleMapClick)
-  if (mapLocation()) createMarker(initialLocation)
+  if (location) createMarker(location)
   await nextTick()
   window.setTimeout(() => map?.invalidateSize(), 0)
 })
 
 watch(() => [props.latitude, props.longitude], () => {
   const location = mapLocation()
-  if (!location || !map) return
+  if (!map) return
+  if (!location) {
+    marker?.remove()
+    marker = null
+    return
+  }
   if (!marker) createMarker(location)
   else marker.setLatLng(location)
   map.panTo(location)
-}, { deep: true })
+})
+
+watch(() => props.viewport, viewport => {
+  if (viewport) map?.setView([viewport.latitude, viewport.longitude], viewport.zoom)
+})
 
 onBeforeUnmount(() => {
   map?.remove()
@@ -90,7 +104,15 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="hotel-location-map" :class="{ 'hotel-location-map--compact': compact }">
-    <div ref="mapElement" class="hotel-location-map__canvas" role="application" :aria-label="label" />
+    <div
+      ref="mapElement"
+      class="hotel-location-map__canvas"
+      role="application"
+      :aria-label="label"
+      @pointerdown.capture="emit('interact')"
+      @keydown.capture="emit('interact')"
+      @wheel.capture.passive="emit('interact')"
+    />
   </div>
 </template>
 

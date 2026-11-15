@@ -104,6 +104,8 @@ function checkModel(model, instance, expectedValues = values) {
     expectedValues.NUXT_PUBLIC_APP_URL,
   )
   assert.equal(app.build.args.CRM_BRAND, instance)
+  assert.equal(app.environment.CRM_BRAND, instance)
+  assert.equal(migrate.environment.CRM_BRAND, instance)
   assert.deepEqual(
     app.ports.map((port) => [port.host_ip, port.published, port.target]),
     [['127.0.0.1', instance === 'aparts' ? '3000' : '3002', 3000]],

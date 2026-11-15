@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ResponsiveFormDialog } from '#fsd/shared/ui'
 import { useCurrentUser } from '#fsd/shared/auth'
 import { useI18n } from 'vue-i18n'
 
@@ -50,7 +51,7 @@ async function sync() {
       <UIcon name="i-lucide-chevron-right" class="size-4 shrink-0 text-[var(--color-muted)] rtl:rotate-180" />
     </button>
 
-    <USlideover v-model:open="open" title="Booking.com" :description="apartmentName" :modal="true" :overlay="true">
+    <ResponsiveFormDialog v-model:open="open" title="Booking.com" :description="apartmentName" :modal="true" :overlay="true">
       <template #body>
         <form :id="`booking-integration-${apartmentId}`" class="space-y-4" @submit.prevent="save()">
           <p class="text-sm text-[var(--color-muted)]">{{ t('icalImport.hint') }}</p>
@@ -75,7 +76,7 @@ async function sync() {
           <UButton type="submit" :form="`booking-integration-${apartmentId}`" class="min-h-11" :loading="busy" :disabled="busy || loading || Boolean(loadError)">{{ feed?.enabled ? t('common.save') : t('icalImport.connect') }}</UButton>
         </div>
       </template>
-    </USlideover>
+    </ResponsiveFormDialog>
   </div>
 </template>
 

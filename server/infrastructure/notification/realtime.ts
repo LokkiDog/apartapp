@@ -3,6 +3,8 @@ export type NotificationRealtimeMessage =
   | { type: 'notification.read'; id: string; readAt: string }
   | { type: 'notifications.read-all'; readAt: string }
   | { type: 'notifications.heartbeat' }
+  | { type: 'notifications.unread-count'; count: number }
+  | { type: 'messaging.unread-count'; count: number | null }
   | { type: 'cleaning.changed'; cleaningId: string; reason: 'created' | 'updated' | 'accepted' | 'started' | 'progress' | 'inventory' | 'tariff' | 'route' | 'completed' | 'deleted' | 'linen'; occurredAt: string }
   | { type: 'task.changed'; taskId: string; reason: 'created' | 'updated' | 'started' | 'progress' | 'resolved' | 'completed' | 'returned' | 'deleted'; occurredAt: string }
   | { type: 'session.revoked'; reason: 'archived' | 'blocked' }

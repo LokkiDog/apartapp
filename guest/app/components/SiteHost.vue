@@ -1,5 +1,11 @@
 <script setup lang="ts">
+import { socialLabels } from '../../../shared/contracts/public-site'
 const { copy, settings, hostDescription } = useSite()
+const phoneLink = computed(() => settings.value?.phone ? `tel:${settings.value.phone.replace(/[^+\d]/g, '')}` : '')
+const socialLinks = computed(() => settings.value?.socials?.map(({ platform, value }) => ({
+  label: platform === 'other' ? new URL(value).hostname : socialLabels[platform],
+  href: platform === 'telegram' && value.startsWith('@') ? `https://t.me/${value.slice(1)}` : value
+})) ?? [])
 const hostPhoto = computed(() => settings.value?.hostPhoto || '')
 </script>
 <template>
@@ -10,7 +16,11 @@ const hostPhoto = computed(() => settings.value?.hostPhoto || '')
       <p class="font-semibold">{{ settings.hostName }}</p>
       <p>{{ hostDescription }}</p>
       <p>{{ copy.hostWelcome }}</p>
-      <SiteContact :label="copy.whatsapp" />
+      <div v-if="settings.whatsapp || phoneLink || socialLinks.length" class="host-contact-links">
+        <SiteContact v-if="settings.whatsapp" :label="copy.whatsapp" />
+        <a v-if="phoneLink" :href="phoneLink" dir="ltr" class="button">{{ settings.phone }}</a>
+        <a v-for="link in socialLinks" :key="link.href" :href="link.href" class="button" target="_blank" rel="noopener noreferrer">{{ link.label }}</a>
+      </div>
     </div>
   </section>
 </template>

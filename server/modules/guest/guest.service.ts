@@ -1,6 +1,6 @@
-import { and, asc, desc, eq, ilike, isNull, or, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, exists, ilike, inArray, isNull, or, sql } from 'drizzle-orm'
 import { createError } from 'h3'
-import { conversationGuestSchema, guestInputSchema, normalizeGuestPhone, type GuestInput } from '@contracts/guests'
+import { conversationGuestSchema, guestInputSchema, guestNotesSchema, normalizeGuestPhone, type GuestConversationList, type GuestInput } from '@contracts/guests'
 import { requireRole, type Actor } from '../../infrastructure/auth/actor'
 import { db } from '../../infrastructure/database/client'
 import { apartments, guests, messagingConnections, messagingContacts, messagingConversations, organizations, stays } from '../../infrastructure/database/schema'
@@ -39,11 +39,19 @@ async function lockGuestContacts(tx: Transaction, organizationId: string) {
   await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${'guest-contacts:' + organizationId}, 0))`)
 }
 
-async function matchingGuests(tx: Transaction, organizationId: string, keys: ReturnType<typeof contactKeys>) {
-  if (!keys.phoneKey && !keys.emailKey) return []
-  return tx.select().from(guests).where(and(eq(guests.organizationId, organizationId), or(
-    keys.phoneKey ? eq(guests.phoneKey, keys.phoneKey) : undefined,
-    keys.emailKey ? eq(guests.emailKey, keys.emailKey) : undefined,
+const extraPhoneKey = sql`regexp_replace(regexp_replace(extra.value, '[[:space:]().-]', '', 'g'), '^00', '+')`
+
+async function matchingGuests(tx: Transaction, actorOrganizationId: string, phoneKeys: string[], emailKeys: string[]) {
+  if (!phoneKeys.length && !emailKeys.length) return []
+  return tx.select().from(guests).where(and(eq(guests.organizationId, actorOrganizationId), or(
+    phoneKeys.length ? or(
+      inArray(guests.phoneKey, phoneKeys),
+      sql`exists (select 1 from unnest(${guests.additionalPhones}) extra(value) where ${inArray(extraPhoneKey, phoneKeys)})`,
+    ) : undefined,
+    emailKeys.length ? or(
+      inArray(guests.emailKey, emailKeys),
+      sql`exists (select 1 from unnest(${guests.additionalEmails}) extra(value) where ${inArray(sql`lower(extra.value)`, emailKeys)})`,
+    ) : undefined,
   )))
 }
 
@@ -54,15 +62,15 @@ export async function resolveStayGuest(tx: Transaction, organizationId: string, 
   if (!organization?.enabled) return null
   await lockGuestContacts(tx, organizationId)
   const keys = contactKeys(phone, email)
-  const matches = await matchingGuests(tx, organizationId, keys)
+  const matches = await matchingGuests(tx, organizationId, keys.phoneKey ? [keys.phoneKey] : [], keys.emailKey ? [keys.emailKey] : [])
   if (matches.length > 1) throw contactConflict()
   const [match] = matches
   if (!match) {
     const [guest] = await tx.insert(guests).values({ organizationId, name, phone, email, ...keys }).returning({ id: guests.id })
     return guest!.id
   }
-  const nextPhone = match.phone || phone
-  const nextEmail = match.email || email
+  const nextPhone = match.phone || (keys.phoneKey && match.additionalPhones.some(value => normalizeGuestPhone(value) === keys.phoneKey) ? '' : phone)
+  const nextEmail = match.email || (keys.emailKey && match.additionalEmails.some(value => value.toLowerCase() === keys.emailKey) ? '' : email)
   if (nextPhone !== match.phone || nextEmail !== match.email) {
     await tx.update(guests).set({
       phone: nextPhone, email: nextEmail, ...contactKeys(nextPhone, nextEmail), updatedAt: new Date(),
@@ -82,7 +90,11 @@ export async function listGuests(actor: Actor, search: string, page: number) {
   const rows = await db.select(summary).from(guests)
     .where(and(eq(guests.organizationId, actor.organizationId), search ? or(
       ilike(guests.name, pattern), ilike(guests.email, pattern), ilike(guests.phone, pattern),
-      normalizedPhone ? ilike(guests.phoneKey, searchPattern(normalizedPhone)) : undefined,
+      sql`exists (select 1 from unnest(${guests.additionalPhones} || ${guests.additionalEmails} || ${guests.additionalWhatsapps}) extra(value) where extra.value ilike ${pattern})`,
+      normalizedPhone ? or(
+        ilike(guests.phoneKey, searchPattern(normalizedPhone)),
+        sql`exists (select 1 from unnest(${guests.additionalPhones}) extra(value) where ${extraPhoneKey} ilike ${searchPattern(normalizedPhone)})`,
+      ) : undefined,
     ) : undefined))
     .orderBy(asc(guests.name), asc(guests.id)).limit(pageSize + 1).offset((page - 1) * pageSize)
   return { items: rows.slice(0, pageSize), hasMore: rows.length > pageSize }
@@ -91,7 +103,9 @@ export async function listGuests(actor: Actor, search: string, page: number) {
 async function writeGuest(tx: Transaction, actor: Actor, data: GuestInput, id?: string) {
   const keys = contactKeys(data.phone, data.email)
   await lockGuestContacts(tx, actor.organizationId)
-  if ((await matchingGuests(tx, actor.organizationId, keys)).some(guest => guest.id !== id)) throw contactConflict()
+  const phoneKeys = [data.phone, ...(data.additionalPhones ?? [])].map(normalizeGuestPhone).filter(key => key !== null)
+  const emailKeys = [data.email, ...(data.additionalEmails ?? [])].filter(Boolean).map(email => email.toLowerCase())
+  if ((await matchingGuests(tx, actor.organizationId, phoneKeys, emailKeys)).some(guest => guest.id !== id)) throw contactConflict()
   const [guest] = id
     ? await tx.update(guests).set({ ...data, ...keys, updatedAt: new Date() }).where(guestScope(actor, id)).returning(summary)
     : await tx.insert(guests).values({ ...data, ...keys, organizationId: actor.organizationId }).returning(summary)
@@ -119,14 +133,42 @@ function staysQuery(actor: Actor) {
     .innerJoin(apartments, and(eq(apartments.id, stays.apartmentId), eq(apartments.organizationId, actor.organizationId)))
 }
 
+export async function saveGuestNotes(actor: Actor, id: string, input: unknown) {
+  await assertGuestsAccess(actor)
+  const { notes } = guestNotesSchema.parse(input)
+  const [guest] = await db.update(guests).set({ notes, updatedAt: new Date() })
+    .where(guestScope(actor, id)).returning({ notes: guests.notes })
+  if (!guest) throw notFound()
+  return guest
+}
+
+function guestChatStayScope(actor: Actor, guestId: string) {
+  return and(
+    eq(messagingConversations.organizationId, actor.organizationId),
+    inArray(messagingConversations.contactId, db.select({ id: messagingContacts.id })
+      .from(messagingContacts)
+      .where(and(eq(messagingContacts.organizationId, actor.organizationId), eq(messagingContacts.guestId, guestId)))),
+  )
+}
+
 export async function getGuest(actor: Actor, id: string) {
   await assertGuestsAccess(actor)
-  const [guest] = await db.select({ ...summary, notes: guests.notes }).from(guests).where(guestScope(actor, id))
+  const [guest] = await db.select({
+    ...summary,
+    notes: guests.notes,
+    additionalPhones: guests.additionalPhones,
+    additionalEmails: guests.additionalEmails,
+    additionalWhatsapps: guests.additionalWhatsapps,
+  }).from(guests).where(guestScope(actor, id))
   if (!guest) throw notFound()
   const [organization] = await db.select({ enabled: organizations.messagingEnabled, status: organizations.status })
     .from(organizations).where(eq(organizations.id, actor.organizationId))
   const [linkedStays, conversations] = await Promise.all([
-    staysQuery(actor).where(and(eq(stays.organizationId, actor.organizationId), eq(stays.guestId, id)))
+    staysQuery(actor).where(and(eq(stays.organizationId, actor.organizationId), or(
+      eq(stays.guestId, id),
+      exists(db.select({ id: messagingConversations.id }).from(messagingConversations)
+        .where(and(guestChatStayScope(actor, id), eq(messagingConversations.stayId, stays.id)))),
+    )))
       .orderBy(desc(stays.checkInOn), asc(stays.id)),
     organization?.enabled && organization.status === 'active'
       ? conversationQuery(actor).where(and(eq(messagingContacts.organizationId, actor.organizationId), eq(messagingContacts.guestId, id)))
@@ -145,7 +187,7 @@ export async function findGuestStays(actor: Actor, search: string, page: number)
   return { items: rows.slice(0, pageSize), hasMore: rows.length > pageSize }
 }
 
-export async function findGuestConversations(actor: Actor, search: string, page: number, channel?: 'telegram' | 'line') {
+export async function findGuestConversations(actor: Actor, search: string, page: number, channel?: 'telegram' | 'line'): Promise<GuestConversationList> {
   await assertGuestsAccess(actor)
   await assertMessagingAccess(actor)
   const pattern = searchPattern(search)
@@ -155,14 +197,48 @@ export async function findGuestConversations(actor: Actor, search: string, page:
   return { items: rows.slice(0, pageSize), hasMore: rows.length > pageSize }
 }
 
+export async function listStayGuests(actor: Actor, stayId: string) {
+  await assertGuestsAccess(actor)
+  const [stay] = await db.select({ guestId: stays.guestId }).from(stays).where(and(
+    eq(stays.organizationId, actor.organizationId), eq(stays.id, stayId),
+  ))
+  if (!stay) throw createError({ statusCode: 404, statusMessage: 'Booking not found' })
+
+  const chatGuests = db.select({ id: messagingContacts.guestId }).from(messagingConversations)
+    .innerJoin(messagingContacts, and(
+      eq(messagingContacts.id, messagingConversations.contactId),
+      eq(messagingContacts.organizationId, actor.organizationId),
+    ))
+    .where(and(eq(messagingConversations.organizationId, actor.organizationId), eq(messagingConversations.stayId, stayId)))
+  const linked = await db.select({ id: guests.id, name: guests.name }).from(guests)
+    .where(and(eq(guests.organizationId, actor.organizationId), or(
+      stay.guestId ? eq(guests.id, stay.guestId) : undefined,
+      inArray(guests.id, chatGuests),
+    )))
+    .orderBy(asc(guests.name), asc(guests.id))
+  return { directGuestId: stay.guestId, guests: linked }
+}
+
 export async function linkGuestStay(actor: Actor, id: string, stayId: string, linked: boolean) {
   await assertGuestsAccess(actor)
   const [guest] = await db.select({ id: guests.id }).from(guests).where(guestScope(actor, id))
   if (!guest) throw notFound()
-  const [stay] = await db.update(stays).set({ guestId: linked ? id : null, updatedAt: new Date() }).where(and(
-    eq(stays.organizationId, actor.organizationId), eq(stays.id, stayId), linked ? undefined : eq(stays.guestId, id),
-  )).returning({ id: stays.id })
-  if (!stay) throw createError({ statusCode: 404, statusMessage: 'Booking not found' })
+  const scope = and(eq(stays.organizationId, actor.organizationId), eq(stays.id, stayId))
+  const found = await db.transaction(async tx => {
+    const [stay] = await tx.update(stays).set({ guestId: linked ? id : null, updatedAt: new Date() })
+      .where(and(scope, linked ? undefined : eq(stays.guestId, id))).returning({ id: stays.id })
+    if (linked) return Boolean(stay)
+
+    const chats = await tx.update(messagingConversations).set({ stayId: null, updatedAt: new Date() })
+      .where(and(
+        guestChatStayScope(actor, id),
+        eq(messagingConversations.stayId, stayId),
+        exists(tx.select({ id: stays.id }).from(stays).where(scope)),
+      ))
+      .returning({ id: messagingConversations.id })
+    return Boolean(stay || chats.length)
+  })
+  if (!found) throw createError({ statusCode: 404, statusMessage: 'Booking not found' })
   return { ok: true }
 }
 

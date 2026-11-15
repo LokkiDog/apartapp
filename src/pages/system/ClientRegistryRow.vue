@@ -14,11 +14,12 @@ const props = defineProps<{
   pending: boolean
   enteringClientId: string | null
 }>()
-const emit = defineEmits<{ enter: []; 'update:module': [field: 'messagingEnabled' | 'guestsEnabled', enabled: boolean] }>()
+const emit = defineEmits<{ enter: []; 'update:module': [field: 'messagingEnabled' | 'guestsEnabled' | 'aiAgentsEnabled', enabled: boolean] }>()
 
 const modules = [
   { field: 'messagingEnabled', label: 'Сообщения' },
   { field: 'guestsEnabled', label: 'Гости' },
+  { field: 'aiAgentsEnabled', label: 'ИИ-агенты' },
 ] as const
 const table = computed(() => props.layout === 'table')
 const cell = computed(() => table.value ? 'td' : 'div')

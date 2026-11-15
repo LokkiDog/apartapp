@@ -20,13 +20,16 @@ RUN npm run prepare && npm run build
 FROM dependencies AS migrate
 
 COPY drizzle.config.ts ./
+COPY shared/config/crm-database.ts shared/config/load-crm-env.ts ./shared/config/
 COPY server/infrastructure/database ./server/infrastructure/database
 CMD ["npm", "run", "db:migrate"]
 
 FROM node:22-alpine AS runtime
 
+ARG CRM_BRAND=aparts
 WORKDIR /app
 ENV NODE_ENV=production \
+    CRM_BRAND=$CRM_BRAND \
     NITRO_HOST=0.0.0.0 \
     PORT=3000 \
     FILE_STORAGE_PATH=/app/.data/uploads

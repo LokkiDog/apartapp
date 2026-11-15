@@ -18,7 +18,7 @@ function ownUser(actor: Actor) {
 export async function getOwnProfile(actor: Actor): Promise<OwnProfile> {
   const user = await db.query.users.findFirst({ where: ownUser(actor) })
   if (!user) throw createError({ statusCode: 404, statusMessage: 'Пользователь не найден' })
-  return { currency: user.currency, name: user.name, phone: user.phone, publicBio: user.publicBio, hasPhoto: Boolean(user.profilePhotoKey), photoVersion: user.updatedAt.toISOString() }
+  return { currency: user.currency, name: user.name, phone: user.phone, socials: user.socials, hasPhoto: Boolean(user.profilePhotoKey), photoVersion: user.updatedAt.toISOString() }
 }
 export async function updateOwnProfile(actor: Actor, input: unknown) {
   const data = profileUpdateSchema.parse(input)

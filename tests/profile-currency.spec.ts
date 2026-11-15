@@ -16,6 +16,7 @@ vi.mock('#fsd/shared/lib', async () => ({
 vi.mock('#fsd/shared/ui', async () => ({
   ConfirmActionModal: (await import('../src/shared/ui/ConfirmActionModal.vue')).default,
   PageHeader: { template: '<div />' },
+  ResponsiveFormDialog: { template: '<div />' },
   DeleteConfirmModal: { template: '<div />' }
 }))
 vi.mock('#fsd/features/change-language', () => ({ LanguageSwitcher: { template: '<div />' } }))
@@ -48,6 +49,7 @@ it('warns before saving, supports cancel and retry, and applies the confirmed cu
       plugins: [createI18n({ legacy: false, locale: 'ru', messages: { ru } })],
       stubs: {
         USelect: Select,
+        UDropdownMenu: true,
         UAvatar: true,
         UForm: { template: '<form><slot /></form>' },
         UFormField: { template: '<div><slot /></div>' },

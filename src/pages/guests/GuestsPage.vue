@@ -19,7 +19,7 @@ watch(search, (value, _, onCleanup) => {
 watch(userScope, () => { page.value = 1; formOpen.value = false })
 const { data, status, refresh } = await useAsyncData(computed(() => `guests-directory-${userScope.value}`), () => {
   if (!allowed.value) return Promise.resolve({ items: [], hasMore: false })
-  return $fetch('/api/guests', { query: { q: query.value, page: page.value } })
+  return $fetch<{ items: GuestSummary[]; hasMore: boolean }>('/api/guests', { query: { q: query.value, page: page.value } })
 }, { server: false, default: () => ({ items: [], hasMore: false }), watch: [query, page] })
 
 function openGuest(guest: GuestSummary) {

@@ -10,7 +10,7 @@ import { filterApartmentsByScope, isPropertyScopeReady, propertyScopeQuery, Prop
 import { apartmentCalendarColor, createFormValidator, formatDate, useMoneyFormat, useSubmitFormValidation } from '#fsd/shared/lib'
 import { useCurrentUser } from '#fsd/shared/auth'
 import { useNotificationState } from '#fsd/features/manage-notifications'
-import { DateRangeInput, DeleteConfirmModal, EmptyState, MoneyInput, PageHeader } from '#fsd/shared/ui'
+import { DateRangeInput, DeleteConfirmModal, EmptyState, MoneyInput, PageHeader, ResponsiveFormDialog } from '#fsd/shared/ui'
 import StayCalendarPopover from './StayCalendarPopover.vue'
 import CalendarEventMarker from './CalendarEventMarker.vue'
 import StayBookingRow from './StayBookingRow.vue'
@@ -369,8 +369,9 @@ function openDetails(stay: Stay) {
   detailsOpen.value = true
 }
 const toast = useToast()
-watch([() => route.query.stay, () => user.value?.organizationId, isAdministrator], async ([stayId, organizationId, administrator], _, onCleanup) => {
-  if (!import.meta.client || !administrator || typeof stayId !== 'string') return
+const canOpenStayLink = computed(() => user.value?.roles.some(role => role === 'administrator' || role === 'manager'))
+watch([() => route.query.stay, () => user.value?.organizationId, canOpenStayLink], async ([stayId, organizationId, allowed], _, onCleanup) => {
+  if (!import.meta.client || !allowed || typeof stayId !== 'string') return
   const controller = new AbortController()
   onCleanup(() => controller.abort())
   try {
@@ -698,7 +699,7 @@ async function saveStay() {
 
     <LazyStayDetailsSlideover v-if="detailsOpen" v-model:open="detailsOpen" :stay="selectedStay" :can-edit="canEditStays" :can-manage-cleaning="Boolean(user?.roles.includes('administrator'))" :show-service-prices="showFinancialDetails" @update:open="closeStayLink" @edit="openEdit" @saved="refreshStayDetails" />
 
-    <USlideover v-model:open="open" :title="editingStay ? t('calendar.editBooking') : t('calendar.newStay')" :modal="true" :overlay="true">
+    <ResponsiveFormDialog v-model:open="open" :title="editingStay ? t('calendar.editBooking') : t('calendar.newStay')" :modal="true" :overlay="true">
       <template #body>
         <UForm :key="validation.formKey.value" id="stay-form" :state="form" :validate="validate" :validate-on="validation.validateOn.value" novalidate class="form-grid stay-form-grid" @error="validation.onError" @submit="saveStay">
           <UFormField name="apartmentId" :label="t('calendar.apartment')">
@@ -741,7 +742,7 @@ async function saveStay() {
           <UButton type="submit" form="stay-form" :loading="pending">{{ editingStay ? t('calendar.saveChanges') : t('calendar.create') }}</UButton>
         </div>
       </template>
-    </USlideover>
+    </ResponsiveFormDialog>
 
     <DeleteConfirmModal v-model:open="deleteOpen" :title="t('calendar.deleteBooking')" :description="t('calendar.deleteWarning')" :loading="pending" :error="error" @confirm="removeStay" />
   </section>

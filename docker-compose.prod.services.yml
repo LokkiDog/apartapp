@@ -26,6 +26,8 @@ services:
       target: migrate
     env_file:
       - ${APARTS_ENV_FILE:-.env.production}
+    environment:
+      CRM_BRAND: ${CRM_DEPLOY_BRAND:-aparts}
     networks:
       - backend
     depends_on:
@@ -43,6 +45,7 @@ services:
     env_file:
       - ${APARTS_ENV_FILE:-.env.production}
     environment:
+      CRM_BRAND: ${CRM_DEPLOY_BRAND:-aparts}
       NODE_ENV: production
       NITRO_HOST: 0.0.0.0
       NUXT_PUBLIC_APP_URL: ${NUXT_PUBLIC_APP_URL:?NUXT_PUBLIC_APP_URL is required}

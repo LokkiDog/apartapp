@@ -2,9 +2,9 @@
 import CrmBrandMark from "./CrmBrandMark.vue";
 import {
   switchClientContext,
-  canAccessWorkSection,
+  getCrmNavigation,
+  type NavItem,
   useCurrentUser,
-  useCurrentUserScope,
   usesManagerOnlyNavigation,
 } from "#fsd/shared/auth";
 import { useNetworkStatus } from "#fsd/shared/lib";
@@ -32,7 +32,6 @@ function toggleSidebar() {
   } catch { /* The menu remains usable when storage is unavailable. */ }
 }
 
-type NavItem = { to: string; label: string; icon: string };
 const route = useRoute();
 const user = useCurrentUser();
 const online = useNetworkStatus();
@@ -43,50 +42,10 @@ const logoutPending = ref(false);
 const mobileNavigationReady = ref(false);
 const notificationsReady = ref(false);
 const isAdministrator = computed(() => user.value?.roles.includes("administrator") ?? false);
-const userScope = useCurrentUserScope();
-const messagingScope = computed(() =>
-  isAdministrator.value && user.value?.messagingEnabled ? userScope.value : null,
-);
-const { data: messageCountResult, refresh: refreshMessageCount } = useAsyncData(
-  "messaging-unread-count",
-  async (_app, { signal }): Promise<{ scope: string | null; count: number }> => {
-    const scope = messagingScope.value;
-    if (!scope) return { scope, count: 0 };
-    try {
-      const { count } = await $fetch<{ count: number }>("/api/messaging/unread-count", { signal });
-      return { scope, count };
-    } catch {
-      return { scope, count: messageCountResult.value?.scope === scope ? messageCountResult.value.count : 0 };
-    }
-  },
-  { server: false, default: () => ({ scope: null, count: 0 }), watch: [messagingScope] },
-);
-const messageCount = computed(() => {
-  const result = messageCountResult.value;
-  return result && result.scope === messagingScope.value ? result.count : 0;
-});
+const messageCount = computed(() => user.value?.messagingEnabled && isAdministrator.value ? notifications.messagingUnreadCount.value : 0);
 const messageBadge = computed(() => messageCount.value > 99 ? "99+" : String(messageCount.value));
 const messageCountLabel = computed(() => t("messaging.unreadCount", { count: messageCount.value }));
 
-let messageCountTimer: ReturnType<typeof setInterval> | undefined;
-function pollMessageCount() {
-  if (messagingScope.value && !document.hidden) void refreshMessageCount({ dedupe: "defer" });
-}
-onMounted(() => {
-  messageCountTimer = setInterval(pollMessageCount, 5000);
-  document.addEventListener("visibilitychange", pollMessageCount);
-});
-onBeforeUnmount(() => {
-  clearInterval(messageCountTimer);
-  document.removeEventListener("visibilitychange", pollMessageCount);
-});
-
-const isSpecialistNavigation = computed(() =>
-  Boolean(
-    user.value?.roles.includes("specialist") &&
-      !isAdministrator.value,
-  ),
-);
 const { isLoading: isPageLoading } = useLoadingIndicator({
   throttle: 120,
   hideDelay: 100,
@@ -101,85 +60,19 @@ onMounted(() => {
   notificationsReady.value = true;
 });
 
-const work = computed<NavItem[]>(() => [
-  { to: "/", label: t("nav.home"), icon: "i-lucide-layout-dashboard" },
-  { to: "/calendar", label: t("nav.bookings"), icon: "i-lucide-calendar-days" },
-  { to: "/work", label: t("nav.cleanings"), icon: "i-lucide-broom" },
-]);
-const specialistWork = computed<NavItem[]>(() => [
-  { to: "/work", label: t("nav.cleanings"), icon: "i-lucide-broom" },
-  { to: "/tasks", label: t("work.tasks"), icon: "i-lucide-clipboard-check" },
-]);
-const expenses = computed<NavItem>(() => ({
-  to: "/expenses",
-  label: t("nav.expenses"),
-  icon: "i-lucide-receipt",
-}));
-const problems = computed<NavItem>(() => ({
-  to: "/problems",
-  label: t("nav.problems"),
-  icon: "i-lucide-triangle-alert",
-}));
-const objects = computed<NavItem[]>(() => [
-  {
-    to: "/apartments",
-    label: t("nav.apartments"),
-    icon: "i-lucide-building-2",
-  },
-  { to: "/hotels", label: t("nav.hotels"), icon: "i-lucide-hotel" },
-  { to: "/inventory", label: t("nav.inventory"), icon: "i-lucide-package" },
-]);
-const reports = computed<NavItem[]>(() => [
-  {
-    to: "/reports",
-    label: t("nav.summary"),
-    icon: "i-lucide-chart-no-axes-combined",
-  },
-  {
-    to: "/statement",
-    label: t("nav.statement"),
-    icon: "i-lucide-wallet-cards",
-  },
-]);
-const managerFinance = computed<NavItem[]>(() => [
-  {
-    to: "/statement",
-    label: t("nav.myExpenses"),
-    icon: "i-lucide-wallet-cards",
-  },
-]);
-const managerPrimary = computed<NavItem[]>(() => [
-  { to: "/calendar", label: t("nav.bookings"), icon: "i-lucide-calendar-days" },
-  {
-    to: "/apartments",
-    label: t("nav.apartments"),
-    icon: "i-lucide-building-2",
-  },
-  ...managerFinance.value,
-]);
-const communicationItems = computed<NavItem[]>(() => [
-  ...(user.value?.guestsEnabled
-    ? [{ to: "/guests", label: t("guests.title"), icon: "i-lucide-contact" }]
-    : []),
-  ...(user.value?.messagingEnabled
-    ? [{ to: "/messages", label: t("messaging.title"), icon: "i-lucide-messages-square" }]
-    : []),
-]);
-const settings = computed<NavItem[]>(() => [
-  ...(user.value?.messagingEnabled ? [{ to: '/settings/messaging', label: t('messaging.settings'), icon: 'i-lucide-messages-square' }] : []),
-  { to: "/settings/site", label: t("siteSettings.title"), icon: "i-lucide-globe" },
-  { to: "/settings/users", label: t("nav.users"), icon: "i-lucide-users" },
-  {
-    to: "/settings/apartment-types",
-    label: t("nav.apartmentTypes"),
-    icon: "i-lucide-coins",
-  },
-  {
-    to: "/settings/services",
-    label: t("nav.services"),
-    icon: "i-lucide-concierge-bell",
-  },
-]);
+const navigation = computed(() => getCrmNavigation(user.value, t));
+const settings = computed(() => navigation.value.settings);
+const groups = computed(() => navigation.value.groups);
+const desktopGroups = computed(() => {
+  const home = groups.value.flatMap((group) => group.items).find((item) => item.to === "/");
+  if (!home) return groups.value;
+  const sections = groups.value
+    .map((group) => ({ ...group, items: group.items.filter((item) => item.to !== "/") }))
+    .filter((group) => group.items.length);
+  return [{ label: "", items: [home] }, ...sections];
+});
+const specialistWork = computed(() => navigation.value.specialistWork);
+const isSpecialistNavigation = computed(() => navigation.value.isSpecialistNavigation);
 const settingsMenuItems = computed(() =>
   settings.value.map((item) => ({ ...item, exact: true })),
 );
@@ -187,43 +80,6 @@ const isSettingsPage = computed(() =>
   settings.value.some((item) => route.path === item.to),
 );
 
-const groups = computed(() => {
-  if (isAdministrator.value)
-    return [
-      { label: t("nav.work"), items: [...work.value, problems.value, expenses.value] },
-      ...(communicationItems.value.length
-        ? [{ label: t("nav.communication"), items: communicationItems.value }]
-        : []),
-      { label: t("nav.objects"), items: objects.value },
-      { label: t("nav.reports"), items: reports.value },
-    ];
-  if (usesManagerOnlyNavigation(user.value))
-    return [{ label: "", items: managerPrimary.value }];
-  if (isSpecialistNavigation.value)
-    return [{ label: t("nav.work"), items: specialistWork.value }];
-  if (user.value?.roles.includes("manager"))
-    return [
-      {
-        label: t("nav.work"),
-        items: work.value.filter(
-          (item) => item.to !== "/work" || canAccessWorkSection(user.value),
-        ),
-      },
-      {
-        label: t("nav.objects"),
-        items: objects.value.filter(
-          (item) => !["/hotels", "/inventory"].includes(item.to),
-        ),
-      },
-      { label: t("nav.finance"), items: managerFinance.value },
-    ];
-  return [
-    {
-      label: t("nav.work"),
-      items: work.value.filter((item) => ["/", "/work"].includes(item.to)),
-    },
-  ];
-});
 const mobileGroups = computed(() =>
   isAdministrator.value
     ? [...groups.value, { label: t("nav.settings"), items: settings.value }]
@@ -309,7 +165,7 @@ async function logout() {
         </UTooltip>
       </div>
       <nav id="desktop-navigation" class="desktop-sidebar__nav mt-8 space-y-6" :aria-label="$t('nav.work')">
-        <section v-for="group in groups" :key="group.label" :aria-label="group.label || undefined">
+        <section v-for="group in desktopGroups" :key="group.label" :aria-label="group.label || undefined">
           <p v-if="group.label && !sidebarCollapsed" class="nav-group-label">{{ group.label }}</p>
           <div :class="group.label && !sidebarCollapsed ? 'mt-2 space-y-1' : 'space-y-1'">
             <UTooltip

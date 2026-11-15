@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { localizedName } from '#shared/utils/localized-name'
-import { useCurrentUser } from '#fsd/shared/auth'
+import { useCurrentUser, useCurrentUserScope } from '#fsd/shared/auth'
+import type { GuestSummary } from '@contracts/guests'
+import { GuestDirectoryPicker } from '#fsd/features/guest-form'
 import type { Stay } from '#fsd/entities/stay'
 import { formatDate, useMoneyFormat } from '#fsd/shared/lib'
 import StayServiceIcons from './StayServiceIcons.vue'
@@ -28,6 +30,53 @@ const isOpen = computed({
   get: () => props.open,
   set: value => emit('update:open', value)
 })
+
+const userScope = useCurrentUserScope()
+const canManageGuestLink = computed(() => props.canManageCleaning && user.value?.guestsEnabled && !user.value.inSystem)
+const stayId = computed(() => props.stay?.id)
+const pickerOpen = ref(false)
+const unlinkingGuest = ref<string>()
+const linkError = ref('')
+const { data: guestLinks, status: guestLinksStatus, refresh: refreshGuestLinks } = await useAsyncData(
+  computed(() => `stay-guest-links-${userScope.value}-${stayId.value ?? ''}`),
+  () => canManageGuestLink.value && props.open && stayId.value
+    ? $fetch<{ directGuestId: string | null; guests: Pick<GuestSummary, 'id' | 'name'>[] }>(`/api/stays/${stayId.value}/guests`)
+    : Promise.resolve({ directGuestId: null, guests: [] }),
+  { server: false, default: () => ({ directGuestId: null, guests: [] }), watch: [canManageGuestLink, () => props.open, userScope] },
+)
+
+watch([stayId, userScope], () => {
+  pickerOpen.value = false
+  linkError.value = ''
+})
+
+async function linkGuest(guest: GuestSummary) {
+  const id = stayId.value
+  const scope = userScope.value
+  if (!id || !canManageGuestLink.value) throw new Error('Guest linking unavailable')
+  await $fetch(`/api/guests/${guest.id}/stay`, { method: 'PATCH', body: { id, linked: true } })
+  if (stayId.value === id && userScope.value === scope) await refreshGuestLinks()
+  return guest
+}
+
+async function unlinkGuest(guestId: string) {
+  const id = stayId.value
+  const scope = userScope.value
+  if (!id || !canManageGuestLink.value || unlinkingGuest.value) return
+  unlinkingGuest.value = guestId
+  linkError.value = ''
+  try {
+    await $fetch(`/api/guests/${guestId}/stay`, { method: 'PATCH', body: { id, linked: false } })
+    if (stayId.value === id && userScope.value === scope) {
+      await refreshGuestLinks()
+      emit('saved')
+    }
+  } catch {
+    if (stayId.value === id && userScope.value === scope) linkError.value = t('common.error')
+  } finally {
+    unlinkingGuest.value = undefined
+  }
+}
 
 function editStay() {
   if (!props.stay) return
@@ -76,7 +125,7 @@ async function saveGuests() {
           <UAlert v-if="guestError" color="error" role="alert" :description="guestError" />
         </section>
 
-        <section v-if="stay.guestName || stay.guestPhone || stay.guestEmail || stay.guestId || stay.guestComment || stay.specialRequests" class="stay-details__section">
+        <section v-if="canManageGuestLink || stay.guestName || stay.guestPhone || stay.guestEmail || stay.guestComment || stay.specialRequests" class="stay-details__section">
           <h3>{{ t('calendarExtra.guestDetails') }}</h3>
           <dl class="stay-details__list">
             <div v-if="stay.guestName"><dt>{{ t('calendarExtra.guestName') }}</dt><dd>{{ stay.guestName }}</dd></div>
@@ -85,7 +134,27 @@ async function saveGuests() {
             <div v-if="stay.guestComment"><dt>{{ t('calendar.guestComment') }}</dt><dd>{{ stay.guestComment }}</dd></div>
             <div v-if="stay.specialRequests"><dt>{{ t('common.notes') }}</dt><dd>{{ stay.specialRequests }}</dd></div>
           </dl>
-          <UButton v-if="stay.guestId && canManageCleaning && user?.guestsEnabled" :to="`/guests/${stay.guestId}`" color="neutral" variant="ghost" icon="i-lucide-contact" class="min-h-11">{{ t('guests.linkedGuest') }}</UButton>
+          <div v-if="canManageGuestLink" class="mt-2 space-y-2">
+            <p v-if="guestLinksStatus === 'pending' || guestLinksStatus === 'idle'" role="status" class="text-sm text-[var(--color-muted)]">{{ t('guests.loading') }}</p>
+            <UAlert v-else-if="guestLinksStatus === 'error'" color="error" variant="soft" :description="t('common.error')" :actions="[{ label: t('guests.retry'), onClick: () => refreshGuestLinks() }]" />
+            <template v-else>
+              <ul class="divide-y divide-[var(--color-line)]">
+                <li v-for="guest in guestLinks.guests" :key="guest.id" class="flex items-center gap-2">
+                  <UButton :to="`/guests/${guest.id}`" color="neutral" variant="ghost" icon="i-lucide-contact" class="min-h-11 min-w-0 flex-1">
+                    <span class="min-w-0 text-start">
+                      <span class="block break-words">{{ guest.name || t('guests.unnamed') }}</span>
+                      <span v-if="guest.id !== guestLinks.directGuestId" class="block text-xs text-[var(--color-muted)]">{{ t('guests.linkedViaChat') }}</span>
+                    </span>
+                  </UButton>
+                  <UButton color="neutral" variant="ghost" icon="i-lucide-unlink" class="size-11 shrink-0 justify-center" :aria-label="t('guests.unlinkGuest', { name: guest.name || t('guests.unnamed') })" :disabled="Boolean(unlinkingGuest)" :loading="unlinkingGuest === guest.id" @click="unlinkGuest(guest.id)" />
+                </li>
+              </ul>
+              <UButton color="neutral" variant="outline" icon="i-lucide-link" class="min-h-11" :disabled="Boolean(unlinkingGuest)" @click="pickerOpen = true">
+                {{ t(guestLinks.directGuestId ? 'guests.relinkGuest' : 'guests.linkGuest') }}
+              </UButton>
+              <UAlert v-if="linkError" color="error" variant="soft" :description="linkError" />
+            </template>
+          </div>
         </section>
 
         <section v-if="stay.services?.length" class="stay-details__section">
@@ -122,4 +191,13 @@ async function saveGuests() {
       </div>
     </template>
   </USlideover>
+  <GuestDirectoryPicker
+    v-if="canManageGuestLink && stayId"
+    :key="`${userScope}:${stayId}`"
+    v-model:open="pickerOpen"
+    :picker-key="`stay-${userScope}-${stayId}`"
+    :current-guest-id="guestLinks.directGuestId"
+    :save-guest="linkGuest"
+    @saved="emit('saved')"
+  />
 </template>

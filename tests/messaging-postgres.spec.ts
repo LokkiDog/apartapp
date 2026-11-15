@@ -717,6 +717,35 @@ describe.skipIf(!url)('guest messaging PostgreSQL boundaries', () => {
     expect((await inbox.listConversations(actor)).items[0]?.stayId).toBeNull()
   })
 
+  it('shows an existing chat booking on the guest card and unlinks only that guest’s associations', async () => {
+    const directory = await import('../server/modules/guest/guest.service')
+    const chatId = await conversationId()
+    const stay = await makeStay(actor)
+    await inbox.updateConversation(actor, chatId, { stayId: stay.id })
+    const fields = { name: 'Guest from chat', phone: '', email: '', whatsapp: '', notes: '' }
+    const guest = await directory.assignConversationGuest(actor, chatId, { action: 'create', guest: fields })
+    const anotherGuest = await directory.saveGuest(actor, { ...fields, name: 'Booking guest' })
+
+    expect((await directory.getGuest(actor, guest.id)).stays.map(item => item.id)).toEqual([stay.id])
+    await expect(directory.listStayGuests(actor, stay.id)).resolves.toEqual({
+      directGuestId: null,
+      guests: [{ id: guest.id, name: guest.name }],
+    })
+    await expect(directory.listStayGuests(other, stay.id)).rejects.toMatchObject({ statusCode: 404 })
+    await directory.linkGuestStay(actor, guest.id, stay.id, true)
+    expect((await directory.getGuest(actor, guest.id)).stays.map(item => item.id)).toEqual([stay.id])
+    await directory.linkGuestStay(actor, anotherGuest.id, stay.id, true)
+    const links = await directory.listStayGuests(actor, stay.id)
+    expect(links.directGuestId).toBe(anotherGuest.id)
+    expect(links.guests.map(item => item.id)).toEqual(expect.arrayContaining([guest.id, anotherGuest.id]))
+    await directory.linkGuestStay(actor, guest.id, stay.id, false)
+    expect((await directory.listStayGuests(actor, stay.id)).guests.map(item => item.id)).toEqual([anotherGuest.id])
+
+    expect((await directory.getGuest(actor, guest.id)).stays).toEqual([])
+    expect((await inbox.listMessages(actor, chatId, undefined, 50)).conversation.stayId).toBeNull()
+    expect((await directory.getGuest(actor, anotherGuest.id)).stays.map(item => item.id)).toEqual([stay.id])
+  })
+
   it('lets only the superuser switch off a client guest directory while keeping bookings and chat history', async () => {
     const directory = await import('../server/modules/guest/guest.service')
     const booking = await import('../server/modules/stay/stay.service')
@@ -837,6 +866,42 @@ describe.skipIf(!url)('guest messaging PostgreSQL boundaries', () => {
     await directory.saveGuest(actor, { ...fields, name: 'Renamed', whatsapp: '+359888234567' }, first.id)
     expect(await directory.getGuest(actor, first.id)).toMatchObject({ name: 'Renamed', phone: '', whatsapp: '+359888234567', notes: '' })
     await expect(directory.saveGuest(other, fields, first.id)).rejects.toMatchObject({ statusCode: 404 })
+  })
+
+  it('finds additional contacts and updates the private comment independently', async () => {
+    const directory = await import('../server/modules/guest/guest.service')
+    const fields = { name: 'Guest with multiple contacts', phone: '', email: '', whatsapp: '', notes: '' }
+    const guest = await directory.saveGuest(actor, {
+      ...fields,
+      phone: '+359888222000',
+      additionalPhones: ['00359 (888) 222-001', '+359888222002'],
+      additionalEmails: ['work@example.test', 'travel@example.test'],
+      additionalWhatsapps: ['+359888222003'],
+    })
+    expect((await directory.listGuests(actor, '+359888222001', 1)).items).toEqual([guest])
+    expect((await directory.listGuests(actor, 'travel@example.test', 1)).items).toEqual([guest])
+    await expect(directory.saveGuest(actor, { ...fields, phone: '+359888222001' }))
+      .rejects.toMatchObject({ statusCode: 409 })
+    await expect(directory.saveGuest(actor, { ...fields, email: 'Work@example.test' }))
+      .rejects.toMatchObject({ statusCode: 409 })
+    const booking = await import('../server/modules/stay/stay.service')
+    const apartment = await makeApartment(actor)
+    const stay = await booking.createStay(actor, {
+      apartmentId: apartment.id, checkInOn: '2030-02-01', checkOutOn: '2030-02-02', adultCount: 1, childCount: 0,
+      guestPhone: '+359888222002', guestEmail: 'TRAVEL@example.test',
+    })
+    expect(stay.guestId).toBe(guest.id)
+    await expect(directory.saveGuestNotes(other, guest.id, { notes: 'Another organization' }))
+      .rejects.toMatchObject({ statusCode: 404 })
+    await expect(directory.saveGuestNotes(actor, guest.id, { notes: '  Поздний заезд  ' }))
+      .resolves.toEqual({ notes: 'Поздний заезд' })
+    expect(await directory.getGuest(actor, guest.id)).toMatchObject({
+      phone: '+359888222000',
+      additionalPhones: ['00359 (888) 222-001', '+359888222002'],
+      additionalEmails: ['work@example.test', 'travel@example.test'],
+      additionalWhatsapps: ['+359888222003'],
+      notes: 'Поздний заезд',
+    })
   })
 
   it('creates a guest and links the chat atomically, then allows linking an existing guest', async () => {

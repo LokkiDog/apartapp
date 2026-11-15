@@ -8,6 +8,7 @@ import type {
   MessagingChannel,
 } from '@contracts/messaging'
 import { MAX_MESSAGE_FILE_BYTES } from '@contracts/messaging'
+import { useNotificationState } from '#fsd/features/manage-notifications'
 import { GuestForm } from '#fsd/features/guest-form'
 import ConversationContactField from './ConversationContactField.vue'
 import ConversationGuestPicker from './ConversationGuestPicker.vue'
@@ -15,9 +16,10 @@ import ReplyTemplatePicker from './ReplyTemplatePicker.vue'
 import type { Stay } from '#fsd/entities/stay'
 import { clientResourceUrl, useCurrentUser } from '#fsd/shared/auth'
 import { formatDate } from '#fsd/shared/lib'
-import { EmptyState, PageHeader } from '#fsd/shared/ui'
+import { EmptyState, PageHeader, ResponsiveFormDialog } from '#fsd/shared/ui'
 const { t, locale } = useI18n()
 const user = useCurrentUser()
+const { messagingRevision } = useNotificationState()
 const route = useRoute()
 const selectedId = computed(() =>
   typeof route.params.id === 'string' ? route.params.id : '',
@@ -41,7 +43,8 @@ const text = ref('')
 const upload = ref<File | null>(null)
 const fileInput = ref<HTMLInputElement | null>(null)
 const pending = ref(false)
-const polling = ref(false)
+const refreshing = ref(false)
+let refreshQueued = false
 const connection = ref<MessagingConnection | null>(null)
 const sources = ref<MessagingSource[]>([])
 const defaultReplyId = ref('')
@@ -220,7 +223,7 @@ async function loadHistory(older = false): Promise<void> {
       a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id),
   )
   if (older || !hadMessages) historyNext.value = result.next
-  // If more than one page arrived between polls, leave a visible way to fetch the gap.
+  // If more than one page arrived between refreshes, leave a visible way to fetch the gap.
   if (!older && hadMessages && !overlapsHistory && result.next)
     historyNext.value = result.next
   const readThrough = new Map<string, string>()
@@ -261,9 +264,12 @@ function fetchInboxPage(before?: string) {
   return $fetch<InboxPage>('/api/messaging/conversations', { query: { before } })
 }
 async function refreshInbox() {
-  if (polling.value || !allowed.value || document.visibilityState !== 'visible')
+  if (!allowed.value) return
+  if (refreshing.value) {
+    refreshQueued = true
     return
-  polling.value = true
+  }
+  refreshing.value = true
   const current = identity.value
   try {
     const [first, settings] = await Promise.all([
@@ -285,22 +291,18 @@ async function refreshInbox() {
   } catch (cause) {
     if (current === identity.value) showError(cause)
   } finally {
-    polling.value = false
+    refreshing.value = false
+    if (refreshQueued) {
+      refreshQueued = false
+      void refreshInbox()
+    }
   }
 }
-onMounted(() => {
-  void refreshInbox()
-})
-let timer: ReturnType<typeof setInterval> | undefined
-onMounted(() => {
-  timer = setInterval(() => {
-    void refreshInbox()
-  }, 5000)
-})
-onUnmounted(() => clearInterval(timer))
+watch(messagingRevision, () => { void refreshInbox() })
+onMounted(() => { void refreshInbox() })
 async function moreConversations() {
-  if (!conversationNext.value || polling.value) return
-  polling.value = true
+  if (!conversationNext.value || refreshing.value) return
+  refreshing.value = true
   const current = identity.value
   try {
     const result = await fetchInboxPage(conversationNext.value)
@@ -313,7 +315,11 @@ async function moreConversations() {
   } catch (cause) {
     showError(cause)
   } finally {
-    polling.value = false
+    refreshing.value = false
+    if (refreshQueued) {
+      refreshQueued = false
+      void refreshInbox()
+    }
   }
 }
 function retryInbox() {
@@ -467,7 +473,7 @@ watch([identity, allowed, selectedId], () => {
 async function onGuestSaved() {
   if (!allowed.value || !selectedId.value) return
   try {
-    if (polling.value) await loadHistory()
+    if (refreshing.value) await loadHistory()
     else await refreshInbox()
   } catch (cause) {
     showError(cause)
@@ -565,7 +571,7 @@ function formattedTime(value: string) {
           color="neutral"
           variant="ghost"
           class="w-full"
-          :loading="polling"
+          :loading="refreshing"
           @click="moreConversations"
           >{{ t('messaging.more') }}</UButton
         >
@@ -782,7 +788,7 @@ function formattedTime(value: string) {
         <ConversationContactField :contact="selected" />
       </GuestForm>
     </template>
-    <USlideover
+    <ResponsiveFormDialog
       :modal="true"
       :overlay="true"
       v-model:open="linkOpen"
@@ -849,7 +855,7 @@ function formattedTime(value: string) {
             >{{ t('common.save') }}</UButton
           >
         </div></template
-      ></USlideover
+      ></ResponsiveFormDialog
     >
   </section>
 </template>

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ResponsiveFormDialog } from '#fsd/shared/ui'
 const { public: { brand } } = useRuntimeConfig()
 import { useCurrentUser } from '#fsd/shared/auth'
 import { usePasskeys } from '#fsd/shared/lib'
@@ -49,7 +50,7 @@ async function acceptOffer() {
     </template>
     <template #footer><div class="form-actions form-actions--footer"><UButton color="neutral" variant="ghost" :disabled="offerPending" @click="passkeys.postponeOffer()">{{ t('passkeys.later') }}</UButton><UButton icon="i-lucide-fingerprint" :loading="offerPending" :disabled="offerPending" @click="acceptOffer">{{ t('passkeys.create') }}</UButton></div></template>
   </UModal>
-  <USlideover v-model:open="open" :title="t('passkeys.title')" :modal="true" :overlay="true" :dismissible="!busy">
+  <ResponsiveFormDialog v-model:open="open" :title="t('passkeys.title')" :modal="true" :overlay="true" :dismissible="!busy">
     <template #body><PasskeyManager v-if="open" @busy="busy = $event" /></template>
-  </USlideover>
+  </ResponsiveFormDialog>
 </template>

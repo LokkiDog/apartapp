@@ -34,9 +34,15 @@ async function serviceSnapshots(serviceIds: string[], organizationId: string) {
   return services
 }
 
-export async function listStays(actor: Actor, query: StayListQuery = {}) {
+export async function listStays(actor: Actor, query: StayListQuery = {}, stayId?: string) {
   requireRole(actor, 'administrator', 'manager')
   const criteria = [eq(stays.organizationId, actor.organizationId), eq(stays.state, 'active')]
+  if (stayId) criteria.push(eq(stays.id, stayId))
+  const managedIds = await managedApartmentIds(actor)
+  if (managedIds) {
+    if (!managedIds.length) return []
+    criteria.push(inArray(stays.apartmentId, managedIds))
+  }
   if (query.onlyVika) {
     requireRole(actor, 'administrator')
     criteria.push(exists(db.select({ apartmentId: apartmentManagers.apartmentId })
@@ -68,9 +74,8 @@ export async function listStays(actor: Actor, query: StayListQuery = {}) {
     if (cashTask.collectedAt) cashTaskStateByStayId.set(cashTask.stayId, 'collected')
     else if (!cashTaskStateByStayId.has(cashTask.stayId)) cashTaskStateByStayId.set(cashTask.stayId, 'pending')
   }
-  const managedIds = actor.roles.includes('administrator') ? null : new Set(await managedApartmentIds(actor) ?? [])
   return rows
-    .filter(stay => (!managedIds || managedIds.has(stay.apartmentId)) && (!query.hotelId || stay.apartment.hotelId === query.hotelId))
+    .filter(stay => !query.hotelId || stay.apartment.hotelId === query.hotelId)
     .map(stay => {
       const apartment = serializeApartment(stay.apartment)
       const hasCleaning = Boolean(stay.cleaning?.id)
@@ -82,7 +87,12 @@ export async function listStays(actor: Actor, query: StayListQuery = {}) {
 }
 
 export async function getStayDetails(actor: Actor, id: string) {
-  requireRole(actor, 'administrator')
+  requireRole(actor, 'administrator', 'manager')
+  if (!actor.roles.includes('administrator')) {
+    const [stay] = await listStays(actor, {}, id)
+    if (!stay) throw createError({ statusCode: 404, statusMessage: 'Booking not found' })
+    return stay
+  }
   const stay = await db.query.stays.findFirst({
     where: and(eq(stays.id, id), eq(stays.organizationId, actor.organizationId)),
     with: { apartment: { with: { hotel: true } }, services: true, cleaning: { columns: { id: true, status: true, scheduledOn: true } } },

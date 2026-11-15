@@ -1,6 +1,7 @@
 <script setup lang="ts">
 const props = defineProps<{ title?: string, slug?: string, label?: string }>()
-const { contact, copy } = useSite()
+const { contact, copy, settings, localePath } = useSite()
+const hasOtherContacts = computed(() => Boolean(settings.value?.phone || settings.value?.socials?.length))
 const route = useRoute()
 const { current, request } = useApartmentEnquiry()
 function clicked(event: MouseEvent) {
@@ -12,5 +13,6 @@ function clicked(event: MouseEvent) {
 </script>
 <template>
   <a v-if="contact(title, slug)" :href="contact(title, slug)" class="button" target="_blank" rel="noopener noreferrer" @click="clicked">{{ label || copy.dates }}</a>
+  <a v-else-if="hasOtherContacts" :href="`${localePath('/')}#contacts`" class="button">{{ copy.contacts }}</a>
   <span v-else class="contact-pending">{{ copy.contactPending }}</span>
 </template>

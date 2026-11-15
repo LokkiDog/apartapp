@@ -3,14 +3,15 @@ export default defineNuxtRouteMiddleware(async to => {
   const { loggedIn, fetch } = useUserSession()
   if (import.meta.client && !navigator.onLine) return
   if (!loggedIn.value) await fetch()
-  if (!loggedIn.value) return navigateTo('/login')
+  const login = to.path === '/settings/ai-agents' ? { path: '/login', query: { agentSettings: '1' } } : '/login'
+  if (!loggedIn.value) return navigateTo(login)
   if (import.meta.client) {
     try {
       const current = await $fetch('/api/auth/me', { retry: false })
       const session = useUserSession().session
       session.value = { ...session.value, id: session.value?.id ?? current.platformSessionId!, user: current }
     } catch (cause: any) {
-      if (cause?.response?.status === 401) { useUserSession().session.value = null; return navigateTo('/login') }
+      if (cause?.response?.status === 401) { useUserSession().session.value = null; return navigateTo(login) }
       throw cause
     }
   }

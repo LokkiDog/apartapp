@@ -13,6 +13,10 @@ Mobile-first CRM для управления апартаментами в Ба�
 `.env` под выбранный бренд. Если основной `.env` настроен на MagicMop,
 для параллельного запуска Aparts используйте `npm run dev:aparts` с
 `.env.aparts`, отдельной базой Aparts и отдельным каталогом сборки.
+`npm run db:migrate` берёт настройки из `.env`, а `npm run db:migrate:aparts`
+использует `.env.aparts`. Перед подключением обе команды запуска и миграций
+проверяют соответствие бренда и базы. Команда запуска выводит адрес и имя базы
+без учётных данных.
 Гостевой сайт запускается командой `npm run dev:guest` на 2001 и
 по умолчанию обращается к Aparts CRM.
 
@@ -81,6 +85,8 @@ Brevo для доставки Email. Письма обрабатываются �
 `npm test` — правила Zod-контрактов.
 
 `npm run test:e2e` — Playwright-сценарии входа на mobile и desktop. Перед запуском поднимите PostgreSQL, примените миграции и запустите приложение; при другом адресе задайте `E2E_BASE_URL`.
+
+Локальные результаты тестов хранятся в `.artifacts/`: HTML-отчёт Playwright — в `.artifacts/playwright/report/`, трассировки — в `.artifacts/playwright/test-results/`, покрытие Vitest (при включённом сборе) — в `.artifacts/coverage/`.
 
 `npm run build` — production build и PWA service worker.
 

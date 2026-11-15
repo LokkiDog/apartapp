@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { contactPhoneSchema, publicBioSchema } from './public-site'
+import { contactPhoneSchema, socialContactsSchema } from './public-site'
 export const emailSchema = z.string().trim().toLowerCase().email().max(254)
 export const registrationModeSchema = z.enum(['self_service', 'superuser_only'])
 export const timezoneSchema = z.string().max(100).refine(value => {
@@ -11,6 +11,7 @@ export const clientInputSchema = z.object({
 })
 export const clientUpdateSchema = z.object({
   guestsEnabled: z.boolean().optional(),
+  aiAgentsEnabled: z.boolean().optional(),
   messagingEnabled: z.boolean().optional(),
   name: z.string().trim().min(2).max(200).optional(), timezone: timezoneSchema.optional(), status: z.enum(['active', 'blocked']).optional()
 }).strict()
@@ -23,6 +24,7 @@ export const confirmationSchema = z.object({ token: z.string().min(20).max(200) 
 export type RegistrationMode = z.infer<typeof registrationModeSchema>
 export interface PlatformClient {
   guestsEnabled: boolean;
+  aiAgentsEnabled: boolean;
   messagingEnabled: boolean;
   id: string; name: string; timezone: string; status: 'active' | 'blocked'; createdAt: string;
   administrators: Array<{ id: string; name: string; email: string; status: string; isSuperuser: boolean }>;
@@ -34,7 +36,13 @@ export const changePasswordSchema = z.object({
   newPassword: z.string().min(8).max(200)
 }).strict()
 
-export const profileUpdateSchema = z.object({ name: administratorInputSchema.shape.name, phone: contactPhoneSchema.optional(), publicBio: publicBioSchema.optional() }).strict()
+const profilePhoneSchema = contactPhoneSchema.refine(
+  value => !value.startsWith('+7') || value.replace(/\D/g, '').length === 11,
+  'Неверный номер телефона'
+)
+export const profileUpdateSchema = z.object({
+  name: administratorInputSchema.shape.name, phone: profilePhoneSchema.optional(), socials: socialContactsSchema.optional()
+}).strict()
 
 export interface AccountPasskey {
   id: string

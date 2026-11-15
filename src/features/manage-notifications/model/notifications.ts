@@ -24,12 +24,16 @@ export type NotificationRealtimeMessage =
   | { type: 'notification.read'; id: string; readAt: string }
   | { type: 'notifications.read-all'; readAt: string }
   | { type: 'notifications.heartbeat' }
+  | { type: 'notifications.unread-count'; count: number }
+  | { type: 'messaging.unread-count'; count: number | null }
   | CleaningChangeMessage
   | TaskChangeMessage
   | { type: 'session.revoked'; reason: 'archived' | 'blocked' }
 
 export function useNotificationState() {
   const unreadCount = useState('notification-unread-count', () => 0)
+  const messagingUnreadCount = useState('messaging-unread-count-realtime', () => 0)
+  const messagingRevision = useState('messaging-revision', () => 0)
   const revision = useState('notification-revision', () => 0)
   const cleaningRealtime = useCleaningRealtimeState()
   const taskRealtime = useTaskRealtimeState()
@@ -76,12 +80,19 @@ export function useNotificationState() {
       scheduleTaskRevision(message)
       return
     }
-    scheduleNotificationRevision()
+    if (message.type === 'notifications.unread-count') {
+      unreadCount.value = message.count
+      scheduleNotificationRevision()
+    }
+    if (message.type === 'messaging.unread-count') {
+      messagingUnreadCount.value = message.count ?? 0
+      messagingRevision.value += 1
+    }
   }
 
   function reconcileCleaningData() {
     cleaningRealtime.reconcile()
   }
 
-  return { unreadCount, revision, cleaningRevision, lastCleaningChange, taskRevision, lastTaskChange, applyRealtimeMessage, reconcileCleaningData }
+  return { unreadCount, revision, messagingUnreadCount, messagingRevision, cleaningRevision, lastCleaningChange, taskRevision, lastTaskChange, applyRealtimeMessage, reconcileCleaningData }
 }

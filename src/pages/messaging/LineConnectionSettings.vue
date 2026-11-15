@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { LineConnection, LineMessageQuota } from '@contracts/messaging'
-import { ConfirmActionModal } from '#fsd/shared/ui'
+import { ConfirmActionModal, CopyField } from '#fsd/shared/ui'
 import LineInstructionsModal from './LineInstructionsModal.vue'
 import MessagingIntegrationRow from './MessagingIntegrationRow.vue'
 
@@ -192,26 +192,8 @@ async function copyWebhook() {
               </span>
             </span>
           </template>
-          <div class="flex gap-1">
-            <UInput
-              :model-value="connection.webhookUrl"
-              size="sm"
-              dir="ltr"
-              readonly
-              class="min-w-0 flex-1"
-            />
-            <UButton
-              color="neutral"
-              variant="outline"
-              size="sm"
-              :icon="copied ? 'i-lucide-check' : 'i-lucide-copy'"
-              :aria-label="t(copied ? 'common.copied' : 'common.copy')"
-              :title="t(copied ? 'common.copied' : 'common.copy')"
-              class="min-w-11 shrink-0 justify-center"
-              @click="copyWebhook"
-            />
-            <span class="sr-only" role="status">{{ copied ? t('common.copied') : '' }}</span>
-          </div>
+          <CopyField :value="connection.webhookUrl" :copy-label="t('common.copy')" :copied="copied" @copy="copyWebhook" />
+          <span class="sr-only" role="status">{{ copied ? t('common.copied') : '' }}</span>
         </UFormField>
         <div class="flex min-w-0 flex-wrap gap-1">
           <UButton

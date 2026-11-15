@@ -14,6 +14,7 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
+    coverage: { reportsDirectory: './.artifacts/coverage' },
     include: ['tests/**/*.spec.ts', 'server/**/*.test.ts']
   }
 })

@@ -46,6 +46,7 @@ export const organizations = pgTable('organizations', {
   id: uuid('id').primaryKey().defaultRandom(),
   name: text('name').notNull(),
   guestsEnabled: boolean('guests_enabled').notNull().default(false),
+  aiAgentsEnabled: boolean('ai_agents_enabled').notNull().default(false),
   messagingEnabled: boolean('messaging_enabled').notNull().default(false),
   messagingAutomation: jsonb('messaging_automation').$type<import('../../../shared/contracts/messaging-automation').MessagingAutomation>(),
   messagingEnabledSince: timestamp('messaging_enabled_since', { withTimezone: true }),
@@ -62,6 +63,7 @@ export const users = pgTable('users', {
   passwordHash: text('password_hash').notNull(),
   name: text('name').notNull(),
   phone: text('phone').notNull().default(''),
+  socials: jsonb('socials').$type<import('../../../shared/contracts/public-site').SocialContact[]>().notNull().default(sql`'[]'::jsonb`),
   profilePhotoKey: text('profile_photo_key'),
   publicBio: jsonb('public_bio').$type<import('../../../shared/contracts/public-site').PublicBio>().notNull().default(sql`'{"ru":"","en":"","he":"","bg":""}'::jsonb`),
   locale: appLocaleEnum('locale').notNull().default('ru'),
@@ -81,8 +83,20 @@ export const publicSites = pgTable('public_sites', {
   websiteUrl: text('website_url').notNull(),
   enabled: boolean('enabled').notNull().default(false),
   hostUserId: uuid('host_user_id').references(() => users.id, { onDelete: 'set null' }),
+  hostDescription: jsonb('host_description').$type<import('../../../shared/contracts/public-site').PublicBio>().notNull().default(sql`'{"ru":"","en":"","he":"","bg":""}'::jsonb`),
+  contactKinds: jsonb('contact_kinds').$type<import('../../../shared/contracts/public-site').PublicContactKind[]>().notNull().default(sql`'[]'::jsonb`),
   ...timestamps
 }, table => [uniqueIndex('public_sites_url_unique').on(table.websiteUrl)])
+
+export const pendingEmailChanges = pgTable('pending_email_changes', {
+  userId: uuid('user_id').primaryKey().references(() => users.id, { onDelete: 'cascade' }),
+  sessionId: uuid('session_id').notNull(),
+  email: text('email').notNull(),
+  codeHash: text('code_hash').notNull(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  sentAt: timestamp('sent_at', { withTimezone: true }).notNull(),
+  attempts: integer('attempts').notNull().default(0)
+})
 
 export const passkeys = pgTable('passkeys', {
   id: text('id').primaryKey(),
@@ -109,6 +123,7 @@ export const hotels = pgTable('hotels', {
   organizationId: uuid('organization_id').notNull().references(() => organizations.id),
   name: text('name').notNull(),
   address: text('address').notNull(),
+  addressAttribution: text('address_attribution'),
   latitude: numeric('latitude', { precision: 9, scale: 6 }).notNull(),
   longitude: numeric('longitude', { precision: 9, scale: 6 }).notNull(),
   status: hotelStatusEnum('status').notNull().default('active'),
@@ -166,6 +181,12 @@ export const apartmentManagers = pgTable('apartment_managers', {
   index('apartment_managers_organization_apartment_idx').on(table.organizationId, table.apartmentId)
 ])
 
+export const geoapifyDailyUsage = pgTable('geoapify_daily_usage', {
+  day: date('day').primaryKey(),
+  requests: integer('requests').notNull(),
+  lastRequestAt: timestamp('last_request_at', { withTimezone: true }).notNull()
+}, table => [check('geoapify_daily_usage_requests_check', sql`${table.requests} > 0`)])
+
 // Shared platform billing usage: no tenant content or organization-specific data.
 export const translationMonthlyUsage = pgTable('translation_monthly_usage', {
   month: text('month').primaryKey(),
@@ -196,6 +217,9 @@ export const guests = pgTable('guests', {
   email: text('email').notNull().default(''),
   emailKey: text('email_key'),
   whatsapp: text('whatsapp').notNull().default(''),
+  additionalPhones: text('additional_phones').array().notNull().default(sql`ARRAY[]::text[]`),
+  additionalEmails: text('additional_emails').array().notNull().default(sql`ARRAY[]::text[]`),
+  additionalWhatsapps: text('additional_whatsapps').array().notNull().default(sql`ARRAY[]::text[]`),
   notes: text('notes').notNull().default(''),
   ...timestamps
 }, table => [
@@ -912,3 +936,29 @@ export const messagingUpdates = pgTable('messaging_updates', {
   updateId: text('update_id').notNull(),
   receivedAt: timestamp('received_at', { withTimezone: true }).notNull().defaultNow()
 }, table => [primaryKey({ columns: [table.connectionId, table.updateId] })])
+
+export const aiAgentConnections = pgTable('ai_agent_connections', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  organizationId: uuid('organization_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  clientId: text('client_id').notNull(),
+  permissions: text('permissions').array().notNull(),
+  resource: text('resource').notNull(),
+  accessHash: text('access_hash').notNull().unique(),
+  accessExpiresAt: timestamp('access_expires_at', { withTimezone: true }).notNull(),
+  refreshHash: text('refresh_hash').notNull().unique(),
+  refreshExpiresAt: timestamp('refresh_expires_at', { withTimezone: true }).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+}, table => [uniqueIndex('ai_agent_connection_owner_idx').on(table.organizationId, table.userId, table.clientId)])
+
+export const aiAgentCodes = pgTable('ai_agent_codes', {
+  hash: text('hash').primaryKey(),
+  organizationId: uuid('organization_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  clientId: text('client_id').notNull(),
+  permissions: text('permissions').array().notNull(),
+  challenge: text('challenge').notNull(),
+  redirectUri: text('redirect_uri').notNull(),
+  resource: text('resource').notNull(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull()
+}, table => [index('ai_agent_codes_expiry_idx').on(table.expiresAt)])

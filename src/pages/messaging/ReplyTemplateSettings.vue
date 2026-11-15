@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { bookingTemplateFields, messagingTemplateSchema, type BookingTemplateField, type MessagingTemplate } from '@contracts/messaging-template'
-import { DeleteConfirmModal } from '#fsd/shared/ui'
+import { DeleteConfirmModal, ResponsiveFormDialog } from '#fsd/shared/ui'
 
 const props = defineProps<{ identity: string }>()
 const { t } = useI18n()
@@ -119,7 +119,7 @@ async function remove() {
       </li>
     </ul>
 
-    <USlideover
+    <ResponsiveFormDialog
       v-model:open="editorOpen"
       :modal="true"
       :overlay="true"
@@ -161,7 +161,7 @@ async function remove() {
           </UButton>
         </div>
       </template>
-    </USlideover>
+    </ResponsiveFormDialog>
     <DeleteConfirmModal
       v-model:open="deleteOpen"
       :title="t('messaging.templates.delete')"

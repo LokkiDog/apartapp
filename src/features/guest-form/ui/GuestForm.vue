@@ -1,17 +1,32 @@
 <script setup lang="ts">
+import { ResponsiveFormDialog } from '#fsd/shared/ui'
 import { guestInputSchema, type GuestInput, type GuestSummary } from '@contracts/guests'
 
 const props = defineProps<{ guest?: GuestInput & { id: string }; initialName?: string; conversationId?: string }>()
 const emit = defineEmits<{ saved: [guest: GuestSummary] }>()
 const open = defineModel<boolean>('open', { required: true })
 const { t } = useI18n()
-const form = reactive<GuestInput>({ name: '', phone: '', email: '', whatsapp: '', notes: '' })
+type ExtraContacts = Required<Pick<GuestInput, 'additionalPhones' | 'additionalEmails' | 'additionalWhatsapps'>>
+const form = reactive<GuestInput & ExtraContacts>({
+  name: '', phone: '', email: '', whatsapp: '', notes: '',
+  additionalPhones: [], additionalEmails: [], additionalWhatsapps: [],
+})
+const contactFields = [
+  { field: 'phone', extra: 'additionalPhones', label: 'guests.phone', type: 'tel', autocomplete: 'tel' },
+  { field: 'email', extra: 'additionalEmails', label: 'guests.email', type: 'email', autocomplete: 'email' },
+  { field: 'whatsapp', extra: 'additionalWhatsapps', label: 'WhatsApp', type: 'tel', autocomplete: 'off' },
+] as const
 const pending = ref(false)
 const error = ref('')
 watch(open, value => {
   if (!value) return
   const { name = props.initialName ?? '', phone = '', email = '', whatsapp = '', notes = '' } = props.guest ?? {}
-  Object.assign(form, { name: name.slice(0, 160), phone, email, whatsapp, notes })
+  Object.assign(form, {
+    name: name.slice(0, 160), phone, email, whatsapp, notes,
+    additionalPhones: [...(props.guest?.additionalPhones ?? [])],
+    additionalEmails: [...(props.guest?.additionalEmails ?? [])],
+    additionalWhatsapps: [...(props.guest?.additionalWhatsapps ?? [])],
+  })
   error.value = ''
 })
 
@@ -39,13 +54,22 @@ async function save() {
 </script>
 
 <template>
-  <USlideover :modal="true" :overlay="true" v-model:open="open" :title="t(guest ? 'guests.edit' : 'guests.add')" :dismissible="!pending">
+  <ResponsiveFormDialog :modal="true" :overlay="true" v-model:open="open" :title="t(guest ? 'guests.edit' : 'guests.add')" :dismissible="!pending">
     <template #body>
       <UForm id="guest-form" :state="form" :schema="guestInputSchema" class="space-y-4" @submit="save">
         <UFormField name="name" :label="t('guests.name')"><UInput v-model="form.name" autocomplete="name" class="w-full" :ui="{ base: 'min-h-11' }" /></UFormField>
-        <UFormField name="phone" :label="t('common.phone')"><UInput v-model="form.phone" type="tel" autocomplete="tel" class="w-full" :ui="{ base: 'min-h-11' }" /></UFormField>
-        <UFormField name="email" label="Email"><UInput v-model="form.email" type="email" autocomplete="email" class="w-full" :ui="{ base: 'min-h-11' }" /></UFormField>
-        <UFormField name="whatsapp" label="WhatsApp"><UInput v-model="form.whatsapp" type="tel" placeholder="+359..." class="w-full" :ui="{ base: 'min-h-11' }" /></UFormField>
+        <div v-for="contact in contactFields" :key="contact.field" class="space-y-2">
+          <UFormField :name="contact.field" :label="contact.label === 'WhatsApp' ? contact.label : t(contact.label)">
+            <UInput v-model="form[contact.field]" :type="contact.type" :autocomplete="contact.autocomplete" class="w-full" :ui="{ base: 'min-h-11' }" />
+          </UFormField>
+          <div v-for="(_, index) in form[contact.extra]" :key="index" class="flex items-start gap-2">
+            <UFormField :name="`${contact.extra}.${index}`" class="min-w-0 flex-1">
+              <UInput v-model="form[contact.extra][index]" :type="contact.type" :aria-label="contact.label === 'WhatsApp' ? contact.label : t(contact.label)" class="w-full" :ui="{ base: 'min-h-11' }" />
+            </UFormField>
+            <UButton type="button" color="neutral" variant="ghost" icon="i-lucide-x" class="size-11 justify-center" :aria-label="t('guests.removeContact')" @click="form[contact.extra].splice(index, 1)" />
+          </div>
+          <UButton v-if="form[contact.extra].length < 30" type="button" color="neutral" variant="ghost" icon="i-lucide-plus" class="min-h-11" @click="form[contact.extra].push('')">{{ t('guests.addContact') }}</UButton>
+        </div>
         <slot />
         <UFormField name="notes" :label="t('guests.notes')"><UTextarea v-model="form.notes" class="w-full" :ui="{ base: 'min-h-11' }" /></UFormField>
         <UAlert v-if="error" color="error" variant="soft" :description="error" />
@@ -57,5 +81,5 @@ async function save() {
         <UButton class="min-h-11" type="submit" form="guest-form" :loading="pending">{{ t('calendar.saveChanges') }}</UButton>
       </div>
     </template>
-  </USlideover>
+  </ResponsiveFormDialog>
 </template>

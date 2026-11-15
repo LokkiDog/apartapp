@@ -13,30 +13,10 @@ export default defineNuxtPlugin(() => {
   const notifications = useNotificationState()
   let socket: WebSocket | null = null
   let retryTimer: ReturnType<typeof setTimeout> | null = null
+  let heartbeatTimer: ReturnType<typeof setTimeout> | undefined
   let attempts = 0
   let stopped = false
   let connectedOnce = false
-  let countRequest: AbortController | undefined
-
-  async function reconcileNotifications(force = false) {
-    if (stopped || !user.value || user.value.inSystem || !navigator.onLine || document.visibilityState !== 'visible') return
-    if (countRequest && !force) return
-    countRequest?.abort()
-    const request = new AbortController()
-    countRequest = request
-    try {
-      const { count } = await $fetch<{ count: number }>('/api/notifications/unread-count', {
-        signal: request.signal, retry: false, cache: 'no-store',
-      })
-      if (request.signal.aborted) return
-      if (!force && count !== notifications.unreadCount.value) notifications.revision.value += 1
-      notifications.unreadCount.value = count
-    } catch {
-      // Retain the last known count during a temporary connection failure.
-    } finally {
-      if (countRequest === request) countRequest = undefined
-    }
-  }
 
   function clearRetry() {
     if (retryTimer) clearTimeout(retryTimer)
@@ -45,6 +25,7 @@ export default defineNuxtPlugin(() => {
 
   function close() {
     clearRetry()
+    clearTimeout(heartbeatTimer)
     const currentSocket = socket
     socket = null
     currentSocket?.close(1000, 'Session changed')
@@ -58,10 +39,10 @@ export default defineNuxtPlugin(() => {
   async function invalidateSession(reason: 'archived' | 'blocked' = 'archived') {
     if (stopped) return
     stopped = true
-    countRequest?.abort()
     close()
     userSession.session.value = null
     notifications.unreadCount.value = 0
+    notifications.messagingUnreadCount.value = 0
     await $fetch('/api/auth/logout', { method: 'POST' }).catch(() => undefined)
     if (reason === 'blocked') await navigateTo('/login?reason=blocked')
     else await navigateTo('/login?reason=archived')
@@ -96,22 +77,33 @@ export default defineNuxtPlugin(() => {
     if (stopped || !user.value || user.value.inSystem || socket?.readyState === WebSocket.OPEN || socket?.readyState === WebSocket.CONNECTING) return
     const connection = new WebSocket(websocketUrl(user.value?.isSuperuser ? `${user.value.organizationId}:${user.value.contextRevision}` : undefined))
     socket = connection
+    function watchHeartbeat() {
+      clearTimeout(heartbeatTimer)
+      heartbeatTimer = setTimeout(() => {
+        if (socket !== connection) return
+        socket = null
+        connection.close()
+        scheduleReconnect()
+      }, 60_000)
+    }
+
     connection.addEventListener('open', () => {
       if (socket !== connection) return
       const reconnected = connectedOnce
       connectedOnce = true
-      attempts = 0
-      notifications.revision.value += 1
+      watchHeartbeat()
       if (reconnected) notifications.reconcileCleaningData()
     })
     connection.addEventListener('message', event => {
       if (socket !== connection) return
+      watchHeartbeat()
       try {
         const message = JSON.parse(String(event.data)) as NotificationRealtimeMessage
         if (message.type === 'session.revoked') {
           void invalidateSession(message.reason)
           return
         }
+        if (message.type === 'notifications.unread-count') attempts = 0
         notifications.applyRealtimeMessage(message)
       } catch {
         // The client never sends data; malformed server messages are ignored safely.
@@ -119,6 +111,7 @@ export default defineNuxtPlugin(() => {
     })
     connection.addEventListener('close', () => {
       if (socket !== connection) return
+      clearTimeout(heartbeatTimer)
       socket = null
       scheduleReconnect()
     })
@@ -129,28 +122,18 @@ export default defineNuxtPlugin(() => {
     if (await validateSession()) connect()
   }
 
-  watch(notifications.revision, () => { void reconcileNotifications(true) })
-
   watch(scope, () => {
-    countRequest?.abort()
-    countRequest = undefined
     close()
     connectedOnce = false
     attempts = 0
     stopped = !user.value || Boolean(user.value.inSystem)
     notifications.unreadCount.value = 0
-    if (!stopped) {
-      void reconcileNotifications()
-      void connectAfterValidation()
-    }
+    notifications.messagingUnreadCount.value = 0
+    if (!stopped) void connectAfterValidation()
   }, { immediate: true })
 
-  // Catch missed events even when a socket remains open (for example across server replicas).
-  const pollTimer = setInterval(() => { void reconcileNotifications() }, 10_000)
   const resume = () => {
     if (document.visibilityState !== 'visible') return
-    // The socket may have missed events while the tab was hidden.
-    if (!stopped) notifications.revision.value += 1
     if (!socket && !retryTimer) void connectAfterValidation()
   }
   document.addEventListener('visibilitychange', resume)
@@ -159,9 +142,7 @@ export default defineNuxtPlugin(() => {
 
   if (import.meta.hot) import.meta.hot.dispose(() => {
     stopped = true
-    countRequest?.abort()
     close()
-    clearInterval(pollTimer)
     document.removeEventListener('visibilitychange', resume)
     window.removeEventListener('online', resume)
     window.removeEventListener('offline', close)

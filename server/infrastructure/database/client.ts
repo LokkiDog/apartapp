@@ -2,7 +2,9 @@ import { drizzle } from 'drizzle-orm/postgres-js'
 import postgres from 'postgres'
 import * as schema from './schema'
 
-const connectionString = process.env.DATABASE_URL || 'postgres://aparts:aparts@localhost:55432/aparts'
+import { crmDatabaseUrl } from '../../../shared/config/crm-database'
+
+const connectionString = crmDatabaseUrl(process.env.CRM_BRAND, process.env.DATABASE_URL)
 
 const globalForDatabase = globalThis as unknown as { apartsSql?: ReturnType<typeof postgres> }
 const sql = globalForDatabase.apartsSql ?? postgres(connectionString, { max: 10 })

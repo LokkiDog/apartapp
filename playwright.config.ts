@@ -2,6 +2,11 @@ import { defineConfig, devices } from '@playwright/test'
 
 export default defineConfig({
   testDir: './e2e',
+  outputDir: './.artifacts/playwright/test-results',
+  reporter: [
+    ['list'],
+    ['html', { outputFolder: './.artifacts/playwright/report', open: 'never' }]
+  ],
   timeout: 30_000,
   workers: 1,
   use: {

@@ -20,6 +20,7 @@ export interface Actor {
   inSystem?: boolean
   organizationName?: string
   guestsEnabled?: boolean
+  aiAgentsEnabled?: boolean
   messagingEnabled?: boolean
   organizationStatus?: 'active' | 'blocked'
   platformSessionId?: string
@@ -48,11 +49,11 @@ export function requireRole(actor: Actor, ...roles: UserRole[]) {
   }
 }
 
-export function isAdministrator(actor: Actor) {
+export function isAdministrator(actor: Pick<Actor, 'roles'>) {
   return actor.roles.includes('administrator')
 }
 
-export function canAccessWorkSection(actor: Actor) {
+export function canAccessWorkSection(actor: Pick<Actor, 'roles'>) {
   return isAdministrator(actor) || actor.roles.includes('cleaner') || actor.roles.includes('specialist')
 }
 

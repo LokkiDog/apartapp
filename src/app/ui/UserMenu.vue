@@ -1,16 +1,20 @@
 <script setup lang="ts">
 import { useReleaseAnnouncement } from '#fsd/features/release-announcement'
 import type { DropdownMenuItem } from '@nuxt/ui'
+import { canConnectAiAgents, useCurrentUser } from '#fsd/shared/auth'
 
 const props = defineProps<{ mobile?: boolean; collapsed?: boolean; name?: string; roleLabel: string; logoutPending: boolean }>()
 const emit = defineEmits<{ logout: [] }>()
 const { t } = useI18n()
+const account = useCurrentUser()
 const { unread } = useReleaseAnnouncement()
 const items = computed<DropdownMenuItem[][]>(() => [
   [
     { label: t('account.profile'), icon: 'i-lucide-user', to: '/profile' },
     { label: t('account.whatsNew'), icon: 'i-lucide-newspaper', to: '/whats-new', slot: 'whats-new' },
-    { label: t('account.security'), icon: 'i-lucide-shield-check', to: '/security' }
+    { label: t('account.security'), icon: 'i-lucide-shield-check', to: '/security' },
+    ...(canConnectAiAgents(account.value)
+      ? [{ label: t('aiAgents.title'), icon: 'i-lucide-bot', to: '/settings/ai-agents' }] : [])
   ],
   [{ label: t('common.logout'), icon: 'i-lucide-log-out', color: 'error', disabled: props.logoutPending, onSelect: () => emit('logout') }]
 ])

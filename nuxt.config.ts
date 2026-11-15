@@ -98,6 +98,8 @@ export default defineNuxtConfig({
     recaptchaAllowedOrigins: 'https://magicmopcrm.com,https://www.magicmopcrm.com',
     recaptchaMinimumScore: '0.5',
     messagingEncryptionKey: '',
+    geoapifyApiKey: '',
+    geoapifyDailyRequestLimit: '1000',
     googleTranslationApiKey: '',
     googleTranslationMonthlyCharacterLimit: '450000',
     session: {

@@ -22,6 +22,7 @@ export const inventoryMovementSchema = z.enum(['replenishment', 'usage', 'adjust
 export const hotelInputSchema = z.object({
   name: z.string().trim().min(1).max(160),
   address: z.string().trim().min(1).max(500),
+  addressAttribution: z.string().trim().min(1).max(200).nullable().optional(),
   latitude: z.coerce.number().min(-90).max(90),
   longitude: z.coerce.number().min(-180).max(180)
 })

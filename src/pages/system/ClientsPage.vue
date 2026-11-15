@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { switchClientContext, useCurrentUser } from '#fsd/shared/auth'
-import { ConfirmActionModal, PageHeader, EmptyState } from '#fsd/shared/ui'
+import { ConfirmActionModal, PageHeader, EmptyState, ResponsiveFormDialog } from '#fsd/shared/ui'
 import type { PlatformClient } from '@contracts/platform'
 import type { MessagingSetupRequest } from '@contracts/system-notifications'
 import type { DropdownMenuItem } from '@nuxt/ui'
 import ClientRegistryRow from './ClientRegistryRow.vue'
+import ClientHelpDialog from './ClientHelpDialog.vue'
+const helpClient = ref<PlatformClient | null>(null)
 const user = useCurrentUser()
 const { data: clients, refresh, status, error: loadError } = useAsyncData<PlatformClient[]>('system-clients', () => user.value?.isSuperuser ? $fetch<PlatformClient[]>('/api/system/clients') : Promise.resolve([]), {
   server: false,
@@ -90,7 +92,7 @@ async function setStatus(client: PlatformClient, next: 'active' | 'blocked') {
   catch (cause: any) { error.value = cause?.data?.statusMessage ?? 'Не удалось изменить статус' }
   finally { pending.value = false }
 }
-async function setModule(client: PlatformClient, field: 'messagingEnabled' | 'guestsEnabled', enabled: boolean) {
+async function setModule(client: PlatformClient, field: 'messagingEnabled' | 'guestsEnabled' | 'aiAgentsEnabled', enabled: boolean) {
   if (pending.value) return
   pending.value = true; error.value = ''
   try { await $fetch(`/api/system/clients/${client.id}`, { method: 'PATCH', body: { [field]: enabled } }); await refresh() }
@@ -114,6 +116,7 @@ async function enter(organizationId: string) {
 }
 function actions(client: PlatformClient): DropdownMenuItem[] {
   return [
+    { label: 'Помощь', icon: 'i-lucide-circle-help', onSelect: () => { helpClient.value = client } },
     { label: 'Изменить', icon: 'i-lucide-pencil', onSelect: () => edit(client, 'edit') },
     { label: 'Пригласить администратора', icon: 'i-lucide-user-plus', onSelect: () => edit(client, 'invite') },
     ...client.administrators.filter(admin => admin.status === 'invited').map(admin => ({ label: `Повторить приглашение: ${admin.email}`, icon: 'i-lucide-mail', onSelect: () => resend(client, admin.id) })),
@@ -236,7 +239,8 @@ function actions(client: PlatformClient): DropdownMenuItem[] {
         />
       </ul>
     </div>
-    <USlideover v-model:open="open" :title="title" :modal="true" :overlay="true">
+    <ClientHelpDialog v-if="helpClient" :key="helpClient.id" :client="helpClient" @close="helpClient = null" />
+    <ResponsiveFormDialog v-model:open="open" :title="title" :modal="true" :overlay="true">
       <template #body>
         <form id="client-form" class="space-y-5" @submit.prevent="save">
           <template v-if="kind !== 'invite'">
@@ -251,7 +255,7 @@ function actions(client: PlatformClient): DropdownMenuItem[] {
         </form>
       </template>
       <template #footer><div class="form-actions form-actions--footer"><UButton color="neutral" variant="ghost" @click="open = false">Отмена</UButton><UButton type="submit" form="client-form" :loading="pending">Сохранить</UButton></div></template>
-    </USlideover>
+    </ResponsiveFormDialog>
     <ConfirmActionModal v-model:open="blockOpen" title="Заблокировать клиента?" :description="`Доступ пользователей ${blockClient?.name ?? ''} и фоновые операции будут остановлены. Данные сохранятся.`" confirm-label="Заблокировать" :loading="pending" :error="error" @confirm="blockClient && setStatus(blockClient, 'blocked')" />
   </section>
 </template>

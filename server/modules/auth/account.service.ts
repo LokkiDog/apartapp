@@ -4,23 +4,16 @@ import type { Actor } from '../../infrastructure/auth/actor'
 import { requireRole } from '../../infrastructure/auth/actor'
 import { writeAuditLog } from '../../infrastructure/audit/log'
 import { db } from '../../infrastructure/database/client'
-import { apartmentManagers, attachments, authTokens, cleaningAssignments, cleaningProblems, cleanings, financialEntries, inventoryLots, inventoryMovements, notifications, stays, stayServices, tasks, users, organizations } from '../../infrastructure/database/schema'
+import { apartmentManagers, attachments, authTokens, pendingEmailChanges, cleaningAssignments, cleaningProblems, cleanings, financialEntries, inventoryLots, inventoryMovements, notifications, stays, stayServices, tasks, users, organizations } from '../../infrastructure/database/schema'
 import { sendAccountLink } from '../../infrastructure/mail/send'
 import { fileStorage } from '../../infrastructure/storage/local'
 import { publishNotification } from '../../infrastructure/notification/realtime'
 import { invitationResendAvailableAt, invitationResendWaitSeconds } from './invitation-cooldown'
 import { ensureEmailAvailable, lockEmail, normalizeEmail, type Connection } from './email-reservation'
-import { isClientActive } from '../../infrastructure/auth/platform'
 import { isApartmentOwnerEligible } from '@contracts/crm'
 
 const hash = (value: string) => createHash('sha256').update(value).digest('hex')
 const expiry = () => new Date(Date.now() + 1000 * 60 * 60 * 24)
-
-async function issueToken(userId: string, type: 'invitation' | 'password_reset') {
-  const token = randomBytes(32).toString('base64url')
-  await db.insert(authTokens).values({ userId, type, tokenHash: hash(token), expiresAt: expiry() })
-  return token
-}
 
 export type InviteInput = { organizationId: string; name: string; email: string; roles: Array<'administrator' | 'manager' | 'cleaner' | 'specialist'>; locale?: 'ru' | 'en' | 'he' }
 
@@ -85,26 +78,34 @@ export async function resendInvitation(actor: Actor, userId: string, onDeliveryF
 }
 
 export async function requestPasswordReset(email: string) {
-  const user = await db.query.users.findFirst({ where: eq(users.email, normalizeEmail(email)) })
-  if (!user || user.status !== 'active') return
-  if (!user.isSuperuser && !(await isClientActive(user.organizationId))) return
-  const token = await issueToken(user.id, 'password_reset')
-  await sendAccountLink({ to: user.email, name: user.name, type: 'password_reset', token, locale: user.locale })
+  const token = randomBytes(32).toString('base64url')
+  const recipient = await db.transaction(async tx => {
+    const [user] = await tx.select().from(users).where(eq(users.email, normalizeEmail(email))).for('update')
+    if (!user || user.status !== 'active') return
+    if (!user.isSuperuser && !await tx.query.organizations.findFirst({
+      where: and(eq(organizations.id, user.organizationId), eq(organizations.status, 'active')),
+      columns: { id: true }
+    })) return
+    await tx.insert(authTokens).values({ userId: user.id, type: 'password_reset', tokenHash: hash(token), expiresAt: expiry() })
+    return user
+  })
+  if (recipient) await sendAccountLink({ to: recipient.email, name: recipient.name, type: 'password_reset', token, locale: recipient.locale })
 }
 
 export async function setPassword(token: string, password: string) {
   const record = await db.query.authTokens.findFirst({ where: and(eq(authTokens.tokenHash, hash(token)), gt(authTokens.expiresAt, new Date()), isNull(authTokens.usedAt)) })
   if (!record) throw createError({ statusCode: 400, statusMessage: 'Ссылка недействительна или истекла' })
   await db.transaction(async tx => {
+    const [target] = await tx.select().from(users).where(eq(users.id, record.userId)).for('update')
+    if (!target) throw createError({ statusCode: 400, statusMessage: 'Клиент недоступен' })
     const [usedToken] = await tx.update(authTokens).set({ usedAt: new Date() }).where(and(eq(authTokens.id, record.id), isNull(authTokens.usedAt))).returning()
     if (!usedToken) throw createError({ statusCode: 400, statusMessage: 'Ссылка недействительна или истекла' })
-    const target = await tx.query.users.findFirst({ where: eq(users.id, usedToken.userId) })
-    if (!target) throw createError({ statusCode: 400, statusMessage: 'Клиент недоступен' })
     const [client] = await tx.select().from(organizations).where(eq(organizations.id, target.organizationId)).for('share')
     if (!client || (!target.isSuperuser && client.status !== 'active')) throw createError({ statusCode: 400, statusMessage: 'Клиент недоступен' })
     const expectedStatus = usedToken.type === 'invitation' ? 'invited' : 'active'
     const [user] = await tx.update(users).set({ passwordHash: await hashPassword(password), status: 'active', updatedAt: new Date() }).where(and(eq(users.id, usedToken.userId), eq(users.status, expectedStatus))).returning()
     if (!user) throw createError({ statusCode: 400, statusMessage: 'Ссылка недействительна или истекла' })
+    await tx.delete(pendingEmailChanges).where(eq(pendingEmailChanges.userId, target.id))
   })
 }
 

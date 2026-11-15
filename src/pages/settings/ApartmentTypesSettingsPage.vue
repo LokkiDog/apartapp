@@ -2,7 +2,7 @@
 import Decimal from 'decimal.js'
 import type { DropdownMenuItem } from '@nuxt/ui'
 import { createFormValidator, useMoneyFormat, useSubmitFormValidation } from '#fsd/shared/lib'
-import { MoneyInput, PageHeader, EmptyState, DeleteConfirmModal } from '#fsd/shared/ui'
+import { MoneyInput, PageHeader, EmptyState, DeleteConfirmModal, ResponsiveFormDialog } from '#fsd/shared/ui'
 import { useCurrentUser } from '#fsd/shared/auth'
 import { useI18n } from 'vue-i18n'
 import { apartmentTypeInputSchema } from '@contracts/crm'
@@ -72,7 +72,7 @@ async function removeType() { if (!typeToDelete.value) return; deletePending.val
     </div>
     <EmptyState v-else icon="i-lucide-coins" :title="t('apartmentTypes.emptyTitle')" :description="t('apartmentTypes.emptyDescription')" />
 
-    <USlideover v-model:open="open" :title="typeToEdit ? t('apartmentTypes.edit') : t('apartmentTypes.new')" :modal="true" :overlay="true">
+    <ResponsiveFormDialog v-model:open="open" :title="typeToEdit ? t('apartmentTypes.edit') : t('apartmentTypes.new')" :modal="true" :overlay="true">
       <template #body>
         <UForm :key="validation.formKey.value" id="apartment-type-form" :state="form" :validate="validate" :validate-on="validation.validateOn.value" novalidate class="form-grid" @error="validation.onError" @submit="save">
           <UFormField name="name" :label="t('apartmentTypes.name')"><UInput v-model="form.name" placeholder="Studio" /></UFormField>
@@ -86,7 +86,7 @@ async function removeType() { if (!typeToDelete.value) return; deletePending.val
         </UForm>
       </template>
       <template #footer><div class="form-actions form-actions--footer"><UButton type="button" color="neutral" variant="ghost" @click="open = false">{{ t('common.cancel') }}</UButton><UButton type="submit" form="apartment-type-form" :loading="pending">{{ typeToEdit ? t('common.save') : t('apartmentTypes.create') }}</UButton></div></template>
-    </USlideover>
+    </ResponsiveFormDialog>
     <DeleteConfirmModal v-model:open="deleteOpen" :title="t('common.deleteForever')" :description="t('common.irreversible')" :loading="deletePending" :error="error" @confirm="removeType" />
   </section>
 </template>

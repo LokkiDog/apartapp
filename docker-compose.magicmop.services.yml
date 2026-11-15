@@ -9,11 +9,15 @@ services:
     extends:
       file: ./docker-compose.prod.services.yml
       service: migrate
+    environment:
+      CRM_BRAND: ${CRM_DEPLOY_BRAND:-magicmop}
 
   app:
     extends:
       file: ./docker-compose.prod.services.yml
       service: app
+    environment:
+      CRM_BRAND: ${CRM_DEPLOY_BRAND:-magicmop}
     build:
       args:
         CRM_BRAND: ${CRM_DEPLOY_BRAND:-magicmop}

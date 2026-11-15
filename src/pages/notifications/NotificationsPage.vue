@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { EmptyState, GroupedUserMultiSelect, PageHeader } from '#fsd/shared/ui'
+import { EmptyState, GroupedUserMultiSelect, PageHeader, ResponsiveFormDialog } from '#fsd/shared/ui'
 import { useCurrentUser } from '#fsd/shared/auth'
 import { useNotificationState, type NotificationItem, type NotificationType } from '#fsd/features/manage-notifications'
 import { usePushSubscription } from '#fsd/features/manage-push-subscription'
@@ -306,7 +306,7 @@ watch(notificationState.revision, () => {
         <EmptyState v-else icon="i-lucide-bell" :title="t('notifications.emptyTitle')" :description="t('notifications.emptyDescription')" />
       </template>
     </div>
-    <USlideover v-model:open="sendOpen" :title="t('notifications.sendTitle')" :modal="true" :overlay="true">
+    <ResponsiveFormDialog v-model:open="sendOpen" :title="t('notifications.sendTitle')" :modal="true" :overlay="true">
       <template #body>
         <form id="notification-send-form" class="form-grid" @submit.prevent="requestSend">
           <UFormField :label="t('notifications.audience')" required>
@@ -341,7 +341,7 @@ watch(notificationState.revision, () => {
           <UButton type="submit" form="notification-send-form" :loading="sending" :disabled="recipientStatus !== 'success' || !recipientCount">{{ t('notifications.send') }}</UButton>
         </div>
       </template>
-    </USlideover>
+    </ResponsiveFormDialog>
     <UModal v-model:open="confirmSendOpen" :title="t('notifications.confirmTitle')">
       <template #body>
         <div class="space-y-5">

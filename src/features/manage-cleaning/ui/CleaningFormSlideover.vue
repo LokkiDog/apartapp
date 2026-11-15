@@ -8,7 +8,7 @@ import {
   useMoneyFormat,
   useSubmitFormValidation,
 } from "#fsd/shared/lib";
-import { DateInput, GroupedUserMultiSelect, MoneyInput } from "#fsd/shared/ui";
+import { DateInput, GroupedUserMultiSelect, MoneyInput, ResponsiveFormDialog } from "#fsd/shared/ui";
 import { useI18n } from "vue-i18n";
 import { buildCleaningChecklist, cleaningInputSchema } from "@contracts/crm";
 
@@ -270,7 +270,7 @@ function submit() {
 </script>
 
 <template>
-  <USlideover
+  <ResponsiveFormDialog
     :open="open"
     :title="
       editingCleaning
@@ -527,7 +527,7 @@ function submit() {
         >
       </div>
     </template>
-  </USlideover>
+  </ResponsiveFormDialog>
   <UModal
     v-model:open="noAssigneeConfirmationOpen"
     :title="t('common.confirm')"

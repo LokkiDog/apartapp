@@ -1,3 +1,4 @@
+import { getCrmNavigation } from '../src/shared/auth/navigation'
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { resolveCssColor } from './helpers/css-colors'
@@ -109,8 +110,10 @@ describe('specialist and linen collection', () => {
     const stays = readFileSync('server/modules/stay/stay.service.ts', 'utf8')
     const calendarAccess = readFileSync('app/middleware/calendar-access.ts', 'utf8')
     expect(shell).toContain('t("roles.specialist")')
-    expect(shell).toContain('const specialistWork = computed<NavItem[]>(() => [')
-    expect(shell).toContain('{ to: "/tasks", label: t("work.tasks"), icon: "i-lucide-clipboard-check" }')
+    const specialistNavigation = getCrmNavigation({ roles: ['specialist'] }, key => key)
+    expect(specialistNavigation.isSpecialistNavigation).toBe(true)
+    expect(specialistNavigation.groups.flatMap(group => group.items.map(item => item.to))).toEqual(['/work', '/tasks'])
+    expect(specialistNavigation.settings).toEqual([])
     expect(shell).toContain('if (isSpecialistNavigation.value) return specialistWork.value')
     expect(shell).toContain('v-if="!usesManagerOnlyNavigation(user) && !isSpecialistNavigation && (mobileMore.length || user)"')
     expect(specialistTasksPage).toContain('<WorkPage />')

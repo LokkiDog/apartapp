@@ -5,7 +5,7 @@ import type { Task } from '#fsd/entities/task'
 import { useCurrentUser } from '#fsd/shared/auth'
 import { formatDate, formatDateTime, useMoneyFormat } from '#fsd/shared/lib'
 import { useI18n } from 'vue-i18n'
-import { ConfirmActionModal, DeleteConfirmModal, EmptyState, MoneyInput, PageHeader, StatusBadge } from '#fsd/shared/ui'
+import { ConfirmActionModal, CopyField, DeleteConfirmModal, EmptyState, MoneyInput, PageHeader, StatusBadge } from '#fsd/shared/ui'
 import { WorkProgressForm } from '#fsd/features/work-progress'
 import { useCleaningRealtimeState, useTaskRealtimeState } from '#fsd/shared/realtime'
 
@@ -447,13 +447,10 @@ function requestComplete() {
             <p class="detail-label">{{ t('directions.address') }}</p>
             <p class="mt-1 text-sm font-medium leading-6">{{ work?.apartment.hotel.address }}</p>
           </div>
-          <div>
-            <p class="detail-label">{{ t('directions.coordinates') }}</p>
-            <div class="mt-1 flex flex-col gap-3 rounded-xl bg-[var(--color-surface-muted)] p-3 sm:flex-row sm:items-center sm:justify-between">
-              <code class="min-w-0 break-all font-mono text-sm tabular-nums">{{ coordinatesText }}</code>
-              <UButton color="neutral" variant="soft" :icon="coordinatesCopied ? 'i-lucide-check' : 'i-lucide-copy'" class="min-h-11 shrink-0 justify-center" @click="copyHotelCoordinates">{{ coordinatesCopied ? t('directions.copied') : t('directions.copy') }}</UButton>
-            </div>
-          </div>
+          <UFormField :label="t('directions.coordinates')">
+            <CopyField :value="coordinatesText" :copy-label="t('directions.copy')" :copied="coordinatesCopied" @copy="copyHotelCoordinates" />
+            <span class="sr-only" role="status">{{ coordinatesCopied ? t('directions.copied') : '' }}</span>
+          </UFormField>
           <UAlert v-if="coordinatesCopyError" color="error" variant="soft" :description="coordinatesCopyError" />
         </div>
       </template>

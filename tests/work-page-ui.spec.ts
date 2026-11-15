@@ -198,7 +198,7 @@ describe('work page UI contracts', () => {
     expect(hotelMap).toContain("leaflet.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'")
     expect(hotelMap).toContain('draggable: props.selectable')
     expect(hotelApi).toContain("export { default as HotelLocationMap } from './ui/HotelLocationMap.vue'")
-    expect(locationPicker).toContain("import { HotelLocationMap } from '#fsd/entities/hotel'")
+    expect(locationPicker).toMatch(/import \{[^}]*\bHotelLocationMap\b[^}]*\} from '#fsd\/entities\/hotel'/)
     expect(locationPicker).toContain('selectable')
   })
 

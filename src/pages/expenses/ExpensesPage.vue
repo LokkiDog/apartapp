@@ -4,7 +4,7 @@ import type { Apartment } from '#fsd/entities/apartment'
 import { ApartmentSelect } from '#fsd/entities/apartment'
 import { useCurrentUser } from '#fsd/shared/auth'
 import { createFormValidator, formatDate, useMoneyFormat, useSubmitFormValidation } from '#fsd/shared/lib'
-import { DateInput, DateRangeInput, DeleteConfirmModal, EmptyState, MoneyInput, PageHeader } from '#fsd/shared/ui'
+import { DateInput, DateRangeInput, DeleteConfirmModal, EmptyState, MoneyInput, PageHeader, ResponsiveFormDialog } from '#fsd/shared/ui'
 import { useI18n } from 'vue-i18n'
 import { expenseInputSchema } from '@contracts/expense'
 
@@ -140,10 +140,10 @@ async function remove() {
     </div>
     <EmptyState v-else icon="i-lucide-receipt" :title="t('expenses.emptyTitle')" :description="t('expenses.emptyDescription')"><template #actions><UButton @click="openCreate">{{ t('expenses.add') }}</UButton></template></EmptyState>
 
-    <USlideover v-model:open="open" :title="expenseToEdit ? t('expenses.edit') : t('expenses.new')" :modal="true" :overlay="true">
+    <ResponsiveFormDialog v-model:open="open" :title="expenseToEdit ? t('expenses.edit') : t('expenses.new')" :modal="true" :overlay="true">
       <template #body><UForm :key="validation.formKey.value" id="expense-form" :state="form" :validate="validate" :validate-on="validation.validateOn.value" novalidate class="form-grid" @error="validation.onError" @submit="save"><UFormField name="apartmentId" :label="t('expenses.apartment')"><ApartmentSelect v-model="form.apartmentId" :apartments="apartments ?? []" /></UFormField><UFormField name="occurredOn" :label="t('expenses.date')"><DateInput v-model="form.occurredOn" /></UFormField><UFormField name="amountEur" :label="t('expenses.amount')"><MoneyInput v-model="form.amountEur" /></UFormField><UFormField name="description" :label="t('expenses.description')" class="w-full"><UTextarea v-model="form.description" class="w-full" :rows="4" maxlength="200" placeholder="Mixer repair" /></UFormField><UAlert v-if="error" color="error" variant="soft" :description="error" /></UForm></template>
       <template #footer><div class="form-actions form-actions--footer"><UButton type="button" color="neutral" variant="ghost" @click="open = false">{{ t('expenses.cancel') }}</UButton><UButton type="submit" form="expense-form" :loading="pending">{{ expenseToEdit ? t('expenses.save') : t('expenses.add') }}</UButton></div></template>
-    </USlideover>
+    </ResponsiveFormDialog>
     <DeleteConfirmModal v-model:open="deleteOpen" :title="t('expenses.delete')" :description="t('expenses.deleteDescription')" :loading="pending" :error="error" @confirm="remove" />
   </section>
 </template>

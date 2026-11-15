@@ -22,6 +22,28 @@ export function shiftOperationsDate(date: string, amount: number) {
 const unfinished = (status: string) => !['completed', 'canceled'].includes(status)
 const unaccepted = (c: Cleaning) => c.status === 'assigned' && c.assignments.length > 0 && !c.assignments.some(a => a.acceptedAt)
 const cleaningHref = (id: string) => `/cleanings/${encodeURIComponent(id)}`
+type PreparationCleaning = Pick<Cleaning, 'apartmentId' | 'scheduledOn' | 'status' | 'completedAt'>
+  & { guestPreparation: Pick<NonNullable<Cleaning['guestPreparation']>, 'stayId' | 'checkInOn' | 'capturedAt'> | null }
+
+export function findArrivalPreparation<T extends PreparationCleaning>(cleanings: T[],
+  stay: Pick<Stay, 'id' | 'apartmentId' | 'checkInOn'>, previousDeparture: string) {
+  const candidates = cleanings.filter(c => {
+    if (c.apartmentId !== stay.apartmentId || c.scheduledOn > stay.checkInOn || c.scheduledOn < previousDeparture || c.status === 'canceled') return false
+    if (c.status !== 'completed') {
+      // A stay-linked cleaning may belong to the departing stay.
+      return !c.guestPreparation || c.guestPreparation.stayId === stay.id
+    }
+    const snapshot = c.guestPreparation
+    if (!snapshot || snapshot.stayId !== stay.id || snapshot.checkInOn !== stay.checkInOn || !c.completedAt) return false
+    const completedOn = operationsDate(new Date(c.completedAt))
+    const capturedOn = operationsDate(new Date(snapshot.capturedAt))
+    return completedOn >= previousDeparture && completedOn <= stay.checkInOn && capturedOn >= previousDeparture && capturedOn <= stay.checkInOn
+  })
+  const planned = candidates.filter(c => c.status !== 'completed')
+  if (planned.length) return planned.length === 1 ? planned[0] : undefined
+  return candidates.sort((a, b) => String(b.completedAt).localeCompare(String(a.completedAt)))[0]
+}
+
 function cleaningAction(cleaning: Cleaning): OperationsAttention['action'] {
   return unfinished(cleaning.status) && !cleaning.assignments.length
     ? { kind: 'assign', href: `/work?cleaningId=${encodeURIComponent(cleaning.id)}` }
@@ -36,24 +58,7 @@ export function buildOperations(input: OperationsInput, now = new Date()): Omit<
   const arrivals: OperationsArrival[] = incoming.map((stay): OperationsArrival => {
     const priorStays = input.stays.filter(s => s.apartmentId === stay.apartmentId && s.id !== stay.id && s.checkInOn < stay.checkInOn)
     const previousDeparture = priorStays.reduce((latest, s) => s.checkOutOn > latest ? s.checkOutOn : latest, '')
-    // A snapshot for this exact stay is the only evidence of completed preparation.
-    // For planned work, use a cleaning in the vacant interval before this arrival.
-    const candidates = cleanings.filter(c => {
-      if (c.apartmentId !== stay.apartmentId || c.scheduledOn > stay.checkInOn || c.scheduledOn < previousDeparture) return false
-      if (c.status !== 'completed') {
-        // A stay-linked cleaning may belong to the departing stay; the apartment/date interval is authoritative.
-        return !c.guestPreparation || c.guestPreparation.stayId === stay.id
-      }
-      const snapshot = c.guestPreparation
-      if (!snapshot || snapshot.stayId !== stay.id || snapshot.checkInOn !== stay.checkInOn || !c.completedAt) return false
-      const completedOn = operationsDate(new Date(c.completedAt))
-      const capturedOn = operationsDate(new Date(snapshot.capturedAt))
-      return completedOn >= previousDeparture && completedOn <= stay.checkInOn && capturedOn >= previousDeparture && capturedOn <= stay.checkInOn
-    })
-    // Multiple planned or completed candidates do not establish a single preparation state.
-    const completed = candidates.filter(c => c.status === 'completed').sort((a, b) => String(b.completedAt).localeCompare(String(a.completedAt)))
-    const planned = candidates.filter(c => c.status !== 'completed')
-    const cleaning = planned.length === 1 ? planned[0] : planned.length === 0 ? completed[0] : undefined
+    const cleaning = findArrivalPreparation(cleanings, stay, previousDeparture)
     const state = !cleaning ? 'unknown' : cleaning.status === 'completed' ? 'completed' : cleaning.status === 'in_progress' ? 'in_progress' : cleaning.assignments.length ? 'assigned' : 'unassigned'
     const problems = input.problems.filter(p => p.apartmentId === stay.apartmentId)
     const guestCount = stay.adultCount === null || stay.childCount === null ? null : stay.adultCount + stay.childCount

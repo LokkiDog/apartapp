@@ -18,6 +18,7 @@ import {
   EmptyState,
   MoneyInput,
   PageHeader,
+  ResponsiveFormDialog,
   StatusBadge,
 } from "#fsd/shared/ui";
 import type { CleaningDraft } from "#fsd/features/manage-cleaning";
@@ -1968,7 +1969,7 @@ function taskMenuItems(task: Task): DropdownMenuItem[] {
       >
     </template>
 
-    <USlideover
+    <ResponsiveFormDialog
       v-model:open="taskOpen"
       :title="editingTask ? t('work.editTask') : t('work.newTask')"
       :modal="true"
@@ -2059,7 +2060,7 @@ function taskMenuItems(task: Task): DropdownMenuItem[] {
             editingTask ? t("common.save") : t("work.newTask")
           }}</UButton>
         </div></template
-      ></USlideover
+      ></ResponsiveFormDialog
     >
 
     <LazyCleaningFormSlideover
@@ -2075,7 +2076,7 @@ function taskMenuItems(task: Task): DropdownMenuItem[] {
       @submit="saveCleaning"
     />
 
-    <USlideover v-model:open="stockOpen" :title="t('work.stockTitle')"
+    <ResponsiveFormDialog v-model:open="stockOpen" :title="t('work.stockTitle')"
       :modal="true"
       :overlay="true"
       ><template #body
@@ -2124,7 +2125,7 @@ function taskMenuItems(task: Task): DropdownMenuItem[] {
             t("work.writeOff")
           }}</UButton>
         </div></template
-      ></USlideover
+      ></ResponsiveFormDialog
     >
 
     <DeleteConfirmModal

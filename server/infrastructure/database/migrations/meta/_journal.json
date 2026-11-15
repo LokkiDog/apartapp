@@ -456,6 +456,41 @@
       "when": 1792960000017,
       "tag": "0064_guests_enabled",
       "breakpoints": true
+    },
+    {
+      "idx": 65,
+      "version": "7",
+      "when": 1792960000018,
+      "tag": "0065_ai_agents",
+      "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "7",
+      "when": 1792960000019,
+      "tag": "0066_guest_additional_contacts",
+      "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1792960000020,
+      "tag": "0067_geoapify_locations",
+      "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "7",
+      "when": 1792960000021,
+      "tag": "0068_crm_realtime",
+      "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "7",
+      "when": 1792960000022,
+      "tag": "0069_profile_contacts_email",
+      "breakpoints": true
     }
   ]
 }

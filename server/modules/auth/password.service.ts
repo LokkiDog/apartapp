@@ -2,7 +2,7 @@ import { and, eq, ne } from 'drizzle-orm'
 import { createError } from 'h3'
 import type { Actor } from '../../infrastructure/auth/actor'
 import { db } from '../../infrastructure/database/client'
-import { authTokens, passkeyChallenges, platformSessions, users } from '../../infrastructure/database/schema'
+import { authTokens, pendingEmailChanges, passkeyChallenges, platformSessions, users } from '../../infrastructure/database/schema'
 
 export async function changeOwnPassword(actor: Actor, currentPassword: string, newPassword: string) {
   // Credentials belong to the signed-in principal, including superusers in a client context.
@@ -18,6 +18,7 @@ export async function changeOwnPassword(actor: Actor, currentPassword: string, n
     )).returning({ id: users.id })
     if (!changed) throw createError({ statusCode: 409, statusMessage: 'Пароль уже изменён. Попробуйте ещё раз' })
     await tx.delete(platformSessions).where(and(eq(platformSessions.userId, actor.id), actor.platformSessionId ? ne(platformSessions.id, actor.platformSessionId) : undefined))
+    await tx.delete(pendingEmailChanges).where(eq(pendingEmailChanges.userId, actor.id))
     await tx.delete(authTokens).where(and(eq(authTokens.userId, actor.id), eq(authTokens.type, 'password_reset')))
     await tx.delete(passkeyChallenges).where(and(eq(passkeyChallenges.userId, actor.id), eq(passkeyChallenges.purpose, 'register')))
   })

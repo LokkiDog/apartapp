@@ -32,9 +32,11 @@ export default defineAppConfig({
     },
     button: { slots: { base: 'min-h-11 rounded-[10px] font-semibold cursor-pointer disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[background-color,color,box-shadow,scale] duration-150 ease-out active:scale-[0.96]' } },
     input: { slots: { root: 'w-full', base: 'min-h-11 rounded-[10px] bg-white text-[var(--color-ink)] ring-[var(--color-line)] focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]' } },
-    select: { slots: { base: 'w-full h-11 min-h-11 rounded-[10px] bg-white text-[var(--color-ink)] ring-[var(--color-line)] hover:bg-white focus:bg-white focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]' } },
+    select: { slots: { base: 'w-full justify-start text-left h-11 min-h-11 rounded-[10px] bg-white text-[var(--color-ink)] ring-[var(--color-line)] hover:bg-white focus:bg-white focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]', value: 'flex-1 text-left', placeholder: 'flex-1 text-left' } },
     selectMenu: { slots: {
-      base: 'w-full h-11 min-h-11 rounded-[10px] bg-white text-[var(--color-ink)] ring-[var(--color-line)] hover:bg-white focus:bg-white focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]',
+      value: 'flex-1 text-left',
+      placeholder: 'flex-1 text-left',
+      base: 'w-full justify-start text-left h-11 min-h-11 rounded-[10px] bg-white text-[var(--color-ink)] ring-[var(--color-line)] hover:bg-white focus:bg-white focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]',
       input: 'mx-2 mt-2 mb-1 self-stretch rounded-[9px] bg-white text-sm text-[var(--color-ink)] ring-[var(--color-line)] focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]',
       content: 'rounded-[14px] bg-white p-1.5 shadow-[var(--shadow-overlay)] ring-1 ring-[var(--color-line)]',
       group: 'p-0.5',
