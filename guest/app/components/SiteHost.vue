@@ -14,8 +14,8 @@ const hostPhoto = computed(() => settings.value?.hostPhoto || '')
     <div class="host-copy">
       <h2 id="host-title">{{ copy.about }}</h2>
       <p class="font-semibold">{{ settings.hostName }}</p>
-      <p>{{ hostDescription }}</p>
-      <p>{{ copy.hostWelcome }}</p>
+      <p v-if="hostDescription">{{ hostDescription }}</p>
+      <p v-if="copy.hostWelcome">{{ copy.hostWelcome }}</p>
       <div v-if="settings.whatsapp || phoneLink || socialLinks.length" class="host-contact-links">
         <SiteContact v-if="settings.whatsapp" :label="copy.whatsapp" />
         <a v-if="phoneLink" :href="phoneLink" dir="ltr" class="button">{{ settings.phone }}</a>

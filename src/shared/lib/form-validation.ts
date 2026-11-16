@@ -56,6 +56,7 @@ function issueMessage(issue: z.core.$ZodIssue, t: Translate) {
     'Заполните поле для публикации': 'validation.required',
     'Неверный номер телефона': 'profileDetails.invalidPhone',
     'Укажите адрес сайта без пути': 'siteSettings.invalidAddress',
+    'Недопустимый короткий адрес': 'siteSettings.invalidSlug',
     'Выберите профиль': 'siteSettings.chooseProfile'
   }
   const translationKey = customMessages[issue.message]

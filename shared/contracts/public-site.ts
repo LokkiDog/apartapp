@@ -35,8 +35,20 @@ export const websiteUrlSchema = z.string().trim().max(300).transform((value, ctx
     return url.origin
   } catch { ctx.addIssue({ code: 'custom', message: 'Укажите адрес сайта без пути' }); return z.NEVER }
 })
+export const publicSiteZone = 'sites.magicmopcrm.com'
+export const publicSiteColors = ['gold', 'blue', 'rose', 'green'] as const
+export type PublicSiteColor = typeof publicSiteColors[number]
+const reservedSiteNames = new Set(['admin', 'api', 'aparts', 'app', 'crm', 'mail', 'sites', 'support', 'www'])
+export const publicSiteSlugSchema = z.string().trim().toLowerCase().refine(value =>
+  value === '' || (/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value) && value.length <= 63 && !reservedSiteNames.has(value)),
+  'Недопустимый короткий адрес')
 export const publicSiteInputSchema = z.object({
-  enabled: z.boolean(), websiteUrl: websiteUrlSchema,
+  enabled: z.boolean(),
+  websiteUrl: z.union([z.literal(''), websiteUrlSchema]).default(''),
+  slug: publicSiteSlugSchema.default(''),
+  title: z.string().trim().max(100).default(''),
+  description: z.string().trim().max(1000).default(''),
+  accent: z.enum(publicSiteColors).default('gold'),
   hostUserId: z.string().uuid().nullable(),
   hostDescription: publicBioSchema.default(emptyPublicBio),
   contactKinds: z.array(z.enum(publicContactKinds)).max(publicContactKinds.length).default([])
@@ -44,6 +56,10 @@ export const publicSiteInputSchema = z.object({
   if (value.enabled && !value.hostUserId) ctx.addIssue({ code: 'custom', path: ['hostUserId'], message: 'Выберите профиль' })
 })
 export type PublicSiteInput = z.infer<typeof publicSiteInputSchema>
-export type PublicSite = { websiteUrl: string; hostName: string; whatsapp: string; hostPhoto: string; hostDescription: PublicBio; phone?: string; socials?: SocialContact[] }
+export type PublicSite = {
+  websiteUrl: string; hostName: string; whatsapp: string; hostPhoto: string; hostDescription: PublicBio
+  phone?: string; socials?: SocialContact[]
+  branding?: { title: string; description: string; accent: PublicSiteColor }
+}
 export type OwnProfile = { currency: import('./currency').Currency; name: string; phone: string; socials: SocialContact[]; hasPhoto: boolean; photoVersion: string }
-export type PublicSiteSettings = { settings: PublicSiteInput; profiles: Array<{ id: string; name: string; phone: string; socials: SocialContact[]; hasPhoto: boolean }> }
+export type PublicSiteSettings = { settings: PublicSiteInput; addressLocked: boolean; profiles: Array<{ id: string; name: string; phone: string; socials: SocialContact[]; hasPhoto: boolean }> }

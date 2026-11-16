@@ -114,15 +114,19 @@ function checkModel(model, instance, expectedValues = values) {
   assert.equal(model.volumes.uploads_data.name, `${instance}_uploads_data`)
   assert.equal(app.volumes[0].source, 'uploads_data')
   assert.deepEqual(migrate.profiles, ['tools'])
+  assert.equal(guest.profiles, undefined)
+  assert.equal(guest.environment.NUXT_CATALOGUE_API_BASE, 'http://app:3000')
+  assert.deepEqual(
+    guest.ports.map((port) => [port.host_ip, port.published, port.target]),
+    [['127.0.0.1', instance === 'aparts' ? '3001' : '3003', 3001]],
+  )
   if (instance === 'magicmop') {
     assert.equal(postgres.ports?.length ?? 0, 0)
-    assert.equal(guest, undefined)
   } else {
     assert.deepEqual(
       postgres.ports.map((port) => [port.host_ip, port.published, port.target]),
       [['127.0.0.1', '15432', 5432]],
     )
-    assert.equal(guest.profiles, undefined)
   }
 }
 

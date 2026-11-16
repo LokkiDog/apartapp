@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { guestLanguageNames, guestLocales, type GuestLocale } from '#shared/locale'
-const { copy, locale, isRtl, localePath, setLocale } = useSite()
+const { copy, branding, locale, isRtl, localePath, setLocale } = useSite()
 const theme = useCookie<'light' | 'dark'>('aparts-guest-theme', {
   default: () => 'dark',
   maxAge: 60 * 60 * 24 * 365,
@@ -26,8 +26,8 @@ function closeMenu() {
 <template>
   <header class="site-header" @keydown.esc="closeMenu">
     <NuxtLink :to="localePath('/')" class="brand" :aria-label="copy.brand">
-      <svg viewBox="0 0 80 34" aria-hidden="true"><path d="M2 30 28 9 36 17 49 2 78 30M18 25 29 15 35 22M37 23 50 9 58 19" /></svg>
-      <span>APARTS BANSKO</span>
+      <svg v-if="!branding" viewBox="0 0 80 34" aria-hidden="true"><path d="M2 30 28 9 36 17 49 2 78 30M18 25 29 15 35 22M37 23 50 9 58 19" /></svg>
+      <span>{{ branding ? copy.brand : copy.brand.toUpperCase() }}</span>
     </NuxtLink>
     <nav class="desktop-nav" :aria-label="copy.menu">
       <NuxtLink :to="localePath('/apartments')">{{ copy.apartments }}</NuxtLink>

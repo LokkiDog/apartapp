@@ -1372,10 +1372,6 @@
     }
   },
   "operations": {
-    "legacyDesign": "Return to old design",
-    "newDesign": "Try new design",
-    "closeBanner": "Dismiss design suggestion",
-    "designMenu": "Dashboard design",
     "loading": "Loading dashboard",
     "loadError": "Could not load the summary",
     "retry": "Retry",
@@ -1649,6 +1645,25 @@
     "invalidPhone": "Enter an international phone number"
   },
   "siteSettings": {
+    "unavailable": "Website publishing is available in MagicMop.",
+    "shortAddress": "Short address",
+    "siteName": "Site name",
+    "accent": "Accent colour",
+    "copyAddress": "Copy address",
+    "publish": "Publish",
+    "unpublish": "Unpublish",
+    "addressLocked": "The address is locked after publishing.",
+    "addressUnavailable": "This address is already in use.",
+    "detailsRequired": "Enter a short address and site name.",
+    "whatsappRequired": "Add WhatsApp to the profile and select it as a site contact.",
+    "apartmentRequired": "Publish at least one property with a photo.",
+    "invalidSlug": "Use Latin letters, digits and hyphens. Choose an available name.",
+    "colors": {
+      "gold": "Gold",
+      "blue": "Blue",
+      "rose": "Rose",
+      "green": "Green"
+    },
     "hostSection": "Website profile",
     "contacts": "Website contacts",
     "noContacts": "This profile has no contacts yet.",

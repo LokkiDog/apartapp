@@ -33,6 +33,7 @@ beforeEach(() => {
   status.value = 'success'; error.value = null; locale.value = 'ru'; refresh.mockReset()
   vi.stubGlobal('useSite', () => ({
     copy: computed(() => ({ ru, en, he, bg })[locale.value]), locale,
+    branding: ref(undefined),
     isRtl: computed(() => locale.value === 'he'),
     localePath: (path: string) => localizedGuestPath(path, locale.value, true),
     pageUrl: (path = '/') => `https://example.test${localizedGuestPath(path, locale.value)}`,

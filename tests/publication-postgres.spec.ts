@@ -109,7 +109,9 @@ describe.skipIf(!url)('guest publications PostgreSQL', () => {
       await db.delete(schema.users).where(eq(schema.users.id, principal.id))
     }
   })
-  it('publishes only the selected own profile, follows edits and revokes public data and photos', async () => {
+  it('publishes only the selected own profile, follows edits and revokes public data and photos', async ({ onTestFinished }) => {
+    vi.stubEnv('CRM_BRAND', 'aparts')
+    onTestFinished(() => vi.unstubAllEnvs())
     const sites = await import('../server/modules/publication/public-site.service')
     const profiles = await import('../server/modules/auth/profile.service')
     const { fileStorage } = await import('../server/infrastructure/storage/local')
@@ -117,11 +119,11 @@ describe.skipIf(!url)('guest publications PostgreSQL', () => {
     const [foreign] = await db.select().from(schema.users).where(eq(schema.users.organizationId, foreignOrganization))
     await expect(sites.getPublicSiteSettings({ ...actor, roles: ['manager'] })).rejects.toMatchObject({ statusCode: 403 })
     await expect(sites.savePublicSiteSettings(actor, { ...original, hostUserId: foreign!.id })).rejects.toMatchObject({ statusCode: 400 })
-    await expect(sites.savePublicSiteSettings({ ...actor, organizationId: foreignOrganization }, { ...original, hostUserId: foreign!.id })).rejects.toMatchObject({ statusCode: 400 })
+    await expect(sites.savePublicSiteSettings({ ...actor, organizationId: foreignOrganization }, { ...original, hostUserId: foreign!.id })).rejects.toMatchObject({ statusCode: 404 })
     await expect(sites.resolvePublicSite('https://unknown.example.test')).rejects.toMatchObject({ statusCode: 404 })
     expect((await sites.getPublicSiteSettings(actor)).profiles.map(profile => profile.id)).not.toContain(foreign!.id)
     await db.update(schema.users).set({ status: 'active', phone: '+359888999888' }).where(eq(schema.users.id, foreign!.id))
-    await expect(sites.savePublicSiteSettings({ ...actor, organizationId: foreignOrganization }, { ...original, hostUserId: foreign!.id })).rejects.toMatchObject({ statusCode: 409 })
+    await expect(sites.savePublicSiteSettings({ ...actor, organizationId: foreignOrganization }, { ...original, hostUserId: foreign!.id })).rejects.toMatchObject({ statusCode: 404 })
     expect((await sites.getPublicSiteSettings(actor)).settings).toEqual(original)
     try {
       const publicBio = { ru: 'На связи', en: 'Here to help', he: '', bg: '' }
@@ -161,6 +163,83 @@ describe.skipIf(!url)('guest publications PostgreSQL', () => {
       await profiles.setOwnProfilePhoto(actor, null)
       await sites.savePublicSiteSettings(actor, original)
     }
+  })
+  it('publishes client sites only in MagicMop and isolates apartments with the same slug', async ({ onTestFinished }) => {
+    onTestFinished(() => vi.unstubAllEnvs())
+    const sites = await import('../server/modules/publication/public-site.service')
+    const detail = (await import('../server/api/catalogue/apartments/[slug].get')).default
+    const photo = (await import('../server/api/catalogue/apartments/[slug]/photos/[photoId].get')).default
+    const event = (origin: string, id?: string) => {
+      const req = new IncomingMessage(new Socket())
+      req.url = `/studio?site=${encodeURIComponent(origin)}`
+      const request = createEvent(req, new ServerResponse(req))
+      request.context.params = { slug: 'studio', ...(id ? { photoId: id } : {}) }
+      return request
+    }
+    async function tenant(slug: string, title: string, number: string) {
+      const [org] = await db.insert(schema.organizations).values({ name: slug }).returning()
+      const [user] = await db.insert(schema.users).values({
+        organizationId: org!.id, email: `${slug}@example.test`, name: title, status: 'active',
+        roles: ['administrator'], passwordHash: 'test-only', socials: [{ platform: 'whatsapp', value: number }]
+      }).returning()
+      const principal: Actor = { ...actor, id: user!.id, organizationId: org!.id, email: user!.email, name: title }
+      const [type] = await db.insert(schema.apartmentTypes).values({
+        organizationId: org!.id, name: 'Studio', ownerTotalEur: 0, cleanerPoolEur: 0, laundryEur: 0, serviceEur: 0
+      }).returning()
+      const [hotel] = await db.insert(schema.hotels).values({ organizationId: org!.id, name: title, address: 'Test address', latitude: '41.84', longitude: '23.48' }).returning()
+      const [unit] = await db.insert(schema.apartments).values({
+        organizationId: org!.id, hotelId: hotel!.id, apartmentTypeId: type!.id, name: title, capacity: 2, rooms: 1,
+        checkInTime: '15:00', checkOutTime: '11:00'
+      }).returning()
+      const [cover] = await db.insert(schema.attachments).values({
+        organizationId: org!.id, entityType: 'apartment', entityId: unit!.id, uploadedById: user!.id,
+        fileName: 'cover.jpg', mimeType: 'image/jpeg', storageKey: slug
+      }).returning()
+      return {
+        principal, unit: unit!.id, photo: cover!.id, number,
+        settings: { enabled: false, slug, title, accent: 'blue', hostUserId: user!.id, contactKinds: ['whatsapp'] }
+      }
+    }
+    const a = await tenant('villa-rosa', 'Villa Rosa', '+359888111222')
+    const b = await tenant('villa-verde', 'Villa Verde', '+359888333444')
+    vi.stubEnv('CRM_BRAND', 'aparts')
+    await expect(sites.savePublicSiteSettings(a.principal, a.settings)).rejects.toMatchObject({ statusCode: 404 })
+    vi.stubEnv('CRM_BRAND', 'magicmop')
+    const draftSite = await sites.savePublicSiteSettings(a.principal, a.settings)
+    const url = draftSite.settings.websiteUrl
+    expect(url).toBe('https://villa-rosa.sites.magicmopcrm.com')
+    await expect(sites.publicSiteInfo(url)).rejects.toMatchObject({ statusCode: 404 })
+    await expect(sites.savePublicSiteSettings(b.principal, { ...b.settings, slug: a.settings.slug }))
+      .rejects.toMatchObject({ statusCode: 409, data: { code: 'SITE_ADDRESS_UNAVAILABLE' } })
+    await expect(sites.savePublicSiteSettings(a.principal, { ...a.settings, enabled: true }))
+      .rejects.toMatchObject({ data: { code: 'SITE_APARTMENT_REQUIRED' } })
+    for (const site of [a, b]) {
+      await service.savePublication(site.principal, site.unit, {
+        ...draft, published: true, photoIds: [site.photo],
+        translations: { ru: { title: site.settings.title, summary: 'Описание', description: 'Описание объекта', location: '' } }
+      })
+      await expect(sites.savePublicSiteSettings(site.principal, { ...site.settings, enabled: true, contactKinds: [] }))
+        .rejects.toMatchObject({ data: { code: 'SITE_WHATSAPP_REQUIRED' } })
+      const { settings, addressLocked } = await sites.savePublicSiteSettings(site.principal, { ...site.settings, enabled: true })
+      expect(addressLocked).toBe(true)
+      expect(await sites.publicSiteInfo(settings.websiteUrl)).toMatchObject({
+        branding: { title: site.settings.title, accent: 'blue' }, whatsapp: site.number
+      })
+      expect(await detail(event(settings.websiteUrl))).toMatchObject({
+        title: site.settings.title, photos: [{ id: site.photo }]
+      })
+    }
+    await expect(photo(event(url, b.photo))).rejects.toMatchObject({ statusCode: 404 })
+    vi.stubEnv('CRM_BRAND', 'aparts')
+    await expect(sites.resolvePublicSite(url)).rejects.toMatchObject({ statusCode: 404 })
+    vi.stubEnv('CRM_BRAND', 'magicmop')
+    await sites.savePublicSiteSettings(a.principal, a.settings)
+    await expect(detail(event(url))).rejects.toMatchObject({ statusCode: 404 })
+    await expect(sites.savePublicSiteSettings(a.principal, { ...a.settings, slug: 'renamed-villa' }))
+      .rejects.toMatchObject({ statusCode: 409, data: { code: 'SITE_ADDRESS_LOCKED' } })
+    await expect(sites.savePublicSiteSettings(b.principal, { ...b.settings, slug: a.settings.slug }))
+      .rejects.toMatchObject({ statusCode: 409 })
+    expect((await sites.savePublicSiteSettings(a.principal, { ...a.settings, enabled: true })).settings.websiteUrl).toBe(url)
   })
   it('suggests Latin apartment addresses and resolves simultaneous duplicate defaults with the hotel and a suffix', async () => {
     const original = await db.query.apartments.findFirst({ where: eq(schema.apartments.id, apartmentId) })

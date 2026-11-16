@@ -80,7 +80,12 @@ export const users = pgTable('users', {
 
 export const publicSites = pgTable('public_sites', {
   organizationId: uuid('organization_id').primaryKey().references(() => organizations.id, { onDelete: 'cascade' }),
-  websiteUrl: text('website_url').notNull(),
+  websiteUrl: text('website_url'),
+  slug: text('slug'),
+  addressLocked: boolean('address_locked').notNull().default(false),
+  title: text('title').notNull().default(''),
+  description: text('description').notNull().default(''),
+  accent: text('accent').$type<import('../../../shared/contracts/public-site').PublicSiteColor>().notNull().default('gold'),
   enabled: boolean('enabled').notNull().default(false),
   hostUserId: uuid('host_user_id').references(() => users.id, { onDelete: 'set null' }),
   hostDescription: jsonb('host_description').$type<import('../../../shared/contracts/public-site').PublicBio>().notNull().default(sql`'{"ru":"","en":"","he":"","bg":""}'::jsonb`),

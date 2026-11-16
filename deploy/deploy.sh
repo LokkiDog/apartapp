@@ -28,8 +28,7 @@ migrate_url = services["migrate"]["environment"]["DATABASE_URL"]
 if config["name"] != sys.argv[1] or app_url != migrate_url or not re.fullmatch(r"postgres(?:ql)?://[^/]+@postgres:5432/[^/?]+", app_url):
     sys.exit("App and migrations must use the isolated PostgreSQL service.")
 ' "$instance"
-services=app
-if [ "$instance" = aparts ]; then services='app guest'; fi
+services='app guest'
 rollback="$state/rollback"
 mkdir -p "$rollback"
 # shellcheck disable=SC2086
@@ -74,6 +73,9 @@ recover() {
 
   # Traffic is gated until both the old database and old application are ready.
   compose stop app || exit "$result"
+  if [ ! -s "$rollback/guest.image" ]; then
+    compose stop guest || exit "$result"
+  fi
   if "$migration_attempted"; then
     compose exec -T postgres sh -ec 'export PGPASSWORD="$POSTGRES_PASSWORD"; pg_restore --exit-on-error --clean --if-exists --create -U "$POSTGRES_USER" -d postgres' \
       < "$rollback/database.dump" || exit "$result"

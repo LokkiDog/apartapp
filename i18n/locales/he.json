@@ -1372,10 +1372,6 @@
     }
   },
   "operations": {
-    "legacyDesign": "חזרה לעיצוב הקודם",
-    "newDesign": "ניסיון העיצוב החדש",
-    "closeBanner": "סגירת הצעת העיצוב",
-    "designMenu": "עיצוב דף הבית",
     "loading": "טעינת דף הבית",
     "loadError": "לא ניתן לטעון את הסיכום",
     "retry": "ניסיון חוזר",
@@ -1649,6 +1645,25 @@
     "invalidPhone": "יש להזין מספר טלפון בינלאומי"
   },
   "siteSettings": {
+    "unavailable": "פרסום אתרים זמין ב־MagicMop.",
+    "shortAddress": "כתובת קצרה",
+    "siteName": "שם האתר",
+    "accent": "צבע הדגשה",
+    "copyAddress": "העתקת כתובת",
+    "publish": "פרסום",
+    "unpublish": "ביטול פרסום",
+    "addressLocked": "הכתובת קבועה לאחר הפרסום.",
+    "addressUnavailable": "הכתובת כבר בשימוש.",
+    "detailsRequired": "יש להזין כתובת קצרה ושם לאתר.",
+    "whatsappRequired": "יש להוסיף WhatsApp לפרופיל ולבחור בו כאמצעי קשר באתר.",
+    "apartmentRequired": "יש לפרסם לפחות נכס אחד עם תמונה.",
+    "invalidSlug": "יש להשתמש באותיות לטיניות, בספרות ובמקפים ולבחור שם פנוי.",
+    "colors": {
+      "gold": "זהב",
+      "blue": "כחול",
+      "rose": "ורוד",
+      "green": "ירוק"
+    },
     "hostSection": "פרופיל באתר",
     "contacts": "פרטי קשר באתר",
     "noContacts": "עדיין אין פרטי קשר בפרופיל זה.",

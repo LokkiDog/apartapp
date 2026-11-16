@@ -760,3 +760,36 @@ html:has(.apartment-enquiry-dialog[open]) { overflow:hidden; }
   flex-wrap: wrap;
   gap: .5rem;
 }
+
+:root[data-site-accent='blue'] { --gold:#a5c9fa; }
+:root[data-site-accent='blue'][data-theme='light'] { --gold:#254f88; }
+:root[data-site-accent='rose'] { --gold:#edb0bf; }
+:root[data-site-accent='rose'][data-theme='light'] { --gold:#8e3552; }
+:root[data-site-accent='green'] { --gold:#a8cf9c; }
+:root[data-site-accent='green'][data-theme='light'] { --gold:#3e6837; }
+
+:root[data-site-accent] .brand {
+  min-width:0;
+  min-height:44px;
+  font-size:14px;
+  font-weight:600;
+  letter-spacing:.025em;
+  white-space:normal;
+  overflow-wrap:anywhere;
+}
+:root[data-site-accent] .header-actions { flex-shrink:0; }
+
+.hero--client {
+  min-height:0;
+  background:var(--surface);
+  border-block-end:1px solid var(--line);
+}
+.hero--client::after { content:none; }
+.hero--client .hero-copy {
+  justify-content:center;
+  padding-block:clamp(32px,7vw,96px);
+  color:var(--ink);
+  text-shadow:none;
+  overflow-wrap:anywhere;
+}
+.hero--client h1 { color:var(--gold); }
