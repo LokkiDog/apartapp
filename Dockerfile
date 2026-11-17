@@ -15,7 +15,8 @@ ENV CRM_BRAND=$CRM_BRAND NUXT_PUBLIC_APP_URL=$CRM_APP_URL
 ENV NODE_OPTIONS=--max-old-space-size=1536
 
 COPY . .
-RUN npm run prepare && npm run build
+RUN export DATABASE_URL="postgres://build:build@127.0.0.1:1/${CRM_BRAND}" \
+    && npm run prepare && npm run build
 
 FROM dependencies AS migrate
 

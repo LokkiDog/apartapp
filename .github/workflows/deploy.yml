@@ -23,6 +23,8 @@ jobs:
     timeout-minutes: 25
     env:
       CRM_BRAND: ${{ github.ref_name == 'magicmop' && 'magicmop' || 'aparts' }}
+      # Nuxt loads the database module while preparing. CI does not connect to this address.
+      DATABASE_URL: postgres://build:build@127.0.0.1:1/${{ github.ref_name == 'magicmop' && 'magicmop' || 'aparts' }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
