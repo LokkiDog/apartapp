@@ -142,7 +142,6 @@ async function logout() {
 
 <template>
   <div class="app-shell" :class="{ 'app-shell--sidebar-collapsed': sidebarCollapsed }">
-    <div id="app-top-banner" class="app-top-banner" />
     <p v-if="!online" class="offline-banner">{{ $t("common.offline") }}</p>
 
     <aside class="desktop-sidebar">
